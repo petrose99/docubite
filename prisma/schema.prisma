@@ -1,0 +1,497 @@
+generator client {
+  provider = "prisma-client"
+  output   = "client"
+}
+
+generator nextAdmin {
+  provider = "next-admin-generator-prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// This is a clean DocuBite schema. It intentionally has no TaxHacker
+// accounting, transaction, currency, file, project, or import tables.
+model User {
+  id                    String                @id @default(uuid()) @db.Uuid
+  email                 String                @unique
+  name                  String
+  avatar                String?
+  /// "user" or "admin". An admin is exempt from every plan limit in the workspaces they own —
+  /// see isWorkspaceLimitExempt in models/workspaces.ts. Deliberately a String, matching
+  /// WorkspaceMember.role, rather than an enum: the set grows by data, not by migration.
+  role                  String                @default("user")
+  /// Set by an admin from /admin/users. A suspended account keeps its role and all its data, but
+  /// getApiUser refuses it — which is every page, layout, action and route handler at once. Its
+  /// own timestamp rather than role = "suspended": that would destroy the prior role and, for an
+  /// admin, silently revoke plan-limit exemption from every workspace they own.
+  suspendedAt           DateTime?             @map("suspended_at")
+  emailVerified         Boolean               @default(false) @map("is_email_verified")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  accounts              Account[]
+  sessions              Session[]
+  workspaceMemberships  WorkspaceMember[]
+  sentInvitations       WorkspaceInvitation[] @relation("InvitationSender")
+  documentAuditEvents   DocumentAuditEvent[]  @relation("AuditActor")
+  adminAuditEvents      AdminAuditEvent[]     @relation("AdminAuditActor")
+  createdFiles          DocumentFile[]        @relation("FileCreator")
+  fileShares            DocumentFileShare[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id              String                 @id @default(uuid()) @db.Uuid
+  name            String
+  /** "personal" — the single-member workspace auto-created for every user, which is where
+   * their files live by default. "team" — a shared workspace, creatable only on a plan whose
+   * member limit is above one. */
+  kind            String                 @default("personal")
+  aiEnabled       Boolean                @default(true) @map("ai_enabled")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  members         WorkspaceMember[]
+  invitations     WorkspaceInvitation[]
+  templates       DocumentTemplate[]
+  documents       Document[]
+  folders         DocumentFolder[]
+  files           DocumentFile[]
+  jobs            DocumentProcessingJob[]
+  usagePeriods    WorkspaceUsagePeriod[]
+  subscription    WorkspaceSubscription?
+  auditEvents     DocumentAuditEvent[]
+  webhookEvents   StripeWebhookEvent[]
+  workbooks       SpreadsheetWorkbook[]
+  aiFormulaCache  AiFormulaCache[]
+  extractionShapes ExtractionShape[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  role        String    @default("member")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  email       String
+  role        String    @default("member")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  sentById    String    @map("sent_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sentBy      User      @relation("InvitationSender", fields: [sentById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+  @@map("workspace_invitations")
+}
+
+model WorkspaceSubscription {
+  id                   String    @id @default(uuid()) @db.Uuid
+  workspaceId          String    @unique @map("workspace_id") @db.Uuid
+  planCode             String    @default("starter") @map("plan_code")
+  status               String    @default("trialing")
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  currentPeriodStart   DateTime? @map("current_period_start")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  /// End of the free trial the workspace was created on. Nullable because rows created before
+  /// trials existed have no trial to expire, and because a workspace that has converted to a
+  /// paid subscription is governed by currentPeriodEnd instead.
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  /// Set when the customer cancels in the Stripe portal: the subscription stays `active` until
+  /// currentPeriodEnd and then stops. Without it the billing card would say "Renews …" right up
+  /// to the day the workspace goes dark.
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_subscriptions")
+}
+
+model WorkspaceUsagePeriod {
+  id                    String    @id @default(uuid()) @db.Uuid
+  workspaceId           String    @map("workspace_id") @db.Uuid
+  periodStart           DateTime  @map("period_start")
+  periodEnd             DateTime  @map("period_end")
+  inboundDocumentCount  Int       @default(0) @map("inbound_document_count")
+  aiExtractionCount     Int       @default(0) @map("ai_extraction_count")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, periodStart])
+  @@index([workspaceId, periodEnd])
+  @@map("workspace_usage_periods")
+}
+
+model DocumentFolder {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @map("workspace_id") @db.Uuid
+  parentId    String?          @map("parent_id") @db.Uuid
+  name        String
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent      DocumentFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    DocumentFolder[] @relation("FolderTree")
+  files       DocumentFile[]
+
+  @@index([workspaceId, parentId])
+  @@map("document_folders")
+}
+
+/** One spreadsheet file: the thing the Files list lists, shares, and renames. It owns its
+ * worksheets (DocumentTemplate) and the documents extracted into them, so the same PDF can be
+ * uploaded into two different files without tripping the dedup constraint. */
+model DocumentFile {
+  id          String              @id @default(uuid()) @db.Uuid
+  workspaceId String              @map("workspace_id") @db.Uuid
+  folderId    String?             @map("folder_id") @db.Uuid
+  name        String              @default("untitled")
+  createdById String?             @map("created_by_id") @db.Uuid
+  /** Link sharing, keyed on the file id itself the way Lido keys on ?lidoFileId=<uuid>:
+   * none | view | interact | edit. */
+  linkAccess  String              @default("none") @map("link_access")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder      DocumentFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy   User?               @relation("FileCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  templates   DocumentTemplate[]
+  documents   Document[]
+  shares      DocumentFileShare[]
+  workbook    SpreadsheetWorkbook?
+
+  @@index([workspaceId, folderId])
+  @@index([workspaceId, updatedAt])
+  @@map("document_files")
+}
+
+model DocumentFileShare {
+  id        String       @id @default(uuid()) @db.Uuid
+  fileId    String       @map("file_id") @db.Uuid
+  /** Null until the invited email signs up; resolved on first access. */
+  userId    String?      @map("user_id") @db.Uuid
+  email     String
+  access    String       @default("view")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  file      DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([fileId, email])
+  @@index([email])
+  @@map("document_file_shares")
+}
+
+model DocumentTemplate {
+  id             String                    @id @default(uuid()) @db.Uuid
+  workspaceId    String                    @map("workspace_id") @db.Uuid
+  fileId         String                    @map("file_id") @db.Uuid
+  code           String
+  name           String
+  documentType   String                    @map("document_type")
+  isSystem       Boolean                   @default(false) @map("is_system")
+  multiRow       Boolean                   @default(false) @map("multi_row")
+  /// The Univer sheet (tab) inside the file's workbook this worksheet's extraction config feeds.
+  /// Null until the workbook has been seeded — worksheets predate the spreadsheet engine.
+  univerSheetId  String?                   @map("univer_sheet_id")
+  currentVersion Int                       @default(1) @map("current_version")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  workspace      Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  file           DocumentFile              @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  versions       DocumentTemplateVersion[]
+  documents      Document[]
+  shape          ExtractionShape?
+
+  @@unique([fileId, code])
+  @@index([workspaceId])
+  @@map("document_templates")
+}
+
+/** One saved extraction setup, matched against the next similar upload so it can be reused. Kept
+ * per worksheet (@@unique([workspaceId, templateId])) and refreshed whenever that worksheet
+ * extracts a document. `signature` is the layout fingerprint lib/shape-match compares; `fields`
+ * and `prompt` are the setup to re-apply. */
+model ExtractionShape {
+  id             String            @id @default(uuid()) @db.Uuid
+  workspaceId    String            @map("workspace_id") @db.Uuid
+  /// The worksheet this shape mirrors, one shape per worksheet. Unique on its own (a worksheet
+  /// belongs to exactly one workspace); SetNull so a shape outlives the worksheet being deleted.
+  templateId     String?           @unique @map("template_id") @db.Uuid
+  name           String
+  docType        String?           @map("doc_type")
+  entity         String?
+  fields         Json
+  prompt         String?
+  multiRow       Boolean           @default(false) @map("multi_row")
+  signature      Json
+  /// The most recent document this shape was built from — for the "same columns as {filename}"
+  /// hint. Deliberately not a foreign key: the document may be deleted while the shape lives on.
+  lastDocumentId String?           @map("last_document_id") @db.Uuid
+  useCount       Int               @default(0) @map("use_count")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template       DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  documents      Document[]
+
+  @@index([workspaceId])
+  @@map("extraction_shapes")
+}
+
+model DocumentTemplateVersion {
+  id          String           @id @default(uuid()) @db.Uuid
+  templateId  String           @map("template_id") @db.Uuid
+  version     Int
+  fields      Json
+  prompt      String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  template    DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  documents   Document[]
+
+  @@unique([templateId, version])
+  @@map("document_template_versions")
+}
+
+model Document {
+  id                String                   @id @default(uuid()) @db.Uuid
+  workspaceId       String                   @map("workspace_id") @db.Uuid
+  fileId            String                   @map("file_id") @db.Uuid
+  templateId        String?                  @map("template_id") @db.Uuid
+  templateVersionId String?                  @map("template_version_id") @db.Uuid
+  source            String
+  status            String                   @default("received")
+  filename          String
+  mimeType          String                   @map("mime_type")
+  sizeBytes         Int                      @map("size_bytes")
+  sha256            String
+  storageKey        String?                  @map("storage_key")
+  pageRange         String?                  @map("page_range")
+  receivedAt        DateTime                 @default(now()) @map("received_at")
+  fieldSnapshot     Json                     @map("field_snapshot")
+  rawExtraction     Json?                    @map("raw_extraction")
+  reviewedData      Json?                    @map("reviewed_data")
+  confidence        Json?
+  /// Per-field source pins: {version, fields: {[key]: Ref}, items: {[arrayKey]: (Ref|null)[]}},
+  /// where a Ref is {page, bbox, quote, blockIndex, score}. Written by extraction, cleared per
+  /// field on manual edit. Null on documents extracted before provenance existed.
+  provenance        Json?
+  /// The extraction shape this document was stamped with, so a later run can be diffed against
+  /// the previous document of the same shape. SetNull: the diff simply has no predecessor then.
+  shapeId           String?                  @map("shape_id") @db.Uuid
+  /// {docType, entity, period} read alongside the extraction, reused by the folder report.
+  classification    Json?
+  /// The upload batch (one drag of files) this document arrived in, so a folder can be reported on
+  /// as a set. Just a grouping key — null for documents uploaded one at a time.
+  uploadBatchId     String?                  @map("upload_batch_id") @db.Uuid
+  aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
+  searchText        String                   @default("") @map("search_text")
+  ocrText           String                   @default("") @map("ocr_text")
+  errorCode         String?                  @map("error_code")
+  reviewedAt        DateTime?                @map("reviewed_at")
+  /// When this document's rows were written into the file's spreadsheet. Null means the sheet
+  /// has never seen it, which is what makes the extraction-into-sheet bridge idempotent across
+  /// reloads and tabs closed mid-processing.
+  sheetAppliedAt    DateTime?                @map("sheet_applied_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  workspace         Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  file              DocumentFile             @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  template          DocumentTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateVersion   DocumentTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  shape             ExtractionShape?         @relation(fields: [shapeId], references: [id], onDelete: SetNull)
+  jobs              DocumentProcessingJob[]
+  auditEvents       DocumentAuditEvent[]
+
+  @@unique([fileId, sha256])
+  @@index([workspaceId, status])
+  @@index([workspaceId, receivedAt])
+  @@index([fileId, receivedAt])
+  @@index([shapeId])
+  @@index([fileId, uploadBatchId])
+  @@map("documents")
+}
+
+model DocumentProcessingJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  documentId  String?   @map("document_id") @db.Uuid
+  type        String
+  status      String    @default("queued")
+  attempts    Int       @default(0)
+  scheduledAt DateTime  @default(now()) @map("scheduled_at")
+  leaseUntil  DateTime? @map("lease_until")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  errorCode   String?   @map("error_code")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@map("document_processing_jobs")
+}
+
+model DocumentAuditEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  documentId  String?   @map("document_id") @db.Uuid
+  actorId     String?   @map("actor_id") @db.Uuid
+  type        String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("document_audit_events")
+}
+
+/** What a platform admin did in /admin, and to what.
+ *
+ * Separate from DocumentAuditEvent rather than an extension of it: that model's workspaceId is
+ * NOT NULL and cascades on workspace delete, so the row saying "admin deleted workspace X" would
+ * go down with workspace X. This is the record that has to survive its subject. */
+model AdminAuditEvent {
+  id                String   @id @default(uuid()) @db.Uuid
+  /// SetNull, not Cascade: deleting the admin must not delete the evidence of what they did.
+  actorId           String?  @map("actor_id") @db.Uuid
+  type              String
+  /// Deliberately NOT foreign keys. The subject of the record is frequently gone by the time
+  /// anyone reads it — that is exactly what "workspace_deleted" means.
+  targetUserId      String?  @map("target_user_id") @db.Uuid
+  targetWorkspaceId String?  @map("target_workspace_id") @db.Uuid
+  /// Whatever context would be unrecoverable afterwards: the plan replaced, the workspace's name
+  /// and member count before it was destroyed, the reason a retry was refused.
+  detail            Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  actor             User?    @relation("AdminAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@map("admin_audit_events")
+}
+
+/** The spreadsheet behind one file: a Univer `IWorkbookData` snapshot holding every tab, its
+ * cell values, formulas, styles, and the `custom` metadata that links cells back to documents.
+ * One row per file — the grid is the file, not a view derived from it. */
+model SpreadsheetWorkbook {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  fileId      String       @unique @map("file_id") @db.Uuid
+  /// Optimistic concurrency: the client echoes the rev it loaded, and a save against a stale
+  /// rev is rejected (409) rather than silently clobbering a second tab's edits.
+  rev         Int          @default(0)
+  snapshot    Json
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  file        DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("spreadsheet_workbooks")
+}
+
+/** Memoised results for the AI formulas (=AI(...) and friends). Without it every reload
+ * would recalculate every AI cell and re-bill the workspace for an answer it already has. */
+model AiFormulaCache {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  /// sha256 of function name + model + prompt + serialised inputs.
+  hash        String
+  result      String
+  model       String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, hash])
+  @@map("ai_formula_cache")
+}
+
+model StripeWebhookEvent {
+  id            String     @id @default(uuid()) @db.Uuid
+  stripeEventId String     @unique @map("stripe_event_id")
+  workspaceId   String?    @map("workspace_id") @db.Uuid
+  type          String
+  status        String     @default("pending")
+  attempts      Int        @default(0)
+  errorCode     String?    @map("error_code")
+  processingStartedAt DateTime? @map("processing_started_at")
+  leaseUntil    DateTime?  @map("lease_until")
+  processedAt   DateTime?  @map("processed_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([status, leaseUntil])
+  @@map("stripe_webhook_events")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  /// Session and Verification both carry @default(uuid()); this one did not, and nothing noticed
+  /// because the email-OTP flow never wrote an Account row. The first password sign-up did, and
+  /// Prisma rejected it with "Argument `id` is missing". Generated by Prisma rather than by the
+  /// database: the column is TEXT (not UUID like its siblings), so a gen_random_uuid() default
+  /// would mean retyping a live column for no gain — every write goes through Prisma anyway.
+  id                   String   @id @default(uuid())
+  accountId            String   @map("account_id")
+  providerId           String   @map("provider_id")
+  userId               String   @map("user_id") @db.Uuid
+  accessToken          String?  @map("access_token")
+  refreshToken         String?  @map("refresh_token")
+  idToken              String?  @map("id_token")
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                String?
+  password             String?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("verification")
+}

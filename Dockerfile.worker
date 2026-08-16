@@ -1,0 +1,22 @@
+FROM node:26-slim
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl && rm -rf /var/lib/apt/lists/*
+COPY package*.json ./
+COPY prisma ./prisma/
+# The cache mount keeps npm's package cache across build attempts, so an install interrupted
+# by a network drop resumes instead of redownloading everything; the retry flags stop a single
+# flaky fetch from failing the whole install. Together these make the build usable on
+# unreliable links, and the mount also speeds up clean rebuilds everywhere else.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --fetch-retries=10 --fetch-retry-mintimeout=2000 --fetch-retry-maxtimeout=60000 --fetch-timeout=300000
+COPY . .
+RUN npx prisma generate
+
+# ECS runs the long-polling document processing worker. Document parsing itself happens in
+# MinerU's cloud, so this task mostly waits on network — it needs MINERU_API_TOKEN in its
+# environment, and no rendering toolchain of its own.
+CMD ["npx", "tsx", "worker/job-worker.ts"]

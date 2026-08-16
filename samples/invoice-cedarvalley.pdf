@@ -1,0 +1,76 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1305 >>
+stream
+BT
+/F1 24 Tf
+1 0 0 1 50 760 Tm
+(INVOICE) Tj
+/F1 12 Tf
+1 0 0 1 330 770 Tm
+(Cedar Valley Supplies Ltd) Tj
+/F1 10 Tf
+1 0 0 1 330 755 Tm
+(48 Mill Lane, Leeds, UK) Tj
+/F1 11 Tf
+1 0 0 1 50 710 Tm
+(Invoice #: CVS-2026-0442) Tj
+1 0 0 1 50 695 Tm
+(Issue date: 2026-08-11) Tj
+1 0 0 1 50 680 Tm
+(Due date: 2026-09-10) Tj
+1 0 0 1 50 650 Tm
+(Bill To: Lesaoana Holdings) Tj
+/F1 11 Tf
+1 0 0 1 50 600 Tm
+(Description                          Qty    Unit     Amount) Tj
+1 0 0 1 50 585 Tm
+(-----------------------------------------------------------) Tj
+1 0 0 1 50 568 Tm
+(Office chairs                          4   120.00     480.00) Tj
+1 0 0 1 50 551 Tm
+(Standing desk                          2   350.00     700.00) Tj
+1 0 0 1 50 534 Tm
+(Cable trays                           10     8.50      85.00) Tj
+1 0 0 1 50 517 Tm
+(Delivery                               1    45.00      45.00) Tj
+1 0 0 1 50 500 Tm
+(-----------------------------------------------------------) Tj
+1 0 0 1 50 480 Tm
+(Subtotal                                             1310.00) Tj
+1 0 0 1 50 463 Tm
+(VAT 20%                                               262.00) Tj
+/F1 13 Tf
+1 0 0 1 50 440 Tm
+(TOTAL DUE                                        GBP 1572.00) Tj
+/F1 10 Tf
+1 0 0 1 50 405 Tm
+(Payment terms: Net 30 days. Reference CVS-2026-0442.) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1668
+%%EOF
