@@ -81,8 +81,8 @@ ALTER TABLE "documents" ALTER COLUMN "file_id" SET NOT NULL;
 ALTER TABLE "document_templates" ADD CONSTRAINT "document_templates_file_id_fkey" FOREIGN KEY ("file_id") REFERENCES "document_files"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "documents" ADD CONSTRAINT "documents_file_id_fkey" FOREIGN KEY ("file_id") REFERENCES "document_files"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-DROP INDEX "document_templates_workspace_id_code_key";
-DROP INDEX "documents_workspace_id_sha256_key";
+ALTER TABLE "document_templates" DROP CONSTRAINT "document_templates_workspace_id_code_key";
+ALTER TABLE "documents" DROP CONSTRAINT "documents_workspace_id_sha256_key";
 CREATE UNIQUE INDEX "document_templates_file_id_code_key" ON "document_templates"("file_id", "code");
 CREATE UNIQUE INDEX "documents_file_id_sha256_key" ON "documents"("file_id", "sha256");
 CREATE INDEX "document_templates_workspace_id_idx" ON "document_templates"("workspace_id");
