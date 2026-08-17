@@ -14,58 +14,63 @@ datasource db {
 // This is a clean DocuBite schema. It intentionally has no TaxHacker
 // accounting, transaction, currency, file, project, or import tables.
 model User {
-  id                    String                @id @default(uuid()) @db.Uuid
-  email                 String                @unique
-  name                  String
-  avatar                String?
+  id                   String                @id @default(uuid()) @db.Uuid
+  email                String                @unique
+  name                 String
+  avatar               String?
   /// "user" or "admin". An admin is exempt from every plan limit in the workspaces they own —
   /// see isWorkspaceLimitExempt in models/workspaces.ts. Deliberately a String, matching
   /// WorkspaceMember.role, rather than an enum: the set grows by data, not by migration.
-  role                  String                @default("user")
+  role                 String                @default("user")
   /// Set by an admin from /admin/users. A suspended account keeps its role and all its data, but
   /// getApiUser refuses it — which is every page, layout, action and route handler at once. Its
   /// own timestamp rather than role = "suspended": that would destroy the prior role and, for an
   /// admin, silently revoke plan-limit exemption from every workspace they own.
-  suspendedAt           DateTime?             @map("suspended_at")
-  emailVerified         Boolean               @default(false) @map("is_email_verified")
-  createdAt             DateTime              @default(now()) @map("created_at")
-  updatedAt             DateTime              @updatedAt @map("updated_at")
-  accounts              Account[]
-  sessions              Session[]
-  workspaceMemberships  WorkspaceMember[]
-  sentInvitations       WorkspaceInvitation[] @relation("InvitationSender")
-  documentAuditEvents   DocumentAuditEvent[]  @relation("AuditActor")
-  adminAuditEvents      AdminAuditEvent[]     @relation("AdminAuditActor")
-  createdFiles          DocumentFile[]        @relation("FileCreator")
-  fileShares            DocumentFileShare[]
+  suspendedAt          DateTime?             @map("suspended_at")
+  emailVerified        Boolean               @default(false) @map("is_email_verified")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  accounts             Account[]
+  sessions             Session[]
+  workspaceMemberships WorkspaceMember[]
+  sentInvitations      WorkspaceInvitation[] @relation("InvitationSender")
+  documentAuditEvents  DocumentAuditEvent[]  @relation("AuditActor")
+  adminAuditEvents     AdminAuditEvent[]     @relation("AdminAuditActor")
+  createdFiles         DocumentFile[]        @relation("FileCreator")
+  fileShares           DocumentFileShare[]
+  createdTemplates     WorkspaceTemplate[]   @relation("TemplateCreator")
 
   @@map("users")
 }
 
 model Workspace {
-  id              String                 @id @default(uuid()) @db.Uuid
-  name            String
-  /** "personal" — the single-member workspace auto-created for every user, which is where
+  id               String                  @id @default(uuid()) @db.Uuid
+  name             String
+  /**
+   * "personal" — the single-member workspace auto-created for every user, which is where
    * their files live by default. "team" — a shared workspace, creatable only on a plan whose
-   * member limit is above one. */
-  kind            String                 @default("personal")
-  aiEnabled       Boolean                @default(true) @map("ai_enabled")
-  createdAt       DateTime               @default(now()) @map("created_at")
-  updatedAt       DateTime               @updatedAt @map("updated_at")
-  members         WorkspaceMember[]
-  invitations     WorkspaceInvitation[]
-  templates       DocumentTemplate[]
-  documents       Document[]
-  folders         DocumentFolder[]
-  files           DocumentFile[]
-  jobs            DocumentProcessingJob[]
-  usagePeriods    WorkspaceUsagePeriod[]
-  subscription    WorkspaceSubscription?
-  auditEvents     DocumentAuditEvent[]
-  webhookEvents   StripeWebhookEvent[]
-  workbooks       SpreadsheetWorkbook[]
-  aiFormulaCache  AiFormulaCache[]
+   * member limit is above one.
+   */
+  kind             String                  @default("personal")
+  aiEnabled        Boolean                 @default(true) @map("ai_enabled")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  members          WorkspaceMember[]
+  invitations      WorkspaceInvitation[]
+  templates        DocumentTemplate[]
+  documents        Document[]
+  folders          DocumentFolder[]
+  files            DocumentFile[]
+  jobs             DocumentProcessingJob[]
+  usagePeriods     WorkspaceUsagePeriod[]
+  subscription     WorkspaceSubscription?
+  auditEvents      DocumentAuditEvent[]
+  webhookEvents    StripeWebhookEvent[]
+  workbooks        SpreadsheetWorkbook[]
+  aiFormulaCache   AiFormulaCache[]
   extractionShapes ExtractionShape[]
+  fieldValues      DocumentFieldValue[]
+  libraryTemplates WorkspaceTemplate[]
 
   @@map("workspaces")
 }
@@ -126,15 +131,15 @@ model WorkspaceSubscription {
 }
 
 model WorkspaceUsagePeriod {
-  id                    String    @id @default(uuid()) @db.Uuid
-  workspaceId           String    @map("workspace_id") @db.Uuid
-  periodStart           DateTime  @map("period_start")
-  periodEnd             DateTime  @map("period_end")
-  inboundDocumentCount  Int       @default(0) @map("inbound_document_count")
-  aiExtractionCount     Int       @default(0) @map("ai_extraction_count")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(uuid()) @db.Uuid
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  periodStart          DateTime  @map("period_start")
+  periodEnd            DateTime  @map("period_end")
+  inboundDocumentCount Int       @default(0) @map("inbound_document_count")
+  aiExtractionCount    Int       @default(0) @map("ai_extraction_count")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, periodStart])
   @@index([workspaceId, periodEnd])
@@ -157,23 +162,27 @@ model DocumentFolder {
   @@map("document_folders")
 }
 
-/** One spreadsheet file: the thing the Files list lists, shares, and renames. It owns its
+/**
+ * One spreadsheet file: the thing the Files list lists, shares, and renames. It owns its
  * worksheets (DocumentTemplate) and the documents extracted into them, so the same PDF can be
- * uploaded into two different files without tripping the dedup constraint. */
+ * uploaded into two different files without tripping the dedup constraint.
+ */
 model DocumentFile {
-  id          String              @id @default(uuid()) @db.Uuid
-  workspaceId String              @map("workspace_id") @db.Uuid
-  folderId    String?             @map("folder_id") @db.Uuid
-  name        String              @default("untitled")
-  createdById String?             @map("created_by_id") @db.Uuid
-  /** Link sharing, keyed on the file id itself the way Lido keys on ?lidoFileId=<uuid>:
-   * none | view | interact | edit. */
-  linkAccess  String              @default("none") @map("link_access")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  folder      DocumentFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy   User?               @relation("FileCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  id          String               @id @default(uuid()) @db.Uuid
+  workspaceId String               @map("workspace_id") @db.Uuid
+  folderId    String?              @map("folder_id") @db.Uuid
+  name        String               @default("untitled")
+  createdById String?              @map("created_by_id") @db.Uuid
+  /**
+   * Link sharing, keyed on the file id itself the way Lido keys on ?lidoFileId=<uuid>:
+   * none | view | interact | edit.
+   */
+  linkAccess  String               @default("none") @map("link_access")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder      DocumentFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy   User?                @relation("FileCreator", fields: [createdById], references: [id], onDelete: SetNull)
   templates   DocumentTemplate[]
   documents   Document[]
   shares      DocumentFileShare[]
@@ -187,7 +196,9 @@ model DocumentFile {
 model DocumentFileShare {
   id        String       @id @default(uuid()) @db.Uuid
   fileId    String       @map("file_id") @db.Uuid
-  /** Null until the invited email signs up; resolved on first access. */
+  /**
+   * Null until the invited email signs up; resolved on first access.
+   */
   userId    String?      @map("user_id") @db.Uuid
   email     String
   access    String       @default("view")
@@ -227,10 +238,12 @@ model DocumentTemplate {
   @@map("document_templates")
 }
 
-/** One saved extraction setup, matched against the next similar upload so it can be reused. Kept
+/**
+ * One saved extraction setup, matched against the next similar upload so it can be reused. Kept
  * per worksheet (@@unique([workspaceId, templateId])) and refreshed whenever that worksheet
  * extracts a document. `signature` is the layout fingerprint lib/shape-match compares; `fields`
- * and `prompt` are the setup to re-apply. */
+ * and `prompt` are the setup to re-apply.
+ */
 model ExtractionShape {
   id             String            @id @default(uuid()) @db.Uuid
   workspaceId    String            @map("workspace_id") @db.Uuid
@@ -259,14 +272,14 @@ model ExtractionShape {
 }
 
 model DocumentTemplateVersion {
-  id          String           @id @default(uuid()) @db.Uuid
-  templateId  String           @map("template_id") @db.Uuid
-  version     Int
-  fields      Json
-  prompt      String?
-  createdAt   DateTime         @default(now()) @map("created_at")
-  template    DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  documents   Document[]
+  id         String           @id @default(uuid()) @db.Uuid
+  templateId String           @map("template_id") @db.Uuid
+  version    Int
+  fields     Json
+  prompt     String?
+  createdAt  DateTime         @default(now()) @map("created_at")
+  template   DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  documents  Document[]
 
   @@unique([templateId, version])
   @@map("document_template_versions")
@@ -321,6 +334,7 @@ model Document {
   shape             ExtractionShape?         @relation(fields: [shapeId], references: [id], onDelete: SetNull)
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
+  fieldValues       DocumentFieldValue[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -366,11 +380,12 @@ model DocumentAuditEvent {
   @@map("document_audit_events")
 }
 
-/** What a platform admin did in /admin, and to what.
- *
+/**
+ * What a platform admin did in /admin, and to what.
  * Separate from DocumentAuditEvent rather than an extension of it: that model's workspaceId is
  * NOT NULL and cascades on workspace delete, so the row saying "admin deleted workspace X" would
- * go down with workspace X. This is the record that has to survive its subject. */
+ * go down with workspace X. This is the record that has to survive its subject.
+ */
 model AdminAuditEvent {
   id                String   @id @default(uuid()) @db.Uuid
   /// SetNull, not Cascade: deleting the admin must not delete the evidence of what they did.
@@ -391,9 +406,11 @@ model AdminAuditEvent {
   @@map("admin_audit_events")
 }
 
-/** The spreadsheet behind one file: a Univer `IWorkbookData` snapshot holding every tab, its
+/**
+ * The spreadsheet behind one file: a Univer `IWorkbookData` snapshot holding every tab, its
  * cell values, formulas, styles, and the `custom` metadata that links cells back to documents.
- * One row per file — the grid is the file, not a view derived from it. */
+ * One row per file — the grid is the file, not a view derived from it.
+ */
 model SpreadsheetWorkbook {
   id          String       @id @default(uuid()) @db.Uuid
   workspaceId String       @map("workspace_id") @db.Uuid
@@ -411,8 +428,10 @@ model SpreadsheetWorkbook {
   @@map("spreadsheet_workbooks")
 }
 
-/** Memoised results for the AI formulas (=AI(...) and friends). Without it every reload
- * would recalculate every AI cell and re-bill the workspace for an answer it already has. */
+/**
+ * Memoised results for the AI formulas (=AI(...) and friends). Without it every reload
+ * would recalculate every AI cell and re-bill the workspace for an answer it already has.
+ */
 model AiFormulaCache {
   id          String    @id @default(uuid()) @db.Uuid
   workspaceId String    @map("workspace_id") @db.Uuid
@@ -428,23 +447,91 @@ model AiFormulaCache {
 }
 
 model StripeWebhookEvent {
-  id            String     @id @default(uuid()) @db.Uuid
-  stripeEventId String     @unique @map("stripe_event_id")
-  workspaceId   String?    @map("workspace_id") @db.Uuid
-  type          String
-  status        String     @default("pending")
-  attempts      Int        @default(0)
-  errorCode     String?    @map("error_code")
-  processingStartedAt DateTime? @map("processing_started_at")
-  leaseUntil    DateTime?  @map("lease_until")
-  processedAt   DateTime?  @map("processed_at")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  id                  String     @id @default(uuid()) @db.Uuid
+  stripeEventId       String     @unique @map("stripe_event_id")
+  workspaceId         String?    @map("workspace_id") @db.Uuid
+  type                String
+  status              String     @default("pending")
+  attempts            Int        @default(0)
+  errorCode           String?    @map("error_code")
+  processingStartedAt DateTime?  @map("processing_started_at")
+  leaseUntil          DateTime?  @map("lease_until")
+  processedAt         DateTime?  @map("processed_at")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  workspace           Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([status, leaseUntil])
   @@map("stripe_webhook_events")
+}
+
+/**
+ * One flattened, queryable copy of a single extracted value, so the whole workspace's extracted
+ * data can be searched and aggregated without unpacking every Document.reviewedData JSON blob.
+ * Kept in lockstep with reviewedData by a delete-all + createMany sync in the same transaction as
+ * any reviewedData write (see models/document-values.ts), so there is deliberately NO unique
+ * constraint — that keeps the migration free of constraint-backed indexes (a prior incident) and
+ * makes the sync a plain replace rather than an upsert. The typed columns (valueNumber/valueDate/
+ * valueBool) power aggregation and range filters; valueText is the always-present search column.
+ * Full-text search stays on insensitive `contains` over valueText rather than tsvector/GIN: the
+ * pglite dev database makes extensions and triggers a migration risk, and every list is capped and
+ * workspace-scoped. If this becomes slow at scale, the upgrade path is a pg_trgm GIN index on
+ * valueText (a Postgres-only additive migration, skipped on pglite).
+ */
+model DocumentFieldValue {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  documentId  String    @map("document_id") @db.Uuid
+  /// The top-level field this value belongs to (matches a DocumentFieldDefinition.key).
+  fieldKey    String    @map("field_key")
+  /// For a value inside an array row: the item field's key. Null for scalar top-level values.
+  itemKey     String?   @map("item_key")
+  /// For a value inside an array row: the 0-based row index. Null for scalar top-level values.
+  itemIndex   Int?      @map("item_index")
+  label       String
+  type        String
+  /// Always set — String()d and capped. This is the column text search runs against.
+  valueText   String?   @map("value_text")
+  valueNumber Float?    @map("value_number")
+  valueDate   DateTime? @map("value_date") @db.Date
+  valueBool   Boolean?  @map("value_bool")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([workspaceId, fieldKey])
+  @@index([workspaceId, fieldKey, valueNumber])
+  @@index([workspaceId, fieldKey, valueDate])
+  @@map("document_field_values")
+}
+
+/**
+ * A workspace-level, deliberately reusable extraction template — the "template library". Distinct
+ * from DocumentTemplate (which is a worksheet bound to one file) and from ExtractionShape (an
+ * implicit "looks like last time" match): this is a named setup a user chooses to start a new
+ * file from. Applying it copies its fields/prompt into a file's worksheet through the existing
+ * save path, so later edits to a library entry never touch a live worksheet.
+ */
+model WorkspaceTemplate {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  description String?
+  docType     String?   @map("doc_type")
+  fields      Json
+  prompt      String?
+  multiRow    Boolean   @default(false) @map("multi_row")
+  useCount    Int       @default(0) @map("use_count")
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?     @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, updatedAt])
+  @@map("workspace_templates")
 }
 
 model Session {
@@ -467,20 +554,20 @@ model Account {
   /// Prisma rejected it with "Argument `id` is missing". Generated by Prisma rather than by the
   /// database: the column is TEXT (not UUID like its siblings), so a gen_random_uuid() default
   /// would mean retyping a live column for no gain — every write goes through Prisma anyway.
-  id                   String   @id @default(uuid())
-  accountId            String   @map("account_id")
-  providerId           String   @map("provider_id")
-  userId               String   @map("user_id") @db.Uuid
-  accessToken          String?  @map("access_token")
-  refreshToken         String?  @map("refresh_token")
-  idToken              String?  @map("id_token")
-  accessTokenExpiresAt DateTime? @map("access_token_expires_at")
+  id                    String    @id @default(uuid())
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id") @db.Uuid
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
   refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
-  scope                String?
-  password             String?
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }

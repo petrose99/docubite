@@ -4,6 +4,8 @@ import { buildDocumentJsonSchema, buildDocumentPrompt, DocumentClassification, D
 import { documentBlocksKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
 import { buildBlocksSidecar, buildDocumentProvenance } from "@/lib/provenance"
 import { buildShapeSignature } from "@/lib/shape-match"
+import { searchableText } from "@/models/documents"
+import { documentFieldValueSyncOps } from "@/models/document-values"
 import { upsertExtractionShape } from "@/models/extraction-shapes"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parseDocumentWithMineru } from "@/lib/mineru"
@@ -187,6 +189,8 @@ export async function processDocumentJob(jobId: string) {
     if (!document.workspace.aiEnabled) {
       await prisma.$transaction([
         prisma.document.update({ where: { id: document.id }, data: { status: "ready_for_review", reviewedData: {}, confidence: { aiEnabled: false } } }),
+        // No values were extracted, so clear any this document carried from an earlier run.
+        ...documentFieldValueSyncOps(document, {}),
         prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
       ])
       return
@@ -286,7 +290,10 @@ export async function processDocumentJob(jobId: string) {
     if (sidecar) await putDocumentSource(documentBlocksKey(document.workspaceId, document.id), Buffer.from(JSON.stringify(sidecar)), "application/json").catch(() => {})
     const status = missing.length || batchFailures ? "needs_review" : "ready_for_review"
     await prisma.$transaction([
-      prisma.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } }),
+      // searchText is rebuilt from the extracted values here — without this it stays the bare
+      // filename set at upload, and text search would miss everything until a manual review.
+      prisma.document.update({ where: { id: document.id }, data: { status, ocrText, searchText: searchableText(extraction, document.filename), rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } }),
+      ...documentFieldValueSyncOps(document, extraction),
       prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
       prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } }),
     ])

@@ -5,6 +5,7 @@
 // app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
 import { DEFAULT_DOCUMENT_TEMPLATES, parseTemplateFields } from "@/lib/document-templates"
 import { deleteDocumentSource, documentStorageKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
+import { documentFieldValueSyncOps } from "@/models/document-values"
 import { prisma } from "@/lib/db"
 import { Prisma } from "@/prisma/client"
 import { randomUUID } from "crypto"
@@ -189,6 +190,12 @@ export async function duplicateFile(input: { workspaceId: string; userId: string
         aiQuotaClaimed: document.aiQuotaClaimed, searchText: document.searchText, ocrText: document.ocrText,
         errorCode: document.errorCode, reviewedAt: document.reviewedAt,
       } })
+      // Give the copy its own flattened field values, so the duplicated documents are searchable on
+      // /data too. Built from the copied snapshot and whatever data the original carried.
+      await prisma.$transaction(documentFieldValueSyncOps(
+        { id, workspaceId: document.workspaceId, fieldSnapshot: document.fieldSnapshot },
+        document.reviewedData ?? document.rawExtraction ?? {},
+      ))
     }
   } catch (error) {
     for (const key of writtenKeys) await deleteDocumentSource(key).catch(() => {})

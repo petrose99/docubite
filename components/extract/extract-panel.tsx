@@ -2,6 +2,7 @@
 
 import { deleteDocumentsAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
+import { SaveToLibraryButton, StartFromLibraryButton, type AppliedTemplate } from "@/components/extract/library-controls"
 import { FileRow } from "@/components/extract/file-row"
 import { filesFromDataTransfer } from "@/components/extract/folder-traverse"
 import { FolderReport } from "@/components/extract/folder-report"
@@ -270,6 +271,18 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
     markDirty()
   }
 
+  /** Copy-on-apply from the template library: loads a saved entry's columns/prompt/row mode into
+   * the panel exactly like useMatchedShape, so the existing save path creates the worksheet and
+   * later edits to the library entry never touch it. */
+  const applyLibraryTemplate = (applied: AppliedTemplate) => {
+    setFields(applied.fields)
+    setPrompt(applied.prompt)
+    setMultiRow(applied.multiRow)
+    if (!template && name.startsWith("Sheet ")) setName(applied.name)
+    setMatchedShape(null)
+    markDirty()
+  }
+
   /** Declines the offer and asks the LLM for a fresh setup instead, forcing past the match. */
   const startFresh = () => {
     setMatchedShape(null)
@@ -437,10 +450,17 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
               </p>
             </div>
           </div>
-          <div className="mt-2.5 flex gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             <button type="button" onClick={useMatchedShape} className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">Use same setup</button>
+            <StartFromLibraryButton workspaceId={workspaceId} onApply={applyLibraryTemplate} variant="link" />
             <button type="button" onClick={startFresh} className="rounded-md px-3 py-1.5 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100">Start fresh</button>
           </div>
+        </div>
+      )}
+
+      {!matchedShape && !fields.length && (
+        <div className="flex justify-end">
+          <StartFromLibraryButton workspaceId={workspaceId} onApply={applyLibraryTemplate} />
         </div>
       )}
 
@@ -472,7 +492,10 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
       </section>
 
       <section>
-        <h3 className="text-sm font-bold text-stone-900">Columns</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-stone-900">Columns</h3>
+          <SaveToLibraryButton workspaceId={workspaceId} name={name} fields={fields} prompt={prompt} multiRow={multiRow} />
+        </div>
         <p className="mb-2 text-xs text-stone-500">Each column is one data point the AI extracts. Click a chip to refine it.</p>
         <ColumnChips fields={fields} aiBusy={aiBusy} aiReady={staged.some((row) => row.file)} onChange={(next) => { setFields(next); markDirty() }} onAiSuggest={() => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, undefined, { fresh: true }) }} onAiColumn={(description) => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, description) }} />
       </section>

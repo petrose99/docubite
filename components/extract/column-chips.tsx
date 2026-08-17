@@ -84,18 +84,21 @@ function FieldEditor({ field, onSave }: { field: DocumentFieldDefinition; onSave
 }
 
 /** The Columns section of the extraction panel: fields as removable chips (click to edit in
- * a popover), a type-your-own column input, and the AI helpers. */
+ * a popover), a type-your-own column input, and the AI helpers. The AI helpers are optional so
+ * the same editor can be reused where there is no file to suggest from (e.g. the template
+ * library), by omitting onAiSuggest/onAiColumn. */
 export function ColumnChips({ fields, onChange, onAiSuggest, onAiColumn, aiBusy, aiReady }: {
   fields: DocumentFieldDefinition[]
   onChange: (fields: DocumentFieldDefinition[]) => void
-  onAiSuggest: () => void
-  onAiColumn: (description: string) => void
-  aiBusy: boolean
-  aiReady: boolean
+  onAiSuggest?: () => void
+  onAiColumn?: (description: string) => void
+  aiBusy?: boolean
+  aiReady?: boolean
 }) {
   const [newColumn, setNewColumn] = useState("")
   const [aiColumnOpen, setAiColumnOpen] = useState(false)
   const [aiColumnText, setAiColumnText] = useState("")
+  const aiHelpers = Boolean(onAiSuggest && onAiColumn)
 
   const addColumn = () => {
     const label = newColumn.trim()
@@ -106,8 +109,8 @@ export function ColumnChips({ fields, onChange, onAiSuggest, onAiColumn, aiBusy,
   }
 
   return <div className="space-y-2.5">
-    <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50" disabled={!aiReady || aiBusy} title={aiReady ? "Let AI propose columns from your first file" : "Add a file first"} onClick={onAiSuggest}>
+    {aiHelpers && <div className="flex flex-wrap items-center gap-2">
+      <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50" disabled={!aiReady || aiBusy} title={aiReady ? "Let AI propose columns from your first file" : "Add a file first"} onClick={() => onAiSuggest?.()}>
         {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}AI suggest columns
       </button>
       <Popover open={aiColumnOpen} onOpenChange={setAiColumnOpen}>
@@ -118,11 +121,11 @@ export function ColumnChips({ fields, onChange, onAiSuggest, onAiColumn, aiBusy,
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-3">
           <label className="mb-1 block text-xs font-medium text-stone-500">Describe the column you want</label>
-          <input className="w-full rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="e.g. total including tax" value={aiColumnText} autoFocus onChange={(event) => setAiColumnText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && aiColumnText.trim()) { event.preventDefault(); onAiColumn(aiColumnText.trim()); setAiColumnText(""); setAiColumnOpen(false) } }} />
-          <button type="button" className="mt-2 w-full rounded-md bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" disabled={!aiColumnText.trim()} onClick={() => { onAiColumn(aiColumnText.trim()); setAiColumnText(""); setAiColumnOpen(false) }}>Add with AI</button>
+          <input className="w-full rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="e.g. total including tax" value={aiColumnText} autoFocus onChange={(event) => setAiColumnText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && aiColumnText.trim()) { event.preventDefault(); onAiColumn?.(aiColumnText.trim()); setAiColumnText(""); setAiColumnOpen(false) } }} />
+          <button type="button" className="mt-2 w-full rounded-md bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" disabled={!aiColumnText.trim()} onClick={() => { onAiColumn?.(aiColumnText.trim()); setAiColumnText(""); setAiColumnOpen(false) }}>Add with AI</button>
         </PopoverContent>
       </Popover>
-    </div>
+    </div>}
 
     <div className="flex flex-wrap gap-1.5">
       {fields.map((field, index) => {

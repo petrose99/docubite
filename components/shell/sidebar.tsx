@@ -3,7 +3,7 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { CreditCard, Files, Settings, Users } from "lucide-react"
+import { CreditCard, Database, Files, Settings, Users } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -24,6 +24,7 @@ export function Sidebar({ workspaceId, workspaces, user }: {
   const base = `/workspaces/${workspaceId}`
   const items = [
     { href: `${base}/files`, label: "Files", icon: Files },
+    { href: `${base}/data`, label: "Data", icon: Database },
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
     { href: `${base}/settings/templates`, label: "Settings", icon: Settings },

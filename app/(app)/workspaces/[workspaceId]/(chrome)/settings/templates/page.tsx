@@ -1,8 +1,10 @@
+import { LibraryManager } from "@/components/templates/library-manager"
 import { TemplateForm } from "@/components/workspace/template-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getCurrentUser } from "@/lib/auth"
 import { listFiles } from "@/models/files"
 import { prisma } from "@/lib/db"
+import { listWorkspaceTemplates } from "@/models/workspace-templates"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
 
@@ -13,9 +15,10 @@ export default async function TemplatesPage({ params }: { params: Promise<{ work
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  const [files, templates] = await Promise.all([
+  const [files, templates, libraryTemplates] = await Promise.all([
     listFiles(workspaceId, { sort: "name", dir: "asc" }),
     prisma.documentTemplate.findMany({ where: { workspaceId }, include: { versions: { orderBy: { version: "desc" }, take: 1 } }, orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
+    listWorkspaceTemplates(workspaceId),
   ])
   const byFile = new Map(files.map((file) => [file.id, templates.filter((template) => template.fileId === file.id)]))
 
@@ -24,6 +27,22 @@ export default async function TemplatesPage({ params }: { params: Promise<{ work
       <h1 className="text-3xl font-bold">Document templates</h1>
       <p className="mt-1 text-muted-foreground">Every file starts with Invoice, Receipt, and Custom document. Custom templates support PDFs and images only.</p>
     </header>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Template library</CardTitle>
+        <CardDescription>Reusable column sets you can start any new file from. Applying one copies its columns into that file; later edits here never change existing worksheets.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <LibraryManager
+          workspaceId={workspaceId}
+          canManage={membership.role === "owner"}
+          templates={libraryTemplates.map((template) => ({
+            id: template.id, name: template.name, description: template.description, docType: template.docType,
+            fields: template.fields, prompt: template.prompt, multiRow: template.multiRow, useCount: template.useCount,
+          }))} />
+      </CardContent>
+    </Card>
 
     <div className="space-y-4">
       {files.map((file) => <Card key={file.id}>

@@ -2,6 +2,7 @@ import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
+import { documentFieldValueSyncOps } from "@/models/document-values"
 import { prisma } from "@/lib/db"
 import { Document, Prisma } from "@/prisma/client"
 import crypto from "crypto"
@@ -32,7 +33,7 @@ export function validateDocumentInput(buffer: Buffer, mimeType: string) {
   if (!isSupportedDocumentBuffer(buffer, mimeType)) throw new Error("unsupported_document_type")
 }
 
-function searchableText(data: Record<string, unknown>, filename: string) {
+export function searchableText(data: Record<string, unknown>, filename: string) {
   const flatten = (value: unknown): string[] => {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return [String(value)]
     if (Array.isArray(value)) return value.flatMap(flatten)
@@ -101,6 +102,7 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   const missing = findMissingRequiredFields(fields, reviewedData)
   return prisma.$transaction([
     prisma.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } }),
+    ...documentFieldValueSyncOps(document, reviewedData),
     prisma.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } }),
   ])
 }
@@ -121,7 +123,7 @@ function clearFieldProvenance(provenance: unknown, fieldKey: string): { provenan
 
 /** actorId is nullable because a link-shared editor has no account of their own; the audit
  * event still records that the edit happened. */
-export async function updateDocumentField(input: { workspaceId: string; documentId: string; fieldKey: string; value: unknown; actorId: string | null }) {
+export async function updateDocumentField(input: { workspaceId: string; documentId: string; fieldKey: string; value: unknown; actorId: string | null; auditType?: string }) {
   const document = await getWorkspaceDocument(input.workspaceId, input.documentId)
   if (!document) throw new Error("document_not_found")
   if (document.status === "queued" || document.status === "failed") throw new Error("document_not_ready")
@@ -140,7 +142,8 @@ export async function updateDocumentField(input: { workspaceId: string; document
   const provenanceUpdate = clearFieldProvenance(document.provenance, input.fieldKey)
   const [updated] = await prisma.$transaction([
     prisma.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence, ...provenanceUpdate } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" } }),
+    ...documentFieldValueSyncOps(document, reviewedData),
+    prisma.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: input.auditType ?? "document_field_edited" } }),
   ])
   return { document: updated, missingRequiredFields: missing }
 }
