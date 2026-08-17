@@ -4,7 +4,7 @@ import Link from "next/link"
 
 export function Faq() {
   return (
-    <section className="border-t border-stone-200 bg-stone-50">
+    <section className="border-t border-stone-200 bg-white">
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[0.75fr_1.25fr]">
         <div>
           <h2 className="font-display text-3xl font-bold tracking-[-0.03em] text-stone-950 sm:text-4xl">Questions people ask first</h2>

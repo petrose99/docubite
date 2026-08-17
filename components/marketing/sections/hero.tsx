@@ -6,16 +6,16 @@ import Link from "next/link"
 
 export function Hero() {
   return (
-    <section className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-16 lg:grid-cols-[1.02fr_.98fr] lg:py-24">
+    <section className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-16 lg:grid-cols-[0.92fr_1.08fr] lg:py-24">
       <div>
         <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />Built for bookkeeping and finance teams
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />Document data extraction
         </p>
         <h1 className="mt-5 font-display text-[2.75rem] font-bold leading-[1.02] tracking-[-0.04em] text-stone-950 sm:text-6xl">
-          Take a bite out of<br className="hidden sm:inline" /> document busywork.
+          Turn any document<br className="hidden sm:inline" /> into data you can trust.
         </h1>
         <p className="mt-6 max-w-xl text-lg leading-8 text-stone-600">
-          DocuBite reads invoices, receipts, bank statements and IDs — including the handwritten and badly scanned ones — and hands back structured fields you review once and export clean.
+          DocuBite reads the documents your work runs on — invoices, receipts, bank statements and IDs — into clean, structured fields. Phone photos and handwriting included. Every value lands in a live sheet and stays pinned to the exact spot it came from.
         </p>
 
         <EmailCapture size="lg" className="mt-8 max-w-lg" />

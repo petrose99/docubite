@@ -447,7 +447,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
       <section>
         <h3 className="text-sm font-bold text-stone-900">Files</h3>
         <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF or image)</p>
-        {staged.length > 0 && <div className="mb-2 space-y-0.5">
+        {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
           {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}
         <button type="button" className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
