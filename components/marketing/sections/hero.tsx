@@ -8,14 +8,11 @@ export function Hero() {
   return (
     <section className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-16 lg:grid-cols-[0.92fr_1.08fr] lg:py-24">
       <div>
-        <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />Document data extraction
-        </p>
-        <h1 className="mt-5 font-display text-[2.75rem] font-bold leading-[1.02] tracking-[-0.04em] text-stone-950 sm:text-6xl">
-          Turn any document<br className="hidden sm:inline" /> into data you can trust.
+        <h1 className="font-display text-[2.75rem] font-bold leading-[1.02] tracking-[-0.04em] text-stone-950 sm:text-6xl">
+          Turn your PDFs<br className="hidden sm:inline" /> into a spreadsheet you can trust.
         </h1>
         <p className="mt-6 max-w-xl text-lg leading-8 text-stone-600">
-          DocuBite reads the documents your work runs on — invoices, receipts, bank statements and IDs — into clean, structured fields. Phone photos and handwriting included. Every value lands in a live sheet and stays pinned to the exact spot it came from.
+          DocuBite reads the PDFs your work runs on — invoices, receipts, bank statements — plus the scans, photos and handwriting mixed in, into clean, structured fields. Drop in one file or a folder of a hundred: every value lands in a live sheet, pinned to the exact spot it came from, and the pile comes back checked for gaps and duplicates.
         </p>
 
         <EmailCapture size="lg" className="mt-8 max-w-lg" />

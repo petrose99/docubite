@@ -11,7 +11,7 @@ export function CtaBand() {
             Your inbox is full of documents. Let something else read them.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-7 text-emerald-100/75">
-            Start a {TRIAL_DAYS}-day free trial and put your worst-looking document through it first.
+            Start a {TRIAL_DAYS}-day free trial and put your worst-looking folder through it first.
           </p>
           <EmailCapture size="lg" tone="inverse" className="mx-auto mt-8 max-w-lg" />
           <p className="mt-4 text-sm text-emerald-100/60">

@@ -1,4 +1,4 @@
-import { FileText, IdCard, Landmark, PenLine, Receipt, ScanLine, type LucideIcon } from "lucide-react"
+import { FileText, Landmark, PenLine, Receipt, ScanLine, type LucideIcon } from "lucide-react"
 
 /** The Solutions mega-menu and the /solutions/[slug] pages read from this one list, so a new
  * solution is a single entry here rather than a page plus a nav edit that can drift apart.
@@ -38,7 +38,7 @@ export const SOLUTIONS: Solution[] = [
     description: "Pull supplier, invoice number, dates, totals, tax and line items out of every supplier invoice — whatever layout it arrives in — and review the result before it reaches your ledger.",
     fields: ["Supplier name", "Invoice number", "Issue date", "Due date", "Net total", "Tax amount", "Gross total", "Currency", "Line items"],
     points: [
-      { title: "Every supplier has a different layout", text: "Templates key on what a field means, not where it sits on the page, so a new supplier does not need a new template — the same invoice template reads all of them." },
+      { title: "Every supplier has a different layout", text: "Templates key on what a field means, not where it sits on the page, so a new supplier does not need a new template — the same invoice template reads all of them. Repeat suppliers are recognised by shape before any AI runs — the same setup applies itself." },
       { title: "Line items come out as rows, not a blob", text: "Repeating item tables are extracted into their own rows with description, quantity, unit price and tax, ready to export alongside the header fields." },
       { title: "Totals are checked, not assumed", text: "Values the model was unsure about are flagged for review rather than quietly filled in, so a misread tax amount is something you correct, not something you discover in a reconciliation." },
     ],
@@ -71,21 +71,7 @@ export const SOLUTIONS: Solution[] = [
       { title: "Tables that run across pages stay one table", text: "Statements are processed in page batches and the transaction rows are stitched back together, so a table broken by a page header does not become two half-tables." },
       { title: "Money in and money out stay apart", text: "Debit and credit columns are extracted as distinct fields rather than one signed number, which is what makes the export usable without a second cleanup pass." },
       { title: "Balances give you a check to run", text: "Opening and closing balances come out with the rows, so the arithmetic can be verified before anyone trusts the data." },
-    ],
-  },
-  {
-    slug: "ids",
-    group: "type",
-    name: "IDs",
-    tagline: "Passports, driving licences, national IDs",
-    icon: IdCard,
-    title: "Identity documents, read into the fields you actually need",
-    description: "Passports, driving licences and national ID cards read into name, document number, dates and issuing country — captured for onboarding checks and held in private encrypted storage.",
-    fields: ["Full name", "Date of birth", "Document number", "Document type", "Issuing country", "Issue date", "Expiry date", "MRZ lines"],
-    points: [
-      { title: "The machine-readable zone is a field too", text: "Where a document carries an MRZ, it is captured as its own value alongside the printed fields, so the two can be checked against each other." },
-      { title: "Photos of cards, not flatbed scans", text: "ID documents are almost always photographed in hand, with glare and a cropped edge. That is the input the vision path is tuned for." },
-      { title: "Handled as sensitive by default", text: "Sources sit in private encrypted storage, access is scoped to the workspace that uploaded them, and document bodies are never written to logs." },
+      { title: "A month goes missing, the report says so", text: "Upload the year's statements as one folder and the folder report flags the missing months and the duplicate uploads before anyone starts reconciling." },
     ],
   },
   {

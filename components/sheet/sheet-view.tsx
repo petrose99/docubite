@@ -7,7 +7,7 @@ import type { SheetTemplate, WorkspaceUsage } from "@/components/extract/types"
 import { useExtractionProgress } from "@/components/extract/use-extraction-progress"
 import { FileHeader } from "@/components/files/file-header"
 import type { FUniver, IWorkbookData } from "@univerjs/presets"
-import { Database, Download, FileText, Sparkles } from "lucide-react"
+import { Database, Download, FileDown, FileText, Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { registerAiFormulas } from "./custom-functions"
@@ -23,6 +23,7 @@ const ExtractIcon = () => <Database className="h-4 w-4" />
 const FormulaIcon = () => <Sparkles className="h-4 w-4" />
 const SourceIcon = () => <FileText className="h-4 w-4" />
 const DownloadIcon = () => <Download className="h-4 w-4" />
+const DownloadCsvIcon = () => <FileDown className="h-4 w-4" />
 
 /** The whole sheet surface: a file bar, the assistant docked left, and the grid filling the
  * rest of the window.
@@ -176,6 +177,23 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       icon: "docubite-download-icon",
       order: 0,
       action: () => { window.location.href = `/workspaces/${workspaceId}/files/${fileId}/export?format=xlsx` },
+    }).appendTo("ribbon.start.history")
+
+    /** Download CSV, beside the XLSX export: a CSV is one sheet, so this one exports the tab you
+     * are looking at. The active sheet's name rides along as `sheetName` for the route to match;
+     * if the API can't hand it over, plain `format=csv` still gets the first tab. */
+    api.registerComponent("docubite-download-csv-icon", DownloadCsvIcon)
+    api.createMenu({
+      id: "docubite.export-csv",
+      title: "Download CSV",
+      tooltip: "Download the current tab as .csv",
+      icon: "docubite-download-csv-icon",
+      order: 0,
+      action: () => {
+        const name = api.getActiveWorkbook()?.getActiveSheet()?.getSheetName()
+        const base = `/workspaces/${workspaceId}/files/${fileId}/export?format=csv`
+        window.location.href = name ? `${base}&sheetName=${encodeURIComponent(name)}` : base
+      },
     }).appendTo("ribbon.start.history")
 
     /** Right-click → Preview source file, on the row's own document.

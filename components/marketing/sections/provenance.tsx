@@ -1,8 +1,9 @@
 import { Check, FileText } from "lucide-react"
 
 const points = [
-  "PDF and image sources, highlighted right on the page",
-  "Uncertain fields flagged for review, not guessed",
+  "Low-confidence values tinted amber in the sheet; missing required fields red",
+  "Reviewed data kept separate from the raw extraction — corrections never overwrite the evidence",
+  "A full audit trail per document: received, extracted, reviewed, edited — who and when",
   "Line-item tables come out as rows, not a blob",
 ]
 
@@ -19,7 +20,7 @@ export function Provenance() {
             A sheet of extracted numbers is a claim about a source nobody is looking at.
           </h2>
           <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-            So DocuBite keeps the thread. Click any cell and the original document opens to the exact line the value came from — the page, the box on the scan, highlighted. Hand-edit a value and its stale source pin drops, because a highlight over the old figure would be worse than none.
+            So DocuBite keeps the thread. Click any cell and the original document opens to the exact line the value came from — the page, the box on the scan, highlighted. Hand-edit a value and its stale source pin drops, because a highlight over the old figure would be worse than none. And when the pages of a document disagree with each other, DocuBite says so, page by page, instead of picking one quietly.
           </p>
           <ul className="mt-6 space-y-3">
             {points.map((point) => (

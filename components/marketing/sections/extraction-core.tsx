@@ -5,6 +5,7 @@ const points = [
   "Angled, low-light phone photos and faded thermal receipts",
   "Handwriting and margin annotations captured as real values",
   "Long, multi-page bundles batched and stitched back into one document",
+  "Whole folders at a drop — up to 100 files a batch, page ranges like 1-3,5, duplicates caught on the way in",
 ]
 
 /** Sits right under the hero to make the repositioning's central claim before anything else:

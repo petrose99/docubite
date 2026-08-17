@@ -51,7 +51,7 @@ const industries: Industry[] = [
       "Hunt for the source PDF when a figure looks wrong",
     ],
     after: [
-      "Drop the whole folder — invoices, receipts, statements — at once",
+      "Drop the whole folder — invoices, receipts, statements — and get back the missing months and duplicates first",
       "Fields land as rows; low-confidence ones flag themselves",
       "Total per supplier with the assistant, click any figure to its line",
     ],
@@ -85,7 +85,7 @@ const industries: Industry[] = [
     after: [
       "Photograph the signed POD or drop the BOL PDF",
       "Line items come out as rows — quantities and refs structured, not a blob",
-      "Ask the assistant to flag mismatches across the whole shipment folder",
+      "Ask the assistant to flag mismatches across the whole shipment folder, and diff this month's paperwork against last month's",
     ],
   },
 ]

@@ -1,33 +1,40 @@
-import { FolderTree, Layers } from "lucide-react"
+import { GitCompareArrows, Layers, Sparkles } from "lucide-react"
 
 const cards = [
   {
-    icon: Layers,
-    title: "Recognises the shape, not the layout",
-    text: "Define a template once — Invoice, Receipt, or your own custom form with the field keys and extraction instructions you need — and it reads every supplier's version of that document. Templates key on what a field means, not where it sits on the page, so a new supplier's layout doesn't need new setup.",
-    chips: ["Invoice", "Receipt", "Custom fields", "Line-item tables"],
+    icon: Sparkles,
+    title: "The first document builds the sheet",
+    text: "Upload it and DocuBite proposes the columns — 3 to 12 typed fields read off the document itself, line-item tables included. Want one more? Describe it in plain English and it appears.",
+    chips: ["Typed columns", "Line-item tables", "Custom fields", "Describe a column"],
   },
   {
-    icon: FolderTree,
-    title: "Reasons across the whole pile, not one page",
-    text: "A file gathers hundreds of documents into one live sheet, kept in folders you organise. Ask the assistant to total spend per supplier, surface the outliers, or check for gaps — and it reasons over every row at once, not a document at a time.",
-    chips: ["Folders", "Multi-doc totals", "Cross-row checks", "CSV export"],
+    icon: Layers,
+    title: "The second one is recognised on sight",
+    text: "Every extraction saves the document's shape — what it means, not where it sits, so a new supplier's layout isn't new setup. When the next one arrives, DocuBite matches it before any AI runs: “Looks like a phone bill — same columns as march.pdf. Use the same setup?” One click, and it costs nothing.",
+    chips: ["Shape memory", "Matched before AI", "Use same setup", "Start fresh"],
+  },
+  {
+    icon: GitCompareArrows,
+    title: "Every one after gets compared to last time",
+    text: "This month's statement against last month's: fields that appeared, fields that went missing, values that moved, line items that changed. The diff is waiting when extraction finishes — you read it instead of hunting for it.",
+    chips: ["Fields added / missing", "Changed values", "Line-item deltas"],
   },
 ]
 
-/** Answers the second objection after "will it read a bad scan?" — "does this scale past one
- * document?" A template captured once and a file that keeps accepting new documents are what
- * make the answer yes. */
+/** Answers the "does this scale past one document?" objection as an arc across repeat documents:
+ * the first one proposes the columns, the second is recognised by shape before any AI runs, and
+ * every one after is diffed against the last of its kind. Setup is a one-time cost that pays
+ * itself back on every document that follows. */
 export function RepeatingDocs() {
   return (
     <section className="border-t border-stone-200 bg-stone-50">
       <div className="mx-auto max-w-6xl px-5 py-20">
         <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Because the same documents keep coming</p>
         <h2 className="mt-3 max-w-xl font-display text-3xl font-bold leading-[1.08] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-          Set it up once. It keeps working as the pile grows.
+          The first one takes a minute. The rest take nothing.
         </h2>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-2">
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
           {cards.map((card) => (
             <article key={card.title} className="rounded-[2rem] rounded-tr-md border border-stone-200 bg-white p-7">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700"><card.icon className="h-5 w-5" /></span>

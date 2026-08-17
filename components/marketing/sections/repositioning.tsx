@@ -4,7 +4,7 @@ const cards = [
   {
     icon: FileSpreadsheet,
     title: "Documents become rows",
-    text: "Drop a file into a workspace and its fields appear as a row the moment extraction finishes — print, scan, photo or handwriting, all through the same door. The file is the sheet, not a view of one.",
+    text: "Drop a file into a workspace and its fields appear as a row the moment extraction finishes — print, scan, photo or handwriting, all through the same door. The file is the sheet, not a view of one. Don't know the columns yet? The first document suggests them — 3 to 12 typed fields, line-item table included.",
   },
   {
     icon: Sparkles,

@@ -23,7 +23,7 @@ export const WORKSPACE_PLANS: Record<string, WorkspacePlan> = {
     name: "Starter",
     priceId: config.stripe.starterPriceId,
     price: 29,
-    features: ["1 user", "200 documents per month", "500 AI extractions per month", "Unlimited files and folders", "Link sharing"],
+    features: ["1 user", "200 documents per month", "500 AI extractions per month", "Unlimited files and folders", "Share by link — view, sandbox or edit"],
     limits: { members: 1, documents: 200, ai: 500 },
   },
   growth: {

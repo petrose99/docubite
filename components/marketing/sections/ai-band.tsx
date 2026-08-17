@@ -1,4 +1,4 @@
-import { MessageCircle, Sparkles, Table2 } from "lucide-react"
+import { MessageCircle, PencilRuler, Sparkles, Table2 } from "lucide-react"
 
 /** The dark "ink" band that carries the two distinct AI surfaces — the assistant and =AI()
  * formulas — since conflating them in one paragraph elsewhere made it unclear DocuBite has
@@ -10,7 +10,7 @@ export function AiBand() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-400">AI in the sheet</p>
           <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] sm:text-4xl">
-            Two ways to put AI to work — without leaving the cell.
+            Three ways to put AI to work — without leaving the cell.
           </h2>
 
           <div className="mt-8 space-y-6">
@@ -29,6 +29,15 @@ export function AiBand() {
                 <h3 className="font-display text-lg font-bold text-white"><span className="font-mono">=AI()</span> formulas, for &ldquo;what&apos;s the formula?&rdquo;</h3>
                 <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
                   Type <span className="font-mono text-emerald-300">=AI(&quot;classify this supplier&quot;, B2)</span> like any other function and it fills down the column. Answers are cached, so recalculating on every reload costs nothing.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><PencilRuler className="h-5 w-5" /></span>
+              <div>
+                <h3 className="font-display text-lg font-bold text-white">The formula builder, for &ldquo;write it for me&rdquo;</h3>
+                <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
+                  Describe the calculation in English — &ldquo;net plus tax, minus the deposit&rdquo; — and get back the formula with a one-sentence explanation of what it does. Nothing lands in the sheet until you hit Insert.
                 </p>
               </div>
             </div>

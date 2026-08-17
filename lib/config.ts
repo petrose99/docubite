@@ -59,7 +59,7 @@ if (process.env.NODE_ENV === "production") {
 export const isGoogleAuthEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 
 const config = {
-  app: { title: "DocuBite", description: "Take a bite out of document busywork. DocuBite reads invoices, receipts, bank statements and IDs — even handwritten and scanned ones — and hands back clean, reviewed data.", version: packageJson.version || "0.0.1", baseURL: env.BASE_URL, supportEmail: "support@docubite.com" },
+  app: { title: "DocuBite", description: "Take a bite out of document busywork. DocuBite reads invoices, receipts and bank statements — even handwritten and scanned ones — into a live sheet where every value traces to its source, and reports on whole folders: what's missing, what's duplicated, what needs a look.", version: packageJson.version || "0.0.1", baseURL: env.BASE_URL, supportEmail: "support@docubite.com" },
   ai: { openaiApiKey: env.OPENAI_API_KEY, openaiModelName: env.OPENAI_MODEL_NAME, geminiApiKey: env.GEMINI_API_KEY, geminiModelName: env.GEMINI_MODEL_NAME, provider: env.AI_PROVIDER },
   documents: { maxFileSizeBytes: 50 * 1024 * 1024, maxPages: env.DOCUMENT_MAX_PAGES, pagesPerBatch: env.DOCUMENT_PAGES_PER_BATCH },
   mineru: { apiToken: env.MINERU_API_TOKEN || "", apiBase: env.MINERU_API_BASE.replace(/\/+$/, ""), modelVersion: env.MINERU_MODEL_VERSION, pollIntervalMs: env.MINERU_POLL_INTERVAL_MS, timeoutMs: env.MINERU_TIMEOUT_MS },

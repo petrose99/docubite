@@ -43,12 +43,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ work
       } })
     }
 
-    // CSV is one sheet by definition. The requested worksheet wins; otherwise the first tab,
-    // which is the one the file opens on.
+    // CSV is one sheet by definition. An exact sheet-name wins (the grid's Download CSV button
+    // sends the active tab's name); otherwise the requested worksheet by template; otherwise the
+    // first tab, which is the one the file opens on.
     const sheets = snapshotToSheets(workbook.snapshot)
+    const sheetName = url.searchParams.get("sheetName")
     const templates = templateCode ? await getFileTemplates(fileId) : []
     const wanted = templates.find((candidate) => candidate.code === templateCode)?.name
-    const chosen = (wanted && sheets.find((sheet) => sheet.name === wanted)) || sheets[0]
+    const chosen = (sheetName && sheets.find((sheet) => sheet.name === sheetName))
+      || (wanted && sheets.find((sheet) => sheet.name === wanted))
+      || sheets[0]
     if (chosen) {
       return new Response(sheetToCsv(chosen), { headers: {
         "content-type": "text/csv; charset=utf-8",

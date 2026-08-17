@@ -32,6 +32,15 @@ export function Faq() {
           <AccordionItem question="Can my team work in the same workspace?">
             Team workspaces with owner and member roles are on the Growth plan and above. Every plan includes per-file link sharing for people outside the workspace.
           </AccordionItem>
+          <AccordionItem question="What can someone I share a link with do?">
+            Whatever level you pick: view, interact, or edit — per public link or per email address, no account needed on their end. Interact is a sandbox: a live grid they can explore where nothing is ever saved. <span className="font-mono">=AI()</span> is disabled on shared links, so a visitor can&apos;t spend your AI allowance.
+          </AccordionItem>
+          <AccordionItem question="What counts against the AI allowance?">
+            Extracting a document and asking the assistant do. The folder report doesn&apos;t — it&apos;s deterministic and free. Recognising a repeat document by its shape doesn&apos;t either; the match happens before any AI runs. Cached <span className="font-mono">=AI()</span> answers recalculate for free.
+          </AccordionItem>
+          <AccordionItem question="What files can I upload?">
+            PDF, JPEG, PNG, WebP and HEIC, up to 50&nbsp;MB each, up to 100 files in a batch — including a whole folder dragged in at once. Email-in and cloud-drive imports aren&apos;t available yet.
+          </AccordionItem>
         </Accordion>
       </div>
     </section>

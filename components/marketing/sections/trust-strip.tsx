@@ -1,7 +1,7 @@
 /** Deliberately not fake customer logos: the product has no named references to show yet, and
  * inventing six greyed-out wordmarks is the one thing on a marketing page a finance buyer will
  * check. These are the document kinds and formats it handles, which is a claim we can stand on. */
-const items = ["Invoices", "Receipts", "Bank statements", "IDs", "Handwritten notes", "Scanned PDFs", "Photos", "Multi-page bundles"]
+const items = ["Invoices", "Receipts", "Bank statements", "Handwritten notes", "Scanned PDFs", "Photos", "Multi-page bundles", "Whole folders"]
 
 export function TrustStrip() {
   return (

@@ -1,4 +1,4 @@
-import { KeyRound, Lock, Server, ShieldCheck } from "lucide-react"
+import { KeyRound, Lock, ScanEye, Server, ShieldCheck, ToggleLeft } from "lucide-react"
 import Link from "next/link"
 
 const points = [
@@ -6,6 +6,8 @@ const points = [
   { icon: KeyRound, title: "Workspace-scoped access", text: "Owner and member roles, per-file link sharing you can revoke, and invitations that expire on their own." },
   { icon: Server, title: "Two services, one purpose", text: "Documents go to our parsing service over TLS to be read; only the resulting text reaches the AI model. With AI off, neither is called at all." },
   { icon: ShieldCheck, title: "Nothing sensitive in the logs", text: "Document bodies, base64 payloads and prompts containing document data are never written to logs." },
+  { icon: ScanEye, title: "Scanned before it's touched", text: "Every upload is malware-scanned before it is rendered, stored for viewing, or sent anywhere. In production the scan fails closed: no verdict, no processing." },
+  { icon: ToggleLeft, title: "AI you can switch off", text: "A per-workspace kill switch turns off every AI call — extraction falls back to review-only, and shared links never had it to begin with." },
 ]
 
 export function Security() {
