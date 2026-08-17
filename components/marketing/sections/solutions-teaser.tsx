@@ -5,7 +5,7 @@ import Link from "next/link"
 
 export function SolutionsTeaser() {
   return (
-    <section className="border-y border-stone-200 bg-stone-50">
+    <section id="industries" className="bg-white">
       <div className="mx-auto max-w-6xl px-5 py-20">
         <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
         <h2 className="mt-3 max-w-2xl font-display text-3xl font-bold tracking-[-0.03em] text-stone-950 sm:text-4xl">

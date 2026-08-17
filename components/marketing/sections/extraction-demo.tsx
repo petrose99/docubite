@@ -1,62 +1,98 @@
-import { Check, FileText } from "lucide-react"
+import { AlertTriangle, FileText, Plus, Sparkles, Table2 } from "lucide-react"
 
-const fields = [
-  { label: "Supplier", value: "Northstar Ltd" },
-  { label: "Invoice number", value: "NS-0481" },
-  { label: "Invoice date", value: "12 Aug 2026" },
-  { label: "Tax (20%)", value: "473.33" },
-  { label: "Total", value: "2,840.00 USD" },
+type Row = { n: number; supplier: string; invoice: string; date: string; tax: string; total: string; flagTax?: boolean }
+
+const rows: Row[] = [
+  { n: 2, supplier: "Northstar Ltd", invoice: "NS-0481", date: "12 Aug", tax: "473.33", total: "2,840.00" },
+  { n: 3, supplier: "Atlas Supplies", invoice: "AT-1190", date: "09 Aug", tax: "188.00", total: "1,128.00" },
+  { n: 4, supplier: "Meridian Print", invoice: "MP-3321", date: "07 Aug", tax: "102.50", total: "615.00", flagTax: true },
+  { n: 5, supplier: "Cedar & Co", invoice: "CC-0067", date: "03 Aug", tax: "236.00", total: "1,416.00" },
+  { n: 6, supplier: "Blue Harbour", invoice: "BH-8842", date: "01 Aug", tax: "412.00", total: "2,472.00" },
 ]
 
-/** The hero's product mock: a page being read on the left, fields landing in a sheet on the
- * right. Every moving part is CSS (see .doc-scan / .field-reveal in globals.css), so this stays
- * a server component and ships no JavaScript. */
+/** The hero's product mock: the live spreadsheet DocuBite hands back — a formula bar with an
+ * =AI() cell, the AI assistant reading the grid, and rows extracted from the documents with an
+ * uncertain value flagged for review. Every part is static markup so this stays a server
+ * component and ships no JavaScript above the fold. */
 export function ExtractionDemo() {
   return (
-    <div className="rounded-[2rem] rounded-tr-md border border-stone-200 bg-white p-3 shadow-[0_32px_90px_-48px_rgba(41,37,36,.55)]">
-      <div className="rounded-[1.6rem] rounded-tr-sm bg-stone-950 p-4">
-        <div className="flex items-center justify-between px-1 pb-3 text-xs text-stone-400">
-          <span className="inline-flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />invoice-0481.pdf</span>
-          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-300">Invoice template</span>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[0.85fr_1fr]">
-          {/* The page. Its "text" is bars rather than lorem ipsum — a real-looking document at
-              this size would only be an unreadable smudge that begs to be squinted at. */}
-          <div className="doc-scan relative overflow-hidden rounded-xl bg-white p-3.5">
-            <div className="h-2 w-2/5 rounded-full bg-stone-800" />
-            <div className="mt-1.5 h-1.5 w-1/4 rounded-full bg-stone-300" />
-            <div className="mt-4 space-y-1.5">
-              {[80, 62, 74, 55, 68, 45].map((width, index) => (
-                <div key={index} className="h-1.5 rounded-full bg-stone-200" style={{ width: `${width}%` }} />
-              ))}
+    <div className="relative">
+      <div className="rounded-[1.6rem] rounded-tr-md border border-stone-200 bg-white p-3 shadow-[0_40px_90px_-50px_rgba(41,37,36,.55)]">
+        <div className="overflow-hidden rounded-[1.1rem] rounded-tr-sm border border-stone-200 bg-white">
+          {/* window chrome */}
+          <div className="flex items-center gap-2.5 border-b border-stone-100 bg-stone-50 px-3.5 py-2.5">
+            <div className="flex gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-stone-200" />
+              <span className="h-2.5 w-2.5 rounded-full bg-stone-200" />
+              <span className="h-2.5 w-2.5 rounded-full bg-stone-200" />
             </div>
-            <div className="mt-4 h-px bg-stone-200" />
-            <div className="mt-3 flex items-center justify-between">
-              <div className="h-1.5 w-1/4 rounded-full bg-stone-200" />
-              <div className="h-2 w-1/3 rounded-full bg-emerald-600/70" />
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-[0.78rem] font-semibold text-stone-700">
+              <Table2 className="h-3.5 w-3.5 text-emerald-700" />August invoices
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-[0.7rem] font-semibold text-white">
+              <Plus className="h-3 w-3" />Extract
+            </span>
           </div>
 
-          {/* The sheet. */}
-          <div className="rounded-xl bg-white p-1.5">
-            <table className="w-full border-collapse text-left">
-              <tbody>
-                {fields.map((field, index) => (
-                  <tr key={field.label} className="field-reveal border-b border-stone-100 last:border-0" style={{ animationDelay: `${0.5 + index * 0.55}s` }}>
-                    <th scope="row" className="whitespace-nowrap px-2 py-[0.55rem] text-[0.7rem] font-medium text-stone-400">{field.label}</th>
-                    <td className="px-2 py-[0.55rem] text-right text-[0.78rem] font-semibold tabular-nums text-stone-900">{field.value}</td>
+          {/* formula bar */}
+          <div className="flex items-center gap-2 overflow-hidden border-b border-stone-100 px-3 py-1.5">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[0.7rem] font-semibold text-emerald-800"><Sparkles className="h-3 w-3" />Ask AI</span>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-stone-200 px-2 py-1 text-[0.7rem] font-semibold text-stone-600"><Sparkles className="h-3 w-3 text-emerald-600" />AI Formula</span>
+            <span className="truncate font-mono text-[0.7rem] text-stone-900"><span className="text-emerald-600">=AI(</span>&quot;Which category?&quot;, A2:F2<span className="text-emerald-600">)</span></span>
+          </div>
+
+          {/* assistant + grid */}
+          <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] sm:grid-cols-[7.75rem_minmax(0,1fr)]">
+            {/* assistant */}
+            <div className="flex min-h-[14rem] flex-col gap-2 border-r border-stone-100 bg-stone-50 px-2 py-2.5">
+              <div className="flex items-center gap-1.5 text-[0.68rem] font-bold text-stone-800"><Sparkles className="h-3 w-3 text-emerald-700" />Assistant</div>
+              <div className="max-w-[96%] self-end rounded-lg rounded-br-sm bg-emerald-700 px-2 py-1.5 text-[0.62rem] leading-snug text-white">Total tax across all invoices?</div>
+              <div className="text-[0.62rem] leading-snug text-stone-700">
+                The tax totals <b className="text-emerald-800">$1,411.83</b> across 5 invoices.
+                <span className="mt-1.5 inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-mono text-[0.55rem] font-bold text-emerald-800">E2:E6</span>
+              </div>
+              <div className="mt-auto flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-[0.6rem] text-stone-400">Ask anything…<span className="h-2.5 w-px bg-emerald-600" /></div>
+            </div>
+
+            {/* grid */}
+            <div className="overflow-hidden">
+              <table className="w-full border-collapse text-[0.62rem]">
+                <thead>
+                  <tr className="bg-stone-50 text-left font-semibold text-stone-500">
+                    <th className="w-4 border-b border-r border-stone-100 px-1 py-1.5 text-center font-semibold text-stone-300">#</th>
+                    <th className="border-b border-stone-100 px-1.5 py-1.5 font-semibold">Supplier</th>
+                    <th className="border-b border-stone-100 px-1.5 py-1.5 font-semibold">Invoice&nbsp;#</th>
+                    <th className="border-b border-stone-100 px-1.5 py-1.5 font-semibold">Date</th>
+                    <th className="border-b border-stone-100 px-1.5 py-1.5 text-right font-semibold">Tax</th>
+                    <th className="border-b border-stone-100 px-1.5 py-1.5 text-right font-semibold">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="field-reveal flex items-center justify-center gap-1.5 pb-1.5 pt-2 text-[0.7rem] font-medium text-emerald-700" style={{ animationDelay: "3.3s" }}>
-              <Check className="h-3.5 w-3.5" />Ready for review
-            </p>
+                </thead>
+                <tbody className="text-stone-900">
+                  {rows.map((row) => (
+                    <tr key={row.n}>
+                      <td className="border-b border-r border-stone-100 px-1 py-1.5 text-center text-stone-300">{row.n}</td>
+                      <td className="whitespace-nowrap border-b border-stone-100 px-1.5 py-1.5 font-semibold">{row.supplier}</td>
+                      <td className="border-b border-stone-100 px-1.5 py-1.5 text-stone-500">{row.invoice}</td>
+                      <td className="whitespace-nowrap border-b border-stone-100 px-1.5 py-1.5 text-stone-500">{row.date}</td>
+                      <td className="border-b border-stone-100 px-1.5 py-1.5 text-right tabular-nums">
+                        {row.flagTax ? (
+                          <span className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1 py-0.5 tabular-nums text-amber-800"><AlertTriangle className="h-2.5 w-2.5 text-amber-600" />{row.tax}</span>
+                        ) : row.tax}
+                      </td>
+                      <td className="border-b border-stone-100 px-1.5 py-1.5 text-right font-semibold tabular-nums">{row.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
-      <p className="px-3 pb-1 pt-3.5 text-center text-sm text-stone-500">One bite: source page in, reviewed fields out.</p>
+
+      {/* source-trace chip */}
+      <div className="mt-3 inline-flex items-center gap-2 rounded-xl rounded-tr-sm bg-emerald-950 px-3 py-2 text-[0.7rem] text-emerald-100 sm:absolute sm:right-4 sm:top-full sm:mt-3.5 sm:shadow-[0_20px_40px_-18px_rgba(2,44,34,.8)]">
+        <FileText className="h-3.5 w-3.5 text-emerald-400" />Click a cell → its spot on the PDF
+      </div>
     </div>
   )
 }

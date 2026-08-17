@@ -56,6 +56,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             Solutions
             <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${solutionsOpen ? "rotate-180" : ""}`} />
           </button>
+          <Link href={"/solutions#industries" as Route} className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950">Industries</Link>
           <Link href="/pricing" className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950">Pricing</Link>
         </nav>
 
@@ -84,7 +85,12 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
 
       {solutionsOpen && (
         <div className="absolute inset-x-0 top-full hidden border-b border-stone-200 bg-white shadow-[0_28px_60px_-36px_rgba(41,37,36,.5)] lg:block">
-          <div className="mx-auto grid max-w-6xl gap-x-12 gap-y-8 px-5 py-8 md:grid-cols-2">
+          <div className="mx-auto max-w-6xl px-5 py-8">
+            <div className="mb-2 flex items-center justify-between px-3">
+              <p className="text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Browse solutions</p>
+              <Link href="/solutions" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900">All solutions & industries<ChevronDown aria-hidden className="h-3.5 w-3.5 -rotate-90" /></Link>
+            </div>
+            <div className="grid gap-x-12 gap-y-8 md:grid-cols-2">
             {SOLUTION_GROUPS.map((group) => (
               <div key={group.id}>
                 <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">{group.label}</p>
@@ -105,6 +111,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
                 </ul>
               </div>
             ))}
+            </div>
           </div>
         </div>
       )}
@@ -113,7 +120,10 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
         <div className="border-t border-stone-200 bg-white lg:hidden">
           <div className="space-y-5 px-5 py-5">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
+                <Link href="/solutions" className="text-sm font-semibold text-emerald-800">See all</Link>
+              </div>
               <ul className="space-y-0.5">
                 {SOLUTIONS.map((solution) => (
                   <li key={solution.slug}>
@@ -124,6 +134,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
                 ))}
               </ul>
             </div>
+            <Link href={"/solutions#industries" as Route} className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">Industries</Link>
             <Link href="/pricing" className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">Pricing</Link>
             {workspaceHref ? (
               <Link href={workspaceHref as Route} className="flex h-11 items-center justify-center rounded-lg bg-emerald-700 text-sm font-semibold text-white">Open workspace</Link>
