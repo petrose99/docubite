@@ -1,9 +1,22 @@
 import config from "@/lib/config"
 
-/** nomic-embed-text is trained with an asymmetric task prefix: the stored document text and the
- * query that retrieves it must be embedded under different prefixes or recall collapses. These are
- * applied here and never stored, so the same raw text always hashes the same way. */
-const TASK_PREFIX = { document: "search_document: ", query: "search_query: " } as const
+/** Retrieval models are trained with asymmetric task prefixes: the stored document and the query
+ * that retrieves it are embedded under different prefixes, or recall collapses. The right prefix
+ * depends on the model family, so it is chosen from the configured model name. Applied here and
+ * never stored, so the same raw text always hashes the same way.
+ *
+ * - nomic-embed-text: "search_document: " / "search_query: "
+ * - BAAI/bge-*: no document prefix; a query instruction on the query side
+ * - intfloat/e5-*: "passage: " / "query: "
+ * A model whose name matches none of these gets no prefix, which is the safe default for a plain
+ * sentence-transformer. */
+function taskPrefix(kind: "document" | "query"): string {
+  const model = config.embeddings.modelName.toLowerCase()
+  if (model.includes("nomic")) return kind === "query" ? "search_query: " : "search_document: "
+  if (model.includes("bge")) return kind === "query" ? "Represent this sentence for searching relevant passages: " : ""
+  if (model.includes("e5")) return kind === "query" ? "query: " : "passage: "
+  return ""
+}
 
 /** One request is tried this many times before giving up. Only transport failures and transient
  * HTTP statuses (408/429/5xx) are retried; a bad request or auth failure throws on the first. */
@@ -113,7 +126,7 @@ async function embedBatch(inputs: string[]): Promise<number[][]> {
  * configured batch size. Returns one vector per input, in input order. */
 export async function embedTexts(inputs: string[], kind: "document" | "query"): Promise<number[][]> {
   if (!inputs.length) return []
-  const prefix = TASK_PREFIX[kind]
+  const prefix = taskPrefix(kind)
   const prefixed = inputs.map((text) => `${prefix}${text}`)
   const size = Math.max(1, config.embeddings.batchSize)
   const vectors: number[][] = []
