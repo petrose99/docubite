@@ -1,7 +1,8 @@
 "use client"
 
-import { getCellProvenanceAction, getExtractionRowsAction, markDocumentsSheetAppliedAction } from "@/app/(app)/workspaces/[workspaceId]/sheet-actions"
+import { getCellProvenanceAction, getDocumentSourceInfoAction, getExtractionRowsAction, markDocumentsSheetAppliedAction } from "@/app/(app)/workspaces/[workspaceId]/sheet-actions"
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
+import type { SourceHit } from "@/components/assistant/document-sources"
 import { ExtractPanel } from "@/components/extract/extract-panel"
 import type { SheetTemplate, WorkspaceUsage } from "@/components/extract/types"
 import { useExtractionProgress } from "@/components/extract/use-extraction-progress"
@@ -19,6 +20,16 @@ import { UniverSheetLoader } from "./univer-sheet-loader"
 
 const SAVE_LABELS: Record<SaveState, string> = { idle: "", saving: "Saving…", saved: "All changes saved", error: "Not saved" }
 
+/** Trims a search snippet to a short quote for the source viewer's quote pill: about 120 chars, cut
+ * at the last word boundary, with an ellipsis. The full snippet runs to hundreds of characters. */
+function clipQuote(snippet: string): string {
+  const text = snippet.trim().replace(/\s+/g, " ")
+  if (text.length <= 120) return text
+  const slice = text.slice(0, 120)
+  const lastSpace = slice.lastIndexOf(" ")
+  return `${(lastSpace > 60 ? slice.slice(0, lastSpace) : slice).trimEnd()}…`
+}
+
 const ExtractIcon = () => <Database className="h-4 w-4" />
 const FormulaIcon = () => <Sparkles className="h-4 w-4" />
 const SourceIcon = () => <FileText className="h-4 w-4" />
@@ -31,7 +42,7 @@ const DownloadCsvIcon = () => <FileDown className="h-4 w-4" />
  * Lido's spreadsheet is the page rather than a widget on it — chrome is one thin bar, and the
  * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Extraction and the
  * assistant are reached from the grid's own toolbar, not from page chrome. */
-export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, usage, sheetCount, queuedIds, hasRows, readOnly = false }: {
+export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
   workspaceId: string
   fileId: string
   fileName: string
@@ -44,6 +55,12 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   queuedIds: string[]
   hasRows: boolean
   readOnly?: boolean
+  /** The single server gate (config.embeddings.enabled) crossed to the client, so the assistant's
+   * Sources card, the click-through, and the "Searchable" chip appear exactly when the tool exists. */
+  documentSearchEnabled?: boolean
+  /** An open-at-page deep link (from the Files content search): open this document over the grid
+   * once, at the given page/highlight. Already validated server-side; absent for a normal open. */
+  initialSource?: { documentId: string; page: number | null; bbox: [number, number, number, number] | null }
 }) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [extractOpen, setExtractOpen] = useState(false)
@@ -83,7 +100,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
     if (typeof settled === "number") setAdoptRev(settled)
   }, [fileId, readOnly, workspaceId])
 
-  const { statuses, track } = useExtractionProgress(workspaceId, queuedIds, (ids) => void absorbExtraction(ids))
+  const { statuses, track } = useExtractionProgress(workspaceId, queuedIds, (ids) => void absorbExtraction(ids), documentSearchEnabled)
 
   // The revision this browser is responsible for. A server revision ahead of it means another
   // tab has edited the file — extraction no longer moves it, since we write those rows here.
@@ -130,6 +147,31 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
     setSource({ documentId: custom.documentId, filename: info.data.filename, mimeType: info.data.mimeType })
     setTarget(info.data.ref ? { page: info.data.ref.page, bbox: info.data.ref.bbox, quote: info.data.ref.quote } : null)
   }, [workspaceId])
+
+  /** Opens the document behind a source the assistant cited, at the matching page and highlight.
+   * The snippet is clipped to a short quote — the raw chunk snippet runs to hundreds of characters
+   * and would swallow the viewer's quote pill. A hit with no page opens the document without a
+   * highlight (already supported); a page with no bbox gets the viewer's amber "position
+   * unavailable" note. A document deleted since the search surfaces as a toast, like the cell path. */
+  const openSearchSource = useCallback(async (hit: SourceHit) => {
+    const info = await getDocumentSourceInfoAction(workspaceId, hit.documentId).catch(() => null)
+    if (!info?.success || !info.data) {
+      toast.error(info?.error ?? "Could not open the source file")
+      return
+    }
+    setSource({ documentId: hit.documentId, filename: info.data.filename, mimeType: info.data.mimeType })
+    setTarget(hit.page != null ? { page: hit.page, bbox: hit.bbox, quote: clipQuote(hit.snippet) } : null)
+  }, [workspaceId])
+
+  // Open-at-page deep link: run once, opening the linked document over the grid at its page and
+  // highlight, through the same path a cited source uses (with no quote — there is no snippet in a
+  // link). Guarded so a re-render never reopens it, and never on a read-only/shared sheet.
+  const openedInitial = useRef(false)
+  useEffect(() => {
+    if (openedInitial.current || readOnly || !initialSource) return
+    openedInitial.current = true
+    void openSearchSource({ documentId: initialSource.documentId, filename: "", page: initialSource.page, bbox: initialSource.bbox, snippet: "" })
+  }, [initialSource, openSearchSource, readOnly])
 
   const handleReady = useCallback((api: FUniver) => {
     apiRef.current = api
@@ -251,7 +293,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-stone-400"}`}>{label}</span> : null} />
 
       <div className="flex min-h-0 flex-1">
-        {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} />}
+        {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}
 
         <UniverSheetLoader
           fileId={fileId}

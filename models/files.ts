@@ -88,8 +88,9 @@ export async function listFolders(workspaceId: string, options: { parentId?: str
 }
 
 /** Every folder in the workspace, flat — the move-to menu needs targets outside the folder
- * currently being browsed. */
-export const listAllFolders = (workspaceId: string) => prisma.documentFolder.findMany({ where: { workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 })
+ * currently being browsed, and the Files search uses `parentId` to compute which results fall
+ * inside the folder being searched from (that folder and its descendants). */
+export const listAllFolders = (workspaceId: string) => prisma.documentFolder.findMany({ where: { workspaceId }, select: { id: true, name: true, parentId: true }, orderBy: { name: "asc" }, take: 500 })
 
 /** The breadcrumb trail for `?folder=`, root first. Depth-capped so a cycle introduced by a
  * bad move can never spin here. */

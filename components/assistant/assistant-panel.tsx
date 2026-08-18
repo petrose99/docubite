@@ -1,5 +1,6 @@
 "use client"
 
+import { DocumentSearchPart, type SourceHit } from "@/components/assistant/document-sources"
 import { PendingChangesBar } from "@/components/assistant/pending-changes-bar"
 import { PendingChanges } from "@/components/assistant/pending-changes"
 import { focusRange, runSheetTool, SHEET_TOOL_NAMES, WRITE_TOOLS } from "@/components/assistant/sheet-tools"
@@ -17,6 +18,10 @@ const INTENTS = [
   "Add a column totalling each row",
 ]
 
+/** Offered only when document search is on — one, not two: four buttons is the ceiling. Leads the
+ * user to the half of the assistant they would not otherwise discover (the documents, not the grid). */
+const DOCUMENT_INTENT = "What payment terms do the invoices state?"
+
 const TOOL_LABELS: Record<string, string> = {
   profile_workbook: "Reading the workbook",
   read_range: "Reading data",
@@ -31,12 +36,16 @@ const TOOL_LABELS: Record<string, string> = {
  *
  * Tool calls are executed here in the browser (see sheet-tools.ts) and the results posted back,
  * so the assistant answers from the workbook on screen rather than from the saved snapshot. */
-export function AssistantPanel({ workspaceId, apiRef, onClose }: {
+export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEnabled = false, onOpenSource }: {
   workspaceId: string
   /** The live grid. A ref rather than a value because the panel mounts before Univer finishes
    * booting, and a question asked in that window still has to find a workbook to read. */
   apiRef: RefObject<FUniver | null>
   onClose: () => void
+  /** Additive and default-off: callers that do not pass these see today's behaviour exactly. When
+   * on, the empty state gains a document intent and the search tool renders its Sources card. */
+  documentSearchEnabled?: boolean
+  onOpenSource?: (hit: SourceHit) => void
 }) {
   const [input, setInput] = useState("")
   const scroller = useRef<HTMLDivElement>(null)
@@ -98,8 +107,12 @@ export function AssistantPanel({ workspaceId, apiRef, onClose }: {
       <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {!messages.length && (
           <div className="space-y-2">
-            <p className="text-xs text-stone-500">Ask about the data in this sheet. The assistant reads the grid as you see it.</p>
-            {INTENTS.map((intent) => (
+            <p className="text-xs text-stone-500">
+              {documentSearchEnabled
+                ? "Ask about the data in this sheet — or what the documents behind it actually say."
+                : "Ask about the data in this sheet. The assistant reads the grid as you see it."}
+            </p>
+            {(documentSearchEnabled ? [...INTENTS, DOCUMENT_INTENT] : INTENTS).map((intent) => (
               <button key={intent} type="button" className="block w-full rounded-md border bg-white px-2.5 py-2 text-left text-xs text-stone-600 hover:border-emerald-300 hover:text-stone-900" onClick={() => ask(intent)}>
                 {intent}
               </button>
@@ -117,6 +130,13 @@ export function AssistantPanel({ workspaceId, apiRef, onClose }: {
               if (part.type === "tool-task_complete") {
                 const input = (part as { input?: { summary?: string; changes?: { target?: string; action?: string }[] } }).input
                 return input?.summary ? <SummaryCard key={index} summary={input.summary} changes={input.changes ?? []} apiRef={apiRef} /> : null
+              }
+              // The document-search tool runs on the server, so its result arrives through the
+              // stream with the full part state; it gets its own renderer (Sources card, snippets,
+              // click-through) rather than the one-line generic fallback below.
+              if (part.type === "tool-search_documents") {
+                const p = part as { state: "input-streaming" | "input-available" | "output-available" | "output-error"; input?: { query?: unknown }; output?: { results?: unknown; error?: unknown; pendingIndexing?: unknown } }
+                return <DocumentSearchPart key={index} state={p.state} input={p.input} output={p.output} onOpenSource={onOpenSource} />
               }
               if (part.type.startsWith("tool-")) {
                 const name = part.type.slice("tool-".length)

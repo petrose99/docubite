@@ -29,6 +29,7 @@ type InsertRow = {
 export type ChunkSearchRow = {
   id: string
   documentId: string
+  fileId: string
   chunkIndex: number
   text: string
   provenance: ChunkProvenance | null
@@ -76,7 +77,7 @@ export function buildInsertChunksSql(rows: InsertRow[]): Sql {
  * the score expressed as cosine similarity (1 - distance). */
 export function buildVectorSearchSql(workspaceId: string, vectorLiteral: string, limit: number): Sql {
   return {
-    text: `SELECT "id", "document_id" AS "documentId", "chunk_index" AS "chunkIndex", "text", "provenance", 1 - ("embedding" <=> $1::vector) AS "score"
+    text: `SELECT "id", "document_id" AS "documentId", "file_id" AS "fileId", "chunk_index" AS "chunkIndex", "text", "provenance", 1 - ("embedding" <=> $1::vector) AS "score"
        FROM "document_chunks"
        WHERE "workspace_id" = $2::uuid AND "embedding" IS NOT NULL
        ORDER BY "embedding" <=> $1::vector
@@ -90,7 +91,7 @@ export function buildVectorSearchSql(workspaceId: string, vectorLiteral: string,
  * bag of words rather than erroring the search. */
 export function buildLexicalSearchSql(workspaceId: string, query: string, limit: number): Sql {
   return {
-    text: `SELECT "id", "document_id" AS "documentId", "chunk_index" AS "chunkIndex", "text", "provenance", ts_rank_cd("text_tsv", websearch_to_tsquery('simple', $1)) AS "score"
+    text: `SELECT "id", "document_id" AS "documentId", "file_id" AS "fileId", "chunk_index" AS "chunkIndex", "text", "provenance", ts_rank_cd("text_tsv", websearch_to_tsquery('simple', $1)) AS "score"
        FROM "document_chunks"
        WHERE "workspace_id" = $2::uuid AND "text_tsv" @@ websearch_to_tsquery('simple', $1)
        ORDER BY "score" DESC

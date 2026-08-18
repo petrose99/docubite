@@ -138,10 +138,12 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
     setStaged((previous) => previous.map((row) => {
       const polled = row.documentId ? statuses[row.documentId] : undefined
       if (!polled) return row
+      // searchable rides along on every settled row; it flips from false to true a beat after
+      // extraction finishes, once embedding has run. With document search off it is always false.
       if (polled.status === "queued" || polled.status === "processing") return { ...row, status: "processing" }
       if (polled.status === "failed") return { ...row, status: "failed", error: polled.errorCode?.replaceAll("_", " ") || "Extraction failed" }
-      if (polled.status === "needs_review") return { ...row, status: "attention" }
-      if (polled.status === "ready_for_review" || polled.status === "reviewed") return { ...row, status: "done" }
+      if (polled.status === "needs_review") return { ...row, status: "attention", searchable: polled.searchable }
+      if (polled.status === "ready_for_review" || polled.status === "reviewed") return { ...row, status: "done", searchable: polled.searchable }
       return row
     }))
   }, [statuses])

@@ -89,15 +89,15 @@ export async function markDocumentsSheetAppliedAction(workspaceId: string, fileI
  *
  * The cells carry only the document id — a filename repeated across every cell of a 500-row
  * sheet would bloat the snapshot for something needed once, when someone opens the preview. */
-export async function getDocumentSourceInfoAction(workspaceId: string, documentId: string): Promise<ActionState<{ filename: string }>> {
+export async function getDocumentSourceInfoAction(workspaceId: string, documentId: string): Promise<ActionState<{ filename: string; mimeType: string }>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
 
-  const document = await prisma.document.findFirst({ where: { id: documentId, workspaceId }, select: { filename: true, storageKey: true } })
+  const document = await prisma.document.findFirst({ where: { id: documentId, workspaceId }, select: { filename: true, mimeType: true, storageKey: true } })
   if (!document) return { success: false, error: "That document is no longer in this workspace" }
   if (!document.storageKey) return { success: false, error: "The original file for this row is no longer stored" }
 
-  return { success: true, data: { filename: document.filename } }
+  return { success: true, data: { filename: document.filename, mimeType: document.mimeType } }
 }
 
 type CellValue = string | number | boolean | null

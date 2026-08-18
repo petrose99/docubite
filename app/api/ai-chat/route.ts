@@ -36,7 +36,8 @@ const DOCUMENT_SEARCH_PROMPT = `
 Answering from document contents:
 - The grid holds extracted fields, but the full text of every uploaded document is also searchable. For a question about what a document actually says — wording, clauses, a value not in a column — call search_documents with a focused query.
 - Ground the answer in the returned snippets and cite each fact as "filename, p.N" using the filename and page the snippet carries.
-- If the search returns nothing relevant, say so plainly. Never invent a citation, a snippet, or a value.`
+- If the search returns nothing relevant, say so plainly. Never invent a citation, a snippet, or a value.
+- If a search returns no results and pendingIndexing is true, tell the user some documents are still being indexed and to ask again in a minute.`
 
 /** Tools declared with no `execute`. The AI SDK streams the call to the browser, which runs it
  * against the live Univer workbook and posts the result back — so the assistant reads the sheet
@@ -140,7 +141,15 @@ export async function POST(request: Request) {
           inputSchema: z.object({ query: z.string().min(2).describe("What to look for, in a few words or a short phrase") }),
           execute: async ({ query }) => {
             try {
-              return { results: await searchDocumentChunks(workspaceId, query, { limit: 8 }) }
+              const results = await searchDocumentChunks(workspaceId, query, { limit: 8 })
+              // Nothing found could mean nothing matches, or the just-uploaded documents are still
+              // being embedded. One cheap count tells the two apart, so the model can say "still
+              // indexing, ask again in a minute" rather than a flat "nothing found".
+              if (results.length === 0) {
+                const pending = await prisma.documentProcessingJob.count({ where: { workspaceId, type: "embed", status: { in: ["queued", "processing"] } } })
+                return { results, pendingIndexing: pending > 0 }
+              }
+              return { results }
             } catch {
               // Never throw out of a tool — that would break the stream. The model is told the
               // search is unavailable and can answer from the grid or say it cannot.

@@ -2,20 +2,29 @@
 
 import { DocumentPreview } from "@/components/documents/document-preview"
 import type { StagedFile } from "@/components/extract/types"
-import { AlertTriangle, Check, Copy, Download, Eye, GitCompare, Loader2, Play, RotateCw, Trash2, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { AlertTriangle, Check, Copy, Download, Eye, FileSearch, GitCompare, Loader2, Play, RotateCw, Trash2, X } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 const formatSize = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
 
 function StatusBadge({ staged }: { staged: StagedFile }) {
-  if (staged.status === "uploading") return <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500"><Loader2 className="h-3 w-3 animate-spin" />Uploading</span>
-  if (staged.status === "queued" || staged.status === "processing") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Loader2 className="h-3 w-3 animate-spin" />Extracting</span>
-  if (staged.status === "done") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Check className="h-3 w-3" />Done</span>
-  if (staged.status === "attention") return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertTriangle className="h-3 w-3" />Review</span>
-  if (staged.status === "failed") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600" title={staged.error || undefined}><X className="h-3 w-3" />Failed</span>
-  if (staged.status === "duplicate") return <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500" title="This exact file was already extracted"><Copy className="h-3 w-3" />Already extracted</span>
-  return null
+  // A second chip once the document has been indexed, next to the extraction status. Renders only
+  // when the searchable flag is set — nothing when document search is off or indexing hasn't run.
+  const searchable = (staged.status === "done" || staged.status === "attention") && staged.searchable
+    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-400" title="Indexed for document search — ask the AI Assistant about its contents"><FileSearch className="h-3 w-3" />Searchable</span>
+    : null
+
+  let status: ReactNode = null
+  if (staged.status === "uploading") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500"><Loader2 className="h-3 w-3 animate-spin" />Uploading</span>
+  else if (staged.status === "queued" || staged.status === "processing") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Loader2 className="h-3 w-3 animate-spin" />Extracting</span>
+  else if (staged.status === "done") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Check className="h-3 w-3" />Done</span>
+  else if (staged.status === "attention") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertTriangle className="h-3 w-3" />Review</span>
+  else if (staged.status === "failed") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600" title={staged.error || undefined}><X className="h-3 w-3" />Failed</span>
+  else if (staged.status === "duplicate") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500" title="This exact file was already extracted"><Copy className="h-3 w-3" />Already extracted</span>
+
+  if (!status && !searchable) return null
+  return <span className="inline-flex items-center gap-2">{status}{searchable}</span>
 }
 
 /** One file in the panel's Files section, mirroring Lido's row: name, status, then eye

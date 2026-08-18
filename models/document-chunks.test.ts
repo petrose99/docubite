@@ -54,18 +54,20 @@ describe("buildInsertChunksSql", () => {
 })
 
 describe("search builders", () => {
-  it("vector search orders by cosine distance, scoped to the workspace", () => {
+  it("vector search orders by cosine distance, scoped to the workspace, selecting file_id", () => {
     const sql = buildVectorSearchSql(WS, "[1,2,3]", 24)
     expect(sql.text).toContain("<=>")
     expect(sql.text).toContain(`"embedding" IS NOT NULL`)
     expect(sql.text).toContain(`"workspace_id" = $2::uuid`)
+    expect(sql.text).toContain(`"file_id" AS "fileId"`)
     expect(sql.params).toEqual(["[1,2,3]", WS, 24])
   })
 
-  it("lexical search uses the 'simple' config and websearch_to_tsquery", () => {
+  it("lexical search uses the 'simple' config and websearch_to_tsquery, selecting file_id", () => {
     const sql = buildLexicalSearchSql(WS, "invoice 42", 24)
     expect(sql.text).toContain(`websearch_to_tsquery('simple', $1)`)
     expect(sql.text).toContain(`"workspace_id" = $2::uuid`)
+    expect(sql.text).toContain(`"file_id" AS "fileId"`)
     expect(sql.params).toEqual(["invoice 42", WS, 24])
   })
 })

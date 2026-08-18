@@ -13,6 +13,11 @@ function hit(id: string, documentId = "doc1", text = "snippet", page: number | n
   return { id, documentId, chunkIndex: 0, text, provenance: page === null ? null : { pages: [page] }, score: 0.5 }
 }
 
+// A hit whose chunk carries block geometry: a single page and a union bbox.
+function hitWithBbox(id: string, pages: number[], bbox: [number, number, number, number]) {
+  return { id, documentId: "doc1", chunkIndex: 0, text: "snippet", provenance: { pages, bbox }, score: 0.5 }
+}
+
 describe("rrfFuse", () => {
   it("sums reciprocal ranks, dedupes by id, and ranks by fused score", () => {
     const listA = [{ id: "a" }, { id: "b" }]
@@ -70,5 +75,32 @@ describe("searchDocumentChunks", () => {
 
     const results = await searchDocumentChunks("ws1", "invoice 42")
     expect(results).toEqual([])
+  })
+
+  it("carries pages and a rounded bbox for a single-page chunk", async () => {
+    vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2, 0.3]] as never)
+    vi.mocked(vectorSearch).mockResolvedValue([hitWithBbox("c1", [3], [0.123456, 0.2, 0.5, 0.678912])] as never)
+    vi.mocked(lexicalSearch).mockResolvedValue([] as never)
+
+    const results = await searchDocumentChunks("ws1", "invoice 42")
+    expect(results[0]).toMatchObject({ page: 3, pages: [3], bbox: [0.1235, 0.2, 0.5, 0.6789] })
+  })
+
+  it("nulls the bbox of a multi-page chunk but keeps every page", async () => {
+    vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2, 0.3]] as never)
+    vi.mocked(vectorSearch).mockResolvedValue([hitWithBbox("c1", [2, 3], [0, 0, 1, 1])] as never)
+    vi.mocked(lexicalSearch).mockResolvedValue([] as never)
+
+    const results = await searchDocumentChunks("ws1", "invoice 42")
+    expect(results[0]).toMatchObject({ page: 2, pages: [2, 3], bbox: null })
+  })
+
+  it("gives a text-fallback hit (null provenance) empty pages and a null bbox", async () => {
+    vi.mocked(embedTexts).mockResolvedValue([[0.1, 0.2, 0.3]] as never)
+    vi.mocked(vectorSearch).mockResolvedValue([hit("c1", "doc1", "snippet", null)] as never)
+    vi.mocked(lexicalSearch).mockResolvedValue([] as never)
+
+    const results = await searchDocumentChunks("ws1", "invoice 42")
+    expect(results[0]).toMatchObject({ page: null, pages: [], bbox: null })
   })
 })

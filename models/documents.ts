@@ -164,10 +164,19 @@ export async function markDocumentsReviewed(workspaceId: string, documentIds: st
 }
 
 /** Lightweight status read for the extraction-progress poller. Capped because callers track
- * one upload batch, not the whole workspace. */
+ * one upload batch, not the whole workspace. `searchable` reports whether the document has any
+ * stored chunks yet — true once embedding has run — and is only computed when document search is
+ * configured; with the feature off it is always false, so nothing downstream ever shows the chip. */
 export async function getDocumentsStatus(workspaceId: string, documentIds: string[]) {
   if (!documentIds.length) return []
-  return prisma.document.findMany({ where: { workspaceId, id: { in: documentIds.slice(0, 50) } }, select: { id: true, status: true, errorCode: true, filename: true } })
+  const where = { workspaceId, id: { in: documentIds.slice(0, 50) } }
+  // With document search off, skip the chunk-count join entirely and report searchable: false.
+  if (!config.embeddings.enabled) {
+    const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true } })
+    return rows.map((row) => ({ ...row, searchable: false }))
+  }
+  const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true, _count: { select: { chunks: true } } } })
+  return rows.map(({ _count, ...row }) => ({ ...row, searchable: _count.chunks > 0 }))
 }
 
 /** Deletes documents with their stored sources. Quota is deliberately not refunded: the

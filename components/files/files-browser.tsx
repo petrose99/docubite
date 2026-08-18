@@ -4,10 +4,10 @@ import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAc
 import { ShareDialog } from "@/components/files/share-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog } from "@/components/ui/dialog"
-import { ArrowUpDown, ChevronRight, Copy, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Plus, Search, Share2, Table2, Trash2 } from "lucide-react"
+import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Plus, Search, Share2, Table2, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 
 export type FileRowData = {
@@ -20,8 +20,37 @@ export type FileRowData = {
   folderName: string | null
   workspaceId: string
   sharedAccess: string | null
+  /** Set on My-Files name-match rows during a content search: which folder the file is in, and
+   * whether that folder is inside the one being searched from. Absent on the shared tab. */
+  folderId?: string | null
+  inScope?: boolean
 }
 export type FolderRowData = { id: string; name: string; fileCount: number; folderCount: number }
+
+/** One document whose *contents* matched the search, with where to open it. */
+export type ContentMatchRow = {
+  documentId: string
+  filename: string
+  fileId: string
+  fileName: string
+  page: number | null
+  bbox: [number, number, number, number] | null
+  snippet: string
+  inScope: boolean
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+/** Marks the query's words in a snippet — case-insensitive, whole-run — so the reason a document
+ * matched is visible. Pure: splits on a capture group so matched runs land at odd indices. */
+function highlightSnippet(snippet: string, query: string): ReactNode {
+  const words = query.trim().split(/\s+/).filter((word) => word.length >= 2)
+  if (!words.length) return snippet
+  const re = new RegExp(`(${words.map(escapeRegExp).join("|")})`, "gi")
+  return snippet.split(re).map((segment, index) =>
+    index % 2 === 1 ? <mark key={index} className="rounded-sm bg-amber-100 text-inherit">{segment}</mark> : segment,
+  )
+}
 
 const relativeTime = (iso: string) => {
   const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -59,7 +88,7 @@ function RowMenu({ items }: { items: Array<{ label: string; icon: typeof Pencil;
   </div>
 }
 
-export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, dir, folders, allFolders, files, sharedFiles }: {
+export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, dir, folders, allFolders, files, sharedFiles, documentSearchEnabled = false, contentMatches = [], scopeFolderName = null }: {
   workspaceId: string
   tab: "mine" | "shared"
   folderId: string | null
@@ -72,6 +101,12 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   allFolders: Array<{ id: string; name: string }>
   files: FileRowData[]
   sharedFiles: FileRowData[]
+  /** All additive and default-off, so a caller that omits them renders exactly today's Files list.
+   * When on, the search box also finds documents by content, and searching inside a folder groups
+   * the results into "In {folder}" and "Everywhere else". */
+  documentSearchEnabled?: boolean
+  contentMatches?: ContentMatchRow[]
+  scopeFolderName?: string | null
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -231,7 +266,81 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   const sortArrow = (field: "name" | "updatedAt") => (sort === field ? <ArrowUpDown className={`h-3 w-3 ${dir === "asc" ? "" : "rotate-180"}`} /> : <ArrowUpDown className="h-3 w-3 opacity-25" />)
 
   const inputClass = "w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-  const empty = !rows.length && !folders.length
+
+  // Content matches accompany a real search on My Files when the feature is on; grouping is that,
+  // plus a folder to scope against. `rows` is indexed for selection, so name rows are rendered from
+  // it (filtered by scope) rather than from a copy, keeping shift-click ranges correct.
+  const showContent = documentSearchEnabled && tab === "mine" && !!search
+  const grouping = showContent && !!scopeFolderName
+  const empty = !rows.length && !folders.length && !(showContent && contentMatches.length > 0)
+
+  const groupHeader = (label: string) => (
+    <tr><td colSpan={5} className="border-b bg-stone-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">{label}</td></tr>
+  )
+
+  const fileRow = (file: FileRowData, index: number) => {
+    const href = tab === "shared" ? `/shared/${file.id}` : `${base}/${file.id}/sheet`
+    return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-stone-50"}>
+      <td className="border-b px-3 py-2">
+        {tab === "mine" && <input type="checkbox" aria-label={`Select ${file.name}`} className="h-4 w-4 accent-emerald-600" checked={marked.has(file.id)}
+          onMouseDown={(event) => { if (event.shiftKey) event.preventDefault() }}
+          onClick={(event) => { event.preventDefault(); markRow(index, event) }}
+          onChange={() => {}} />}
+      </td>
+      <td className="border-b px-3 py-2">
+        <Link href={href} className="inline-flex items-center gap-2 font-medium text-stone-800 hover:text-emerald-800">
+          <Table2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="truncate" title={file.name}>{file.name}</span>
+          {file.linkAccess !== "none" && <Globe className="h-3.5 w-3.5 shrink-0 text-stone-300" aria-label="Shared by link" />}
+        </Link>
+        {file.folderName && <span className="ml-6 text-xs text-stone-400">in {file.folderName}</span>}
+      </td>
+      <td className="border-b px-3 py-2 text-stone-500">
+        {tab === "shared" ? <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-600">{file.sharedAccess === "edit" ? "Can edit" : file.sharedAccess === "interact" ? "Can interact" : "Can view"}</span> : file.documentCount}
+      </td>
+      <td className="border-b px-3 py-2 text-stone-500"><LastUpdated iso={file.updatedAt} /></td>
+      <td className="border-b px-3 py-2">
+        {tab === "mine" && <div className="flex items-center justify-end gap-1">
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" onClick={() => setSharingFile(file)}>
+            <Share2 className="h-3.5 w-3.5" />Share
+          </button>
+          <RowMenu items={[
+            { label: "Rename", icon: Pencil, onSelect: () => setRenaming({ kind: "file", id: file.id, name: file.name }) },
+            { label: "Make a copy", icon: Copy, onSelect: () => void duplicate(file) },
+            { label: "Delete", icon: Trash2, destructive: true, onSelect: () => setConfirming({ kind: "files", ids: [file.id] }) },
+          ]} />
+        </div>}
+      </td>
+    </tr>
+  }
+
+  const contentRow = (match: ContentMatchRow) => {
+    const params = new URLSearchParams({ doc: match.documentId })
+    if (match.page != null) params.set("page", String(match.page))
+    if (match.bbox) params.set("bb", match.bbox.join(","))
+    return <tr key={`content-${match.documentId}`} className="hover:bg-stone-50">
+      <td className="border-b px-3 py-2"></td>
+      <td colSpan={4} className="border-b px-3 py-2">
+        <Link href={`${base}/${match.fileId}/sheet?${params.toString()}`} className="block">
+          <span className="flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+            <span className="truncate font-medium text-stone-800" title={match.filename}>{match.filename}</span>
+            {match.fileName && <span className="shrink-0 text-xs text-stone-400">in {match.fileName}</span>}
+            {match.page != null && <span className="shrink-0 rounded bg-emerald-50 px-1 font-mono text-[11px] text-emerald-800">p.{match.page}</span>}
+          </span>
+          {match.snippet && <span className="ml-[1.375rem] mt-0.5 line-clamp-2 text-xs text-stone-500">{highlightSnippet(match.snippet, search)}</span>}
+        </Link>
+      </td>
+    </tr>
+  }
+
+  // Name matches split by scope, keeping each row's original index in `rows` for selection.
+  const indexedRows = rows.map((file, index) => ({ file, index }))
+  const inScopeRows = indexedRows.filter(({ file }) => file.inScope)
+  const outScopeRows = indexedRows.filter(({ file }) => !file.inScope)
+  const inScopeContent = contentMatches.filter((match) => match.inScope)
+  const outScopeContent = contentMatches.filter((match) => !match.inScope)
+  const matchedDivider = <tr><td colSpan={5} className="border-b bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-stone-400">Matched inside documents</td></tr>
 
   return <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4">
     <div className="flex flex-wrap items-center gap-2">
@@ -245,7 +354,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       </>}
       <div className="relative ml-auto w-64 max-w-full">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-        <input className={`${inputClass} pl-8`} placeholder="Search files" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} />
+        <input className={`${inputClass} pl-8`} placeholder={documentSearchEnabled ? "Search files and documents" : "Search files"} value={searchValue} onChange={(event) => setSearchValue(event.target.value)} />
       </div>
     </div>
 
@@ -255,7 +364,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
         <ChevronRight className="h-3.5 w-3.5 text-stone-300" />
         <Link href={withParams({ folder: folder.id })} className="rounded px-1.5 py-0.5 font-medium hover:bg-stone-100 hover:text-stone-800">{folder.name}</Link>
       </span>)}
-      {search && <span className="ml-2 text-xs text-stone-400">Searching every folder for “{search}”</span>}
+      {search && (!documentSearchEnabled || !folderId) && <span className="ml-2 text-xs text-stone-400">Searching every folder for “{search}”</span>}
     </nav>}
 
     {marked.size > 0 && tab === "mine" && <div className="flex flex-wrap items-center gap-2 rounded-md border bg-stone-50 px-3 py-2 text-sm">
@@ -308,41 +417,24 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
             </td>
           </tr>)}
 
-          {rows.map((file, index) => {
-            const href = tab === "shared" ? `/shared/${file.id}` : `${base}/${file.id}/sheet`
-            return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-stone-50"}>
-              <td className="border-b px-3 py-2">
-                {tab === "mine" && <input type="checkbox" aria-label={`Select ${file.name}`} className="h-4 w-4 accent-emerald-600" checked={marked.has(file.id)}
-                  onMouseDown={(event) => { if (event.shiftKey) event.preventDefault() }}
-                  onClick={(event) => { event.preventDefault(); markRow(index, event) }}
-                  onChange={() => {}} />}
-              </td>
-              <td className="border-b px-3 py-2">
-                <Link href={href} className="inline-flex items-center gap-2 font-medium text-stone-800 hover:text-emerald-800">
-                  <Table2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span className="truncate" title={file.name}>{file.name}</span>
-                  {file.linkAccess !== "none" && <Globe className="h-3.5 w-3.5 shrink-0 text-stone-300" aria-label="Shared by link" />}
-                </Link>
-                {file.folderName && <span className="ml-6 text-xs text-stone-400">in {file.folderName}</span>}
-              </td>
-              <td className="border-b px-3 py-2 text-stone-500">
-                {tab === "shared" ? <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-600">{file.sharedAccess === "edit" ? "Can edit" : file.sharedAccess === "interact" ? "Can interact" : "Can view"}</span> : file.documentCount}
-              </td>
-              <td className="border-b px-3 py-2 text-stone-500"><LastUpdated iso={file.updatedAt} /></td>
-              <td className="border-b px-3 py-2">
-                {tab === "mine" && <div className="flex items-center justify-end gap-1">
-                  <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" onClick={() => setSharingFile(file)}>
-                    <Share2 className="h-3.5 w-3.5" />Share
-                  </button>
-                  <RowMenu items={[
-                    { label: "Rename", icon: Pencil, onSelect: () => setRenaming({ kind: "file", id: file.id, name: file.name }) },
-                    { label: "Make a copy", icon: Copy, onSelect: () => void duplicate(file) },
-                    { label: "Delete", icon: Trash2, destructive: true, onSelect: () => setConfirming({ kind: "files", ids: [file.id] }) },
-                  ]} />
-                </div>}
-              </td>
-            </tr>
-          })}
+          {grouping ? <>
+            {(inScopeRows.length > 0 || inScopeContent.length > 0) && <>
+              {groupHeader(`In ${scopeFolderName}`)}
+              {inScopeRows.map(({ file, index }) => fileRow(file, index))}
+              {inScopeContent.length > 0 && matchedDivider}
+              {inScopeContent.map(contentRow)}
+            </>}
+            {(outScopeRows.length > 0 || outScopeContent.length > 0) && <>
+              {groupHeader("Everywhere else")}
+              {outScopeRows.map(({ file, index }) => fileRow(file, index))}
+              {outScopeContent.length > 0 && matchedDivider}
+              {outScopeContent.map(contentRow)}
+            </>}
+          </> : <>
+            {rows.map((file, index) => fileRow(file, index))}
+            {showContent && contentMatches.length > 0 && matchedDivider}
+            {showContent && contentMatches.map(contentRow)}
+          </>}
 
           {empty && <tr><td colSpan={5} className="px-4 py-16 text-center text-sm text-stone-400">
             {tab === "shared" ? "Nothing has been shared with you yet." : search ? `No files match “${search}”.` : "No files yet — create your first one to start extracting data."}
