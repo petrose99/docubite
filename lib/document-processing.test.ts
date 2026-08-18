@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/db", () => ({ prisma: {} }))
 vi.mock("@/prisma/client", () => ({ Prisma: {}, PrismaClient: vi.fn() }))
@@ -7,9 +7,12 @@ vi.mock("@/lib/document-storage", () => ({ readDocumentSource: vi.fn() }))
 vi.mock("@/lib/malware-scan", () => ({ scanDocumentBuffer: vi.fn() }))
 vi.mock("@/ai/providers/llmProvider", () => ({ requestLLM: vi.fn() }))
 vi.mock("@/lib/mineru", () => ({ parseDocumentWithMineru: vi.fn() }))
+vi.mock("@/lib/document-embedding", () => ({ processEmbedJob: vi.fn() }))
 
-const { buildBatchParts, findConflictingScalarFields, mergeClassification, mergeExtractionPasses, mergeFieldConfidence, mergeProvenancePasses, pageBatches, PERMANENT_ERROR_CODES } = await import("@/lib/document-processing")
+const { buildBatchParts, findConflictingScalarFields, mergeClassification, mergeExtractionPasses, mergeFieldConfidence, mergeProvenancePasses, pageBatches, PERMANENT_ERROR_CODES, processDocumentJob } = await import("@/lib/document-processing")
 const { parseTemplateFields } = await import("@/lib/document-templates")
+const { prisma } = await import("@/lib/db")
+const { processEmbedJob } = await import("@/lib/document-embedding")
 
 function safeErrorCode(error: unknown) {
   const raw = error instanceof Error ? error.message : "processing_failed"
@@ -322,5 +325,48 @@ describe("mergeClassification", () => {
   it("returns empty strings when nothing was classified", () => {
     expect(mergeClassification([{ docType: "", entity: "", period: "" }])).toEqual({ docType: "", entity: "", period: "" })
     expect(mergeClassification([])).toEqual({ docType: "", entity: "", period: "" })
+  })
+})
+
+describe("processDocumentJob dispatch by type", () => {
+  // The claim + load are stubbed on the shared prisma mock; each test controls what findUnique
+  // returns to drive the type switch.
+  function stubClaimAndLoad(job: unknown) {
+    Object.assign(prisma, {
+      documentProcessingJob: {
+        updateMany: vi.fn(async () => ({ count: 1 })),
+        findUnique: vi.fn(async () => job),
+        update: vi.fn(async () => ({})),
+      },
+    })
+  }
+
+  beforeEach(() => {
+    vi.mocked(processEmbedJob).mockReset()
+    vi.mocked(processEmbedJob).mockResolvedValue(undefined)
+  })
+
+  it("routes an embed job to processEmbedJob", async () => {
+    const document = { id: "doc1", workspaceId: "ws1", fileId: "file1", ocrText: "text", workspace: { aiEnabled: true } }
+    stubClaimAndLoad({ id: "job1", type: "embed", attempts: 1, scheduledAt: new Date(0), document })
+    await processDocumentJob("job1")
+    expect(processEmbedJob).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(processEmbedJob).mock.calls[0][0]).toMatchObject({ id: "job1", document: { id: "doc1" } })
+  })
+
+  it("fails an unknown job type permanently and never runs the embed handler", async () => {
+    stubClaimAndLoad({ id: "job2", type: "wat", attempts: 1, scheduledAt: new Date(0), document: { id: "doc1", workspaceId: "ws1", fileId: "file1", ocrText: "", workspace: { aiEnabled: true } } })
+    await processDocumentJob("job2")
+    expect(processEmbedJob).not.toHaveBeenCalled()
+    expect(vi.mocked(prisma.documentProcessingJob.update)).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "failed", errorCode: "unknown_job_type" }) }))
+  })
+
+  it("does nothing when the claim is lost to another worker", async () => {
+    Object.assign(prisma, {
+      documentProcessingJob: { updateMany: vi.fn(async () => ({ count: 0 })), findUnique: vi.fn(), update: vi.fn() },
+    })
+    await processDocumentJob("job3")
+    expect(processEmbedJob).not.toHaveBeenCalled()
+    expect(prisma.documentProcessingJob.findUnique).not.toHaveBeenCalled()
   })
 })

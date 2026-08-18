@@ -39,6 +39,20 @@ const envSchema = z.object({
   MINERU_MODEL_VERSION: z.string().default("vlm"),
   MINERU_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
   MINERU_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  // Semantic document search (RAG). Optional so the app boots without it: with no base URL the
+  // feature is dark everywhere — nothing is enqueued, the embed job handler no-ops, and the
+  // assistant is never given the search tool. Points at any OpenAI-compatible /embeddings endpoint
+  // (Ollama locally, a hosted provider in prod).
+  EMBEDDINGS_BASE_URL: z.string().url().optional(),
+  EMBEDDINGS_API_KEY: z.string().optional(),
+  // "openai" — an OpenAI-compatible /embeddings endpoint (Ollama, a Hugging Face TEI Inference
+  // Endpoint, most hosted providers). "huggingface" — HF's serverless Inference API, whose
+  // feature-extraction task has its own request/response shape (see lib/embeddings.ts).
+  EMBEDDINGS_FORMAT: z.enum(["openai", "huggingface"]).default("openai"),
+  EMBEDDINGS_MODEL_NAME: z.string().default("nomic-embed-text-v1"),
+  EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(768),
+  EMBEDDINGS_BATCH_SIZE: z.coerce.number().int().positive().default(32),
+  EMBEDDINGS_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -63,6 +77,18 @@ const config = {
   ai: { openaiApiKey: env.OPENAI_API_KEY, openaiModelName: env.OPENAI_MODEL_NAME, geminiApiKey: env.GEMINI_API_KEY, geminiModelName: env.GEMINI_MODEL_NAME, provider: env.AI_PROVIDER },
   documents: { maxFileSizeBytes: 50 * 1024 * 1024, maxPages: env.DOCUMENT_MAX_PAGES, pagesPerBatch: env.DOCUMENT_PAGES_PER_BATCH },
   mineru: { apiToken: env.MINERU_API_TOKEN || "", apiBase: env.MINERU_API_BASE.replace(/\/+$/, ""), modelVersion: env.MINERU_MODEL_VERSION, pollIntervalMs: env.MINERU_POLL_INTERVAL_MS, timeoutMs: env.MINERU_TIMEOUT_MS },
+  // `enabled` is the single feature gate read by the enqueue point, the embed job handler and the
+  // assistant tool registration. baseUrl has its trailing slash stripped the way mineru.apiBase does.
+  embeddings: {
+    enabled: Boolean(env.EMBEDDINGS_BASE_URL),
+    baseUrl: (env.EMBEDDINGS_BASE_URL || "").replace(/\/+$/, ""),
+    apiKey: env.EMBEDDINGS_API_KEY || "",
+    format: env.EMBEDDINGS_FORMAT,
+    modelName: env.EMBEDDINGS_MODEL_NAME,
+    dimensions: env.EMBEDDINGS_DIMENSIONS,
+    batchSize: env.EMBEDDINGS_BATCH_SIZE,
+    timeoutMs: env.EMBEDDINGS_TIMEOUT_MS,
+  },
   aws: { region: env.AWS_REGION, documentsBucket: env.AWS_S3_DOCUMENTS_BUCKET, kmsKeyId: env.AWS_S3_KMS_KEY_ID, internalWorkerSecret: env.INTERNAL_WORKER_SECRET, malwareScanUrl: env.MALWARE_SCAN_URL },
   auth: { secret: env.BETTER_AUTH_SECRET, loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
   stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, starterPriceId: env.STRIPE_STARTER_PRICE_ID, growthPriceId: env.STRIPE_GROWTH_PRICE_ID },

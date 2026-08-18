@@ -2,7 +2,7 @@
 
 import { PendingChangesBar } from "@/components/assistant/pending-changes-bar"
 import { PendingChanges } from "@/components/assistant/pending-changes"
-import { focusRange, runSheetTool, WRITE_TOOLS } from "@/components/assistant/sheet-tools"
+import { focusRange, runSheetTool, SHEET_TOOL_NAMES, WRITE_TOOLS } from "@/components/assistant/sheet-tools"
 import type { FUniver } from "@univerjs/presets"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai"
@@ -24,6 +24,7 @@ const TOOL_LABELS: Record<string, string> = {
   write_cells: "Writing cells",
   write_range: "Writing data",
   add_column: "Adding a column",
+  search_documents: "Searching documents",
 }
 
 /** The AI assistant, docked to the left of the grid.
@@ -51,6 +52,9 @@ export function AssistantPanel({ workspaceId, apiRef, onClose }: {
     // records the result, but nothing sends it back, so the model never gets to answer.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onToolCall: async ({ toolCall }) => {
+      // Server-executed tools (search_documents) return through the stream. Running them here would
+      // stamp an "Unknown tool" result over the real one, so only the browser-run tools are handled.
+      if (!SHEET_TOOL_NAMES.has(toolCall.toolName)) return
       const api = apiRef.current
       const output = api
         ? runSheetTool(api, pending, toolCall.toolName, toolCall.input)

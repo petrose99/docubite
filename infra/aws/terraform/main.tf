@@ -33,7 +33,7 @@ resource "aws_iam_role_policy" "worker" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = "${aws_s3_bucket.documents.arn}/*" },
     { Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], Resource = aws_kms_key.documents.arn },
-    { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = [var.database_url_secret_arn, var.openai_api_key_secret_arn, var.internal_worker_secret_arn, var.mineru_api_token_secret_arn] }
+    { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = [var.database_url_secret_arn, var.openai_api_key_secret_arn, var.internal_worker_secret_arn, var.mineru_api_token_secret_arn, var.embeddings_api_key_secret_arn] }
   ] })
 }
 
@@ -49,12 +49,19 @@ locals {
   worker_environment = [
     { name = "NODE_ENV", value = "production" }, { name = "AWS_REGION", value = var.aws_region },
     { name = "AWS_S3_DOCUMENTS_BUCKET", value = aws_s3_bucket.documents.id }, { name = "AWS_S3_KMS_KEY_ID", value = aws_kms_key.documents.arn },
-    { name = "MALWARE_SCAN_URL", value = var.malware_scan_url }
+    { name = "MALWARE_SCAN_URL", value = var.malware_scan_url },
+    # Semantic-search (RAG) embedding config. The worker runs the embed jobs, so it needs the same
+    # EMBEDDINGS_* the web app has. Non-secret settings here; the token is a secret below. These
+    # must match what is set on Vercel, or the two halves disagree about whether the feature is on.
+    { name = "EMBEDDINGS_FORMAT", value = "huggingface" },
+    { name = "EMBEDDINGS_BASE_URL", value = "https://router.huggingface.co/hf-inference" },
+    { name = "EMBEDDINGS_MODEL_NAME", value = "nomic-ai/nomic-embed-text-v1" }
   ]
   worker_secrets = [
     { name = "DATABASE_URL", valueFrom = var.database_url_secret_arn }, { name = "OPENAI_API_KEY", valueFrom = var.openai_api_key_secret_arn },
     { name = "INTERNAL_WORKER_SECRET", valueFrom = var.internal_worker_secret_arn },
-    { name = "MINERU_API_TOKEN", valueFrom = var.mineru_api_token_secret_arn }
+    { name = "MINERU_API_TOKEN", valueFrom = var.mineru_api_token_secret_arn },
+    { name = "EMBEDDINGS_API_KEY", valueFrom = var.embeddings_api_key_secret_arn }
   ]
 }
 resource "aws_ecs_task_definition" "worker" {

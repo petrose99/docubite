@@ -66,6 +66,7 @@ model Workspace {
   workbooks       SpreadsheetWorkbook[]
   aiFormulaCache  AiFormulaCache[]
   extractionShapes ExtractionShape[]
+  documentChunks  DocumentChunk[]
 
   @@map("workspaces")
 }
@@ -178,6 +179,7 @@ model DocumentFile {
   documents   Document[]
   shares      DocumentFileShare[]
   workbook    SpreadsheetWorkbook?
+  chunks      DocumentChunk[]
 
   @@index([workspaceId, folderId])
   @@index([workspaceId, updatedAt])
@@ -321,6 +323,7 @@ model Document {
   shape             ExtractionShape?         @relation(fields: [shapeId], references: [id], onDelete: SetNull)
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
+  chunks            DocumentChunk[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -349,6 +352,38 @@ model DocumentProcessingJob {
 
   @@index([status, scheduledAt])
   @@map("document_processing_jobs")
+}
+
+/** One embedded slice of a document's OCR text, the unit of semantic + lexical search (RAG).
+ *
+ * Two columns of this table are deliberately NOT declared here and live only in the hand-written
+ * migration: `embedding vector(768)` (a pgvector type Prisma cannot express, and which the local
+ * PGlite dev database has no extension for — so it is added conditionally) and `text_tsv` (a
+ * generated `tsvector` for the lexical half). Both are read and written exclusively through raw
+ * SQL in models/document-chunks.ts; Prisma tolerates the extra columns it does not know about.
+ *
+ * Chunks cascade-delete with their document, file, and workspace, so deletion needs no code. */
+model DocumentChunk {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  documentId  String       @map("document_id") @db.Uuid
+  fileId      String       @map("file_id") @db.Uuid
+  chunkIndex  Int          @map("chunk_index")
+  text        String
+  /// {pages: number[], bbox?: [x0,y0,x1,y1]} — where in the source this slice came from, so an
+  /// answer can cite "invoice.pdf, p.3". Null on the ocrText fallback path, which has no blocks.
+  provenance  Json?
+  /// sha256 over the model name + task prefix + text. A re-embed of unchanged content is skipped
+  /// on a hash match; a model or prefix change changes every hash and forces a clean re-embed.
+  contentHash String       @map("content_hash")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  file        DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([workspaceId])
+  @@map("document_chunks")
 }
 
 model DocumentAuditEvent {

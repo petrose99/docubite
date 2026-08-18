@@ -8,6 +8,7 @@ variable "database_url_secret_arn" { type = string }
 variable "openai_api_key_secret_arn" { type = string }
 variable "internal_worker_secret_arn" { type = string }
 variable "mineru_api_token_secret_arn" { type = string }
+variable "embeddings_api_key_secret_arn" { type = string }
 variable "malware_scan_url" { type = string }
 variable "vpc_subnet_ids" { type = list(string) }
 variable "worker_security_group_ids" { type = list(string) }

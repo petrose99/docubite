@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import { searchDocumentChunks } from "@/lib/retrieval"
 import { getWorkspaceMembership, consumeWorkspaceQuota } from "@/models/workspaces"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai"
@@ -28,10 +29,20 @@ Changing the sheet:
 - Never edit cells the user did not ask you to touch, and never delete data to make room.
 - Finish any turn that changed the sheet by calling task_complete, with one entry in changes per thing you did ("Sheet1!G1", "added Line Total header"). The user sees these as clickable links, so give real references.`
 
+/** Appended to the system prompt only when the document-search tool is registered (i.e. embeddings
+ * are configured). Kept separate so the model is never told about a tool it does not have. */
+const DOCUMENT_SEARCH_PROMPT = `
+
+Answering from document contents:
+- The grid holds extracted fields, but the full text of every uploaded document is also searchable. For a question about what a document actually says — wording, clauses, a value not in a column — call search_documents with a focused query.
+- Ground the answer in the returned snippets and cite each fact as "filename, p.N" using the filename and page the snippet carries.
+- If the search returns nothing relevant, say so plainly. Never invent a citation, a snippet, or a value.`
+
 /** Tools declared with no `execute`. The AI SDK streams the call to the browser, which runs it
  * against the live Univer workbook and posts the result back — so the assistant reads the sheet
- * as it is on screen, unsaved edits included, and the server never needs a copy of it. */
-const tools = {
+ * as it is on screen, unsaved edits included, and the server never needs a copy of it. The
+ * document-search tool below is the exception: it runs on the server (it has `execute`). */
+const sheetTools = {
   profile_workbook: tool({
     description: "List the sheets in the workbook with their headers and a few sample rows. Call this first, always.",
     inputSchema: z.object({ sampleRows: z.number().int().min(0).max(25).optional().describe("Rows of sample data per sheet (default 10)") }),
@@ -117,9 +128,32 @@ export async function POST(request: Request) {
 
   const google = createGoogleGenerativeAI({ apiKey: config.ai.geminiApiKey })
 
+  // The document-search tool is added, with a server `execute`, only when embeddings are
+  // configured — the single feature gate. Its result flows back through the stream; the browser's
+  // onToolCall is guarded to ignore it (see components/assistant/assistant-panel.tsx). No extra
+  // quota: this turn already consumed one AI unit above.
+  const tools = config.embeddings.enabled
+    ? {
+        ...sheetTools,
+        search_documents: tool({
+          description: "Search the user's uploaded documents (invoices, receipts, bank statements) for text relevant to a question, and get back matching snippets with their filename and page. Use this for questions about what a document says, rather than about the spreadsheet grid.",
+          inputSchema: z.object({ query: z.string().min(2).describe("What to look for, in a few words or a short phrase") }),
+          execute: async ({ query }) => {
+            try {
+              return { results: await searchDocumentChunks(workspaceId, query, { limit: 8 }) }
+            } catch {
+              // Never throw out of a tool — that would break the stream. The model is told the
+              // search is unavailable and can answer from the grid or say it cannot.
+              return { error: "document_search_unavailable" }
+            }
+          },
+        }),
+      }
+    : sheetTools
+
   const result = streamText({
     model: google(config.ai.geminiModelName),
-    system: SYSTEM_PROMPT,
+    system: config.embeddings.enabled ? SYSTEM_PROMPT + DOCUMENT_SEARCH_PROMPT : SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(MAX_STEPS),

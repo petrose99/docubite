@@ -230,6 +230,12 @@ export type SheetToolName = keyof ReturnType<typeof createSheetTools>
 /** Tools that change the workbook, and so put the accept/undo bar on screen. */
 export const WRITE_TOOLS: ReadonlySet<string> = new Set(["write_cells", "write_range", "add_column"])
 
+/** The tools executed here in the browser. The assistant may also be given server-executed tools
+ * (e.g. search_documents), whose results arrive through the stream — onToolCall must run and
+ * answer ONLY the names in this set, or it would stamp an "Unknown tool" result over a server
+ * tool's real result. */
+export const SHEET_TOOL_NAMES: ReadonlySet<string> = new Set(["profile_workbook", "read_range", "select_range", "write_cells", "write_range", "add_column", "task_complete"])
+
 /** Runs one tool call and always resolves: a thrown error comes back as a result the model can
  * read and correct from, rather than breaking the stream. Gemini in particular will sometimes
  * invent a sheet name, and the error text is what gets it to retry with a real one. */

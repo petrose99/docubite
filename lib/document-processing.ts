@@ -2,6 +2,7 @@ import { requestLLM } from "@/ai/providers/llmProvider"
 import config from "@/lib/config"
 import { buildDocumentJsonSchema, buildDocumentPrompt, DocumentClassification, DocumentFieldDefinition, extractClassification, extractFieldConfidence, extractFieldProvenance, FieldProvenanceHints, findMissingRequiredFields, parseTemplateFields, ProvenanceHint, validateDocumentValues } from "@/lib/document-templates"
 import { documentBlocksKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
+import { processEmbedJob } from "@/lib/document-embedding"
 import { buildBlocksSidecar, buildDocumentProvenance } from "@/lib/provenance"
 import { buildShapeSignature } from "@/lib/shape-match"
 import { upsertExtractionShape } from "@/models/extraction-shapes"
@@ -177,7 +178,22 @@ export async function processDocumentJob(jobId: string) {
   if (!claimed.count) return
   const job = await prisma.documentProcessingJob.findUnique({ where: { id: jobId }, include: { document: { include: { workspace: true, template: true, templateVersion: true } } } })
   if (!job?.document) throw new Error("document_job_not_found")
+  // Dispatch by job type. The atomic claim above is generic; without this switch a second job type
+  // would be mis-run as an extract (processDocumentJob historically ignored job.type). All three
+  // drivers — worker loop, internal route, in-process after() kick — funnel through here, so this
+  // one switch fixes dispatch for every one of them at once.
+  if (job.type === "embed") return await processEmbedJob({ id: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, document: job.document })
+  if (job.type !== "extract") {
+    await prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "failed", errorCode: "unknown_job_type", completedAt: new Date(), leaseUntil: null } })
+    return
+  }
   const document = job.document
+  // Set when the embed job is enqueued mid-run (below). The extract job kicks it in-process once
+  // it finishes — success OR LLM failure — so indexing happens on the serverless after() path and
+  // in dev without a worker. The embed job's own atomic claim makes this safe if the worker also
+  // picks it up.
+  let embedJobId: string | null = null
+  let extractError: unknown = null
   try {
     if (!document.storageKey) throw new Error("document_source_missing")
     if (!PROCESSABLE_TYPES.has(document.mimeType)) throw new Error("unsupported_document_type")
@@ -224,6 +240,16 @@ export async function processDocumentJob(jobId: string) {
     // a single page, which costs batching but never loses text.
     const contents: PageContent[] = parsed.pages?.length ? parsed.pages : [{ page: 1, text: parsed.markdown }]
     const ocrText = parsed.markdown.slice(0, OCR_TEXT_LIMIT)
+
+    // The parsed blocks are stored beside the source so provenance can be re-resolved later and so
+    // the embed job can chunk from them. Written HERE, before the LLM field-extraction below, so it
+    // exists even when that extraction fails — indexing must depend only on OCR. Best effort: a
+    // failed sidecar write costs only future re-resolution / a fallback to ocrText, never this run.
+    const sidecar = buildBlocksSidecar(parsed.blocks ?? null, parsed.pageSizes ?? null)
+    if (sidecar) await putDocumentSource(documentBlocksKey(document.workspaceId, document.id), Buffer.from(JSON.stringify(sidecar)), "application/json").catch(() => {})
+    // Enqueue semantic-search indexing now, off the OCR text alone. Best effort and gated on the
+    // feature: a failure here must never fail the extraction that is the job's real purpose.
+    if (config.embeddings.enabled) embedJobId = await enqueueEmbedJob(document, ocrText).catch(() => null)
 
     // Batch over the pages actually parsed rather than the estimate: pdfPageCount reads 0
     // on PDFs whose page tree sits in a compressed object stream, and batching on that would
@@ -279,11 +305,8 @@ export async function processDocumentJob(jobId: string) {
     // Resolve each merged value's source location against the parsed blocks, remapping pages back
     // to the original numbering when a page range narrowed the parse.
     const provenance = buildDocumentProvenance(fields, mergeProvenancePasses(fields, passes, provenancePasses), extraction, parsed.blocks ?? null, parsed.pageSizes ?? null, pageRanges)
-    // The parsed blocks are stored beside the source so provenance can be re-resolved later. Best
-    // effort: the resolved provenance is already on the document, so a failed sidecar write costs
-    // only future re-resolution, never this extraction.
-    const sidecar = buildBlocksSidecar(parsed.blocks ?? null, parsed.pageSizes ?? null)
-    if (sidecar) await putDocumentSource(documentBlocksKey(document.workspaceId, document.id), Buffer.from(JSON.stringify(sidecar)), "application/json").catch(() => {})
+    // (The blocks sidecar was already written above, before the LLM step, so the embed job can use
+    // it even when extraction fails.)
     const status = missing.length || batchFailures ? "needs_review" : "ready_for_review"
     await prisma.$transaction([
       prisma.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } }),
@@ -299,8 +322,33 @@ export async function processDocumentJob(jobId: string) {
       prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } }),
       prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: permanent ? "extraction_failed" : "extraction_retrying" } }),
     ])
-    throw error
+    // Rethrown below, after the embed job is kicked — a document that OCR'd successfully is
+    // searchable even if the LLM field-extraction failed.
+    extractError = error
   }
+  // Kick the embed job in-process now that extraction has finished (either way). Awaited so the
+  // serverless after() context keeps the function alive until indexing completes; the embed job's
+  // atomic claim makes this a no-op if the worker already picked it up.
+  if (embedJobId) await processDocumentJob(embedJobId).catch(() => {})
+  if (extractError) throw extractError
+}
+
+/** Enqueues the embed job for a freshly OCR'd document and persists its ocrText, so indexing can
+ * proceed off the OCR text alone even if the LLM field-extraction that follows fails. Skips
+ * creating a second job when a queued/processing one already exists (an extract retry re-runs
+ * MinerU): the content-hash skip makes a real duplicate free, this just keeps the queue clean.
+ * Returns the embed job's id so the caller can kick it in-process. */
+async function enqueueEmbedJob(document: { id: string; workspaceId: string }, ocrText: string): Promise<string> {
+  const existing = await prisma.documentProcessingJob.findFirst({ where: { documentId: document.id, type: "embed", status: { in: ["queued", "processing"] } }, select: { id: true } })
+  if (existing) {
+    await prisma.document.update({ where: { id: document.id }, data: { ocrText } })
+    return existing.id
+  }
+  const [, job] = await prisma.$transaction([
+    prisma.document.update({ where: { id: document.id }, data: { ocrText } }),
+    prisma.documentProcessingJob.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "embed" }, select: { id: true } }),
+  ])
+  return job.id
 }
 
 export async function processNextQueuedDocumentJob() {
