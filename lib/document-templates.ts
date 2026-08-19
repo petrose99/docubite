@@ -1,3 +1,4 @@
+import { FINANCE_TEMPLATES } from "@/lib/domains/finance"
 import { z } from "zod"
 
 const fieldTypes = z.enum(["string", "number", "date", "boolean", "array", "enum"])
@@ -68,52 +69,11 @@ export const documentTemplateFieldsSchema = z.array(documentFieldSchema).min(1).
 
 export type DocumentFieldDefinition = z.infer<typeof documentFieldSchema>
 
-export const DEFAULT_DOCUMENT_TEMPLATES = [
-  {
-    code: "invoice", name: "Invoice", documentType: "invoice", isSystem: true, multiRow: true,
-    fields: [
-      { key: "vendor", label: "Supplier", type: "string", instruction: "Seller or supplier name", required: true },
-      { key: "invoice_number", label: "Invoice number", type: "string", instruction: "Invoice, bill, or reference number", required: true },
-      { key: "issue_date", label: "Issue date", type: "date", instruction: "Date the invoice was issued", required: true },
-      { key: "due_date", label: "Due date", type: "date", instruction: "Payment due date", required: false },
-      { key: "currency_code", label: "Currency shown", type: "string", instruction: "Literal ISO 4217 code printed on the document; do not convert", required: false },
-      { key: "subtotal", label: "Subtotal", type: "number", instruction: "Amount before tax", required: false, mergeStrategy: "last" },
-      { key: "tax_total", label: "Tax total", type: "number", instruction: "Total tax or VAT", required: false, mergeStrategy: "last" },
-      { key: "total", label: "Total", type: "number", instruction: "Amount payable including taxes", required: true, mergeStrategy: "last" },
-      { key: "line_items", label: "Line items", type: "array", instruction: "Each billed line item", required: false, itemFields: [
-        { key: "description", label: "Description", type: "string", instruction: "What was billed", required: false },
-        { key: "quantity", label: "Quantity", type: "number", instruction: "Quantity billed", required: false },
-        { key: "unit_price", label: "Unit price", type: "number", instruction: "Price per unit before tax", required: false },
-        { key: "amount", label: "Amount", type: "number", instruction: "Line total", required: false },
-      ] },
-    ],
-  },
-  {
-    code: "receipt", name: "Receipt", documentType: "receipt", isSystem: true, multiRow: true,
-    fields: [
-      { key: "merchant", label: "Merchant", type: "string", instruction: "Store, merchant, or supplier name", required: true },
-      { key: "purchase_date", label: "Purchase date", type: "date", instruction: "Date of purchase", required: true },
-      { key: "receipt_number", label: "Receipt number", type: "string", instruction: "Receipt or reference number", required: false },
-      { key: "currency_code", label: "Currency shown", type: "string", instruction: "Literal ISO 4217 code printed on the document; do not convert", required: false },
-      { key: "tax_total", label: "Tax total", type: "number", instruction: "Total tax or VAT", required: false, mergeStrategy: "last" },
-      { key: "line_items", label: "Line items", type: "array", instruction: "Each purchased item", required: false, itemFields: [
-        { key: "description", label: "Description", type: "string", instruction: "What was purchased", required: false },
-        { key: "quantity", label: "Quantity", type: "number", instruction: "Quantity purchased", required: false },
-        { key: "unit_price", label: "Unit price", type: "number", instruction: "Price per unit before tax", required: false },
-        { key: "amount", label: "Amount", type: "number", instruction: "Line total", required: false },
-      ] },
-      { key: "total", label: "Total", type: "number", instruction: "Amount paid including taxes", required: true, mergeStrategy: "last" },
-    ],
-  },
-  {
-    code: "generic", name: "Custom document", documentType: "generic", isSystem: true, multiRow: false,
-    fields: [
-      { key: "title", label: "Title", type: "string", instruction: "Short factual title", required: true },
-      { key: "document_date", label: "Document date", type: "date", instruction: "Date shown on the document", required: false },
-      { key: "summary", label: "Summary", type: "string", instruction: "One concise factual summary, three sentences maximum", required: false },
-    ],
-  },
-] as const
+/** The templates seeded into every new file. Now sourced from the finance domain pack — the
+ * definitions themselves are unchanged and unchanged in order, so this is a move, not an edit.
+ * Other domain packs (pathology, logistics) are registered in lib/domains but deliberately NOT
+ * included here: everything in this array becomes a worksheet in every file anyone creates. */
+export const DEFAULT_DOCUMENT_TEMPLATES = FINANCE_TEMPLATES
 
 export function parseTemplateFields(fields: unknown): DocumentFieldDefinition[] {
   return documentTemplateFieldsSchema.parse(fields)

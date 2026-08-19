@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
-import { searchDocumentChunks } from "@/lib/retrieval"
+import { findMatchingDocuments, searchDocumentChunks } from "@/lib/retrieval"
 import { getWorkspaceMembership, consumeWorkspaceQuota } from "@/models/workspaces"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai"
@@ -36,8 +36,16 @@ const DOCUMENT_SEARCH_PROMPT = `
 Answering from document contents:
 - The grid holds extracted fields, but the full text of every uploaded document is also searchable. For a question about what a document actually says — wording, clauses, a value not in a column — call search_documents with a focused query.
 - Ground the answer in the returned snippets and cite each fact as "filename, p.N" using the filename and page the snippet carries.
+- Each snippet carries a "source": vlm_ocr means it was read off a scanned page, asr means it was transcribed from a dictation. Say which when it matters — a misheard word and a misread glyph are different kinds of error, and a user checking a surprising value needs to know which to suspect.
 - If the search returns nothing relevant, say so plainly. Never invent a citation, a snippet, or a value.
-- If a search returns no results and pendingIndexing is true, tell the user some documents are still being indexed and to ask again in a minute.`
+- If a search returns no results and pendingIndexing is true, tell the user some documents are still being indexed and to ask again in a minute.
+
+Counting and "all of them" questions:
+- search_documents ranks passages and returns only the best few, so it can NEVER tell you how many documents match. Never count from its results, and never say "all" based on them.
+- For how many / which ones / all / none / every — call find_documents. It returns the complete matching set with a true total.
+- Report the total it gives you, not the number of documents it listed: it lists a sample and counts the rest.
+- If it comes back with kind "no_filters", it could not turn the question into an exact condition. Its availableFields lists what is actually filterable; either ask again naming one of those fields, or tell the user the data does not record what they asked about.
+- If truncated is true, say the total is at least that many rather than reporting it as exact.`
 
 /** Tools declared with no `execute`. The AI SDK streams the call to the browser, which runs it
  * against the live Univer workbook and posts the result back — so the assistant reads the sheet
@@ -154,6 +162,18 @@ export async function POST(request: Request) {
               // Never throw out of a tool — that would break the stream. The model is told the
               // search is unavailable and can answer from the grid or say it cannot.
               return { error: "document_search_unavailable" }
+            }
+          },
+        }),
+        find_documents: tool({
+          description: "Find EVERY document whose extracted values match a condition — 'all invoices from Acme', 'anything due before March', 'shipments still in transit'. Returns a complete, counted set, not the closest matches. Use this whenever the question is about how many, which ones, or all of something. Do not use search_documents for counting.",
+          inputSchema: z.object({ query: z.string().min(2).describe("The condition to match, in plain language, including any names, amounts or dates it mentions") }),
+          execute: async ({ query }) => {
+            try {
+              const result = await findMatchingDocuments(workspaceId, query)
+              return result
+            } catch {
+              return { error: "document_lookup_unavailable" }
             }
           },
         }),

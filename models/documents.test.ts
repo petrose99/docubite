@@ -5,9 +5,26 @@ vi.mock("@/prisma/client", () => ({ Prisma: {}, PrismaClient: vi.fn() }))
 vi.mock("@/models/workspaces", () => ({ consumeWorkspaceQuota: vi.fn() }))
 vi.mock("@/lib/document-storage", () => ({ documentStorageKey: vi.fn(), documentBlocksKey: vi.fn((ws: string, id: string) => `workspaces/${ws}/documents/${id}/blocks`), putDocumentSource: vi.fn(), deleteDocumentSource: vi.fn() }))
 
-const { createDocumentFromBuffer, deleteWorkspaceDocuments, documentDataForExport, documentHash, isSupportedDocumentBuffer, validateDocumentInput } = await import("@/models/documents")
+const { createDocumentFromBuffer, deleteWorkspaceDocuments, documentDataForExport, documentHash, documentSourceFor, isSupportedDocumentBuffer, validateDocumentInput } = await import("@/models/documents")
 const { prisma } = await import("@/lib/db")
 const { deleteDocumentSource } = await import("@/lib/document-storage")
+
+describe("documentSourceFor", () => {
+  // Regression: dictations were being stored with source "upload" (the value every caller passes),
+  // so Document.source was never "dictation", so their chunks were tagged vlm_ocr — a dictated
+  // snippet was cited as though it had been read off a printed page.
+  it("records any audio upload as a dictation, whatever the caller passed", () => {
+    for (const mime of ["audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/flac"]) {
+      expect(documentSourceFor(mime, "upload")).toBe("dictation")
+    }
+  })
+
+  it("leaves every non-audio type on the caller's source", () => {
+    for (const mime of ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"]) {
+      expect(documentSourceFor(mime, "upload")).toBe("upload")
+    }
+  })
+})
 
 describe("document input validation", () => {
   it("requires matching MIME magic bytes", () => {

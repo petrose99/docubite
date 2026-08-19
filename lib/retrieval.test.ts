@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/db", () => ({ prisma: { document: { findMany: vi.fn() } } }))
+// documentAuditEvent is mocked because every search now records a document_searched event —
+// retrieval returns document contents, which is a disclosure worth an audit trail.
+vi.mock("@/lib/db", () => ({ prisma: { document: { findMany: vi.fn() }, documentAuditEvent: { create: vi.fn() } } }))
 vi.mock("@/lib/embeddings", () => ({ embedTexts: vi.fn() }))
 vi.mock("@/models/document-chunks", () => ({ vectorSearch: vi.fn(), lexicalSearch: vi.fn() }))
 

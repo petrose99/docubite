@@ -36,9 +36,15 @@ function toCell(value: unknown): Cell | null {
 
 /** The style a cell earns from how the extraction went: red when a required field came back
  * empty, amber when the model was unsure. This is the confidence signal the old grid showed
- * as a coloured corner, carried into the spreadsheet. */
+ * as a coloured corner, carried into the spreadsheet.
+ *
+ * Red is also used for a dictated value the recording does not support — a value the model
+ * produced with no confidence and no pinnable moment in the audio. That is red rather than amber
+ * on purpose: amber says "check this reading", red says "this may not be in the source at all",
+ * and a fabricated number is the more dangerous of the two. */
 function cellStyle(row: SheetRow, column: SheetColumn, value: unknown): string | undefined {
   if (row.missingRequired.includes(column.fieldKey) && (value === null || value === undefined || value === "")) return SHEET_STYLE_IDS.missing
+  if (row.unsupportedFields?.includes(column.fieldKey)) return SHEET_STYLE_IDS.missing
   const confidence = row.fieldConfidence[column.fieldKey]
   return typeof confidence === "number" && confidence < LOW_CONFIDENCE ? SHEET_STYLE_IDS.low : undefined
 }

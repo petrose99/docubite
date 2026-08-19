@@ -32,6 +32,8 @@ export type EmbedJobInput = {
     workspaceId: string
     fileId: string
     ocrText: string
+    /** "upload" or "dictation" — decides the source tag written onto the chunks. */
+    source: string
     workspace: { aiEnabled: boolean }
   }
 }
@@ -113,7 +115,9 @@ export async function processEmbedJob(job: EmbedJobInput): Promise<void> {
       contentHash: chunk.contentHash,
       embedding: vectors[index],
     }))
-    await replaceDocumentChunks({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, chunks: inserts })
+    // A dictation's chunks are transcribed speech, not parsed print — tagged so a citation can say
+    // which, since the two mishear/misread in quite different ways.
+    await replaceDocumentChunks({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, chunks: inserts, source: document.source === "dictation" ? "asr" : "vlm_ocr" })
     await prisma.$transaction([
       prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
       prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "embedding_completed" } }),

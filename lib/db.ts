@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "@/prisma/client"
+import { checkWorkspaceScope } from "@/lib/workspace-scope"
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -40,6 +41,38 @@ function createPrismaClient() {
   })
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+/** Applies the workspace-scope guard as a client extension.
+ *
+ * Every query against a workspace-scoped model passes through checkWorkspaceScope, which throws if
+ * no workspaceId filter is present. Three modes (DB_SCOPE_GUARD): `off` is a straight pass-through,
+ * `warn` logs and continues, `throw` refuses.
+ *
+ * The mode ladder is the point. Turning this straight on in a deployed app would convert every
+ * legitimately-unscoped query — auth resolving a user's memberships, the admin console, the Stripe
+ * webhook that arrives with a customer id rather than a workspace — into an outage. Running `warn`
+ * first turns that same set into a list to work through, at no risk. */
+function withScopeGuard(client: PrismaClient): PrismaClient {
+  const mode = process.env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn")
+  if (mode === "off") return client
+  return client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          try {
+            checkWorkspaceScope(model, operation, args)
+          } catch (error) {
+            if (mode === "throw") throw error
+            // The stack is what makes a warning actionable — the message alone says which model
+            // was queried but not from where.
+            console.warn(`[workspace-scope] ${error instanceof Error ? error.message : error}`, new Error("query origin").stack)
+          }
+          return query(args)
+        },
+      },
+    },
+  }) as unknown as PrismaClient
+}
+
+export const prisma = globalForPrisma.prisma ?? withScopeGuard(createPrismaClient())
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma

@@ -1,0 +1,6 @@
+{"query":"BP-2026-0777","expectedDocumentIds":["9dd919bf-b82c-43e9-8c0b-08cdd0015f57"],"kind":"exact_id","note":"literal identifier from invoice-brightpeak.pdf"}
+{"query":"Market research report","expectedDocumentIds":["9dd919bf-b82c-43e9-8c0b-08cdd0015f57"],"kind":"semantic","note":"line item from invoice-brightpeak.pdf"}
+{"query":"CVS-2026-0442","expectedDocumentIds":["0b076e11-2f7e-491b-ad2b-a687aa6ab8f8"],"kind":"exact_id","note":"literal identifier from invoice-cedarvalley.pdf"}
+{"query":"Office chairs","expectedDocumentIds":["0b076e11-2f7e-491b-ad2b-a687aa6ab8f8"],"kind":"semantic","note":"line item from invoice-cedarvalley.pdf"}
+{"query":"all invoices from Bright Peak Consulting","expectedDocumentIds":["9dd919bf-b82c-43e9-8c0b-08cdd0015f57"],"kind":"filtered","note":"1 document(s) from this vendor"}
+{"query":"all invoices from Cedar Valley Supplies Ltd","expectedDocumentIds":["0b076e11-2f7e-491b-ad2b-a687aa6ab8f8"],"kind":"filtered","note":"1 document(s) from this vendor"}

@@ -38,6 +38,7 @@ model User {
   adminAuditEvents      AdminAuditEvent[]     @relation("AdminAuditActor")
   createdFiles          DocumentFile[]        @relation("FileCreator")
   fileShares            DocumentFileShare[]
+  signedReports         DocumentReportDraft[]
 
   @@map("users")
 }
@@ -67,6 +68,9 @@ model Workspace {
   aiFormulaCache  AiFormulaCache[]
   extractionShapes ExtractionShape[]
   documentChunks  DocumentChunk[]
+  fieldValues     DocumentFieldValue[]
+  reportTemplates ReportTemplate[]
+  reportDrafts    DocumentReportDraft[]
 
   @@map("workspaces")
 }
@@ -180,6 +184,7 @@ model DocumentFile {
   shares      DocumentFileShare[]
   workbook    SpreadsheetWorkbook?
   chunks      DocumentChunk[]
+  fieldValues DocumentFieldValue[]
 
   @@index([workspaceId, folderId])
   @@index([workspaceId, updatedAt])
@@ -305,6 +310,11 @@ model Document {
   /// The upload batch (one drag of files) this document arrived in, so a folder can be reported on
   /// as a set. Just a grouping key — null for documents uploaded one at a time.
   uploadBatchId     String?                  @map("upload_batch_id") @db.Uuid
+  /// Timestamped ASR output for a dictation: [{startMs, endMs, text}]. Null for every uploaded
+  /// document; the flat text also lands in ocrText, which is what makes a dictation searchable
+  /// through the existing chunking/embedding path with no new retrieval code.
+  transcript        Json?
+  transcriptModel   String?                  @map("transcript_model")
   aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
   searchText        String                   @default("") @map("search_text")
   ocrText           String                   @default("") @map("ocr_text")
@@ -324,6 +334,8 @@ model Document {
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
   chunks            DocumentChunk[]
+  fieldValues       DocumentFieldValue[]
+  reportDrafts      DocumentReportDraft[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -376,6 +388,10 @@ model DocumentChunk {
   /// sha256 over the model name + task prefix + text. A re-embed of unchanged content is skipped
   /// on a hash match; a model or prefix change changes every hash and forces a clean re-embed.
   contentHash String       @map("content_hash")
+  /// vlm_ocr | asr | llm_structured | manual — how the text in this chunk was obtained, so a
+  /// citation can say whether the evidence was read off a page or heard in a dictation.
+  source      String       @default("vlm_ocr")
+  sourceConfidence Float?  @map("source_confidence")
   createdAt   DateTime     @default(now()) @map("created_at")
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
@@ -384,6 +400,114 @@ model DocumentChunk {
   @@unique([documentId, chunkIndex])
   @@index([workspaceId])
   @@map("document_chunks")
+}
+
+/** One extracted value, projected out of Document.reviewedData into typed, indexed columns.
+ *
+ * reviewedData stays the source of truth for rendering a single document; this table is the same
+ * facts made queryable — exact equality, range filters, and completeness ("every invoice from X",
+ * not "the 8 best-matching chunks"). Vector search structurally cannot answer the latter, which is
+ * why the relational spine exists alongside it rather than instead of it.
+ *
+ * As with DocumentChunk, one column is NOT declared here and lives only in the migration:
+ * `value_text_norm` (generated `lower(btrim(value_text))`), which Prisma cannot express. Rows are
+ * written and queried exclusively through raw SQL in models/document-field-values.ts.
+ *
+ * Cascade-deletes with its document, file, and workspace, so cleanup needs no code. */
+model DocumentFieldValue {
+  id               String       @id @default(uuid()) @db.Uuid
+  workspaceId      String       @map("workspace_id") @db.Uuid
+  documentId       String       @map("document_id") @db.Uuid
+  fileId           String       @map("file_id") @db.Uuid
+  /// The worksheet code this value was extracted under, denormalised so a domain-scoped query
+  /// ("all pathology reports") needs no join.
+  templateCode     String?      @map("template_code")
+  fieldKey         String       @map("field_key")
+  /// Set only for array fields: fieldKey is the array ("line_items"), itemKey the field inside one
+  /// row ("sku"), rowIndex its position. Both null for scalars.
+  itemKey          String?      @map("item_key")
+  rowIndex         Int?         @map("row_index")
+  /// Exactly one of these four is non-null, picked by the field's declared type.
+  valueText        String?      @map("value_text")
+  valueNumber      Float?       @map("value_number")
+  valueDate        DateTime?    @map("value_date") @db.Date
+  valueBool        Boolean?     @map("value_bool")
+  /// vlm_ocr | asr | llm_structured | manual — how this fact was obtained.
+  source           String       @default("llm_structured")
+  sourceConfidence Float?       @map("source_confidence")
+  /// The resolved Ref for this value ({page, bbox, quote, blockIndex, score}), copied from the
+  /// document's provenance so a filtered hit can be cited without re-reading it.
+  provenance       Json?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document         Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  file             DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, documentId])
+  @@map("document_field_values")
+}
+
+/** A synoptic report format for one specimen type, owned by the workspace.
+ *
+ * Workspace-scoped and configurable rather than hard-coded: synoptic reporting formats are set by
+ * the lab and the protocol it follows (CAP, ICCR, or a local variant). A built-in format would be
+ * wrong for every institution that uses a different one. `specimenType` null is the fallback. */
+model ReportTemplate {
+  id                String                @id @default(uuid()) @db.Uuid
+  workspaceId       String                @map("workspace_id") @db.Uuid
+  name              String
+  specimenType      String?               @map("specimen_type")
+  /// Ordered synoptic slots: [{key, label, required}]. Rendering walks THESE, never the extracted
+  /// values, so a value the template does not name can never reach a report.
+  synopticFields    Json                  @map("synoptic_fields")
+  /// Ordered narrative sections: [{key, title, instruction}].
+  narrativeSections Json                  @map("narrative_sections")
+  isSystem          Boolean               @default(false) @map("is_system")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  drafts            DocumentReportDraft[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, specimenType])
+  @@map("report_templates")
+}
+
+/** One drafted report for one document.
+ *
+ * `status` is the clinical safety boundary of this feature. A draft is created "draft"; the ONLY
+ * code path that writes "signed" is signReportAction, which requires an authenticated workspace
+ * member and writes a report_signed audit event. Nothing auto-finalises, nothing auto-files.
+ *
+ * Two CHECK constraints in the migration back that up at the database level — status must be one of
+ * the two values, and "signed" is unwritable without both a signer and a timestamp — so the
+ * guarantee does not depend on every future code path remembering it. */
+model DocumentReportDraft {
+  id           String          @id @default(uuid()) @db.Uuid
+  workspaceId  String          @map("workspace_id") @db.Uuid
+  documentId   String          @map("document_id") @db.Uuid
+  templateId   String?         @map("template_id") @db.Uuid
+  status       String          @default("draft")
+  /// The deterministic half: {slotKey: value|null}, produced by template slotting with no LLM.
+  synoptic     Json
+  /// The generated half: {sectionKey: text}.
+  narrative    Json
+  renderedText String          @map("rendered_text")
+  /// Required slots with no dictated value — the checklist a person clears before signing.
+  missingFields Json           @map("missing_fields")
+  version      Int             @default(1)
+  signedById   String?         @map("signed_by_id") @db.Uuid
+  signedAt     DateTime?       @map("signed_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document     Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  template     ReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  signedBy     User?           @relation(fields: [signedById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, version])
+  @@index([workspaceId, documentId])
+  @@map("document_report_drafts")
 }
 
 model DocumentAuditEvent {

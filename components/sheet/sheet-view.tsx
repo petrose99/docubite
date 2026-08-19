@@ -9,7 +9,7 @@ import { useExtractionProgress } from "@/components/extract/use-extraction-progr
 import { FileHeader } from "@/components/files/file-header"
 import type { FWorksheet } from "@univerjs/preset-sheets-core"
 import type { FUniver, IWorkbookData } from "@univerjs/presets"
-import { Database, Download, FileDown, FileText, Files, Sparkles } from "lucide-react"
+import { Database, Download, FileDown, FileText, Files, Mic, Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { registerAiFormulas } from "./custom-functions"
@@ -38,6 +38,7 @@ const SourceIcon = () => <FileText className="h-4 w-4" />
 const DownloadIcon = () => <Download className="h-4 w-4" />
 const DownloadCsvIcon = () => <FileDown className="h-4 w-4" />
 const DocumentsIcon = () => <Files className="h-4 w-4" />
+const DictateIcon = () => <Mic className="h-4 w-4" />
 
 /** The whole sheet surface: a file bar, the assistant docked left, and the grid filling the
  * rest of the window.
@@ -45,7 +46,7 @@ const DocumentsIcon = () => <Files className="h-4 w-4" />
  * Lido's spreadsheet is the page rather than a widget on it — chrome is one thin bar, and the
  * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Extraction and the
  * assistant are reached from the grid's own toolbar, not from page chrome. */
-export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
+export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, dictationEnabled = false, initialSource }: {
   workspaceId: string
   fileId: string
   fileName: string
@@ -61,6 +62,9 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   /** The single server gate (config.embeddings.enabled) crossed to the client, so the assistant's
    * Sources card, the click-through, and the "Searchable" chip appear exactly when the tool exists. */
   documentSearchEnabled?: boolean
+  /** The server's config.asr.enabled crossed to the client, the same way documentSearchEnabled is,
+   * so audio upload and the dictation recorder appear exactly when the server can transcribe. */
+  dictationEnabled?: boolean
   /** An open-at-page deep link (from the Files content search): open this document over the grid
    * once, at the given page/highlight. Already validated server-side; absent for a normal open. */
   initialSource?: { documentId: string; page: number | null; bbox: [number, number, number, number] | null }
@@ -258,6 +262,24 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       action: () => { setDocumentsPanelOpen(false); setFormulaBuilderOpen(true) },
     }).appendTo("ribbon.formulas.basic")
 
+    /** Dictate: its own named toolbar entry, not just a control inside Extract Data.
+     *
+     * A dictation IS an upload as far as the pipeline is concerned, so the recorder lives in the
+     * extract panel — but "open the panel behind the unlabelled database icon, then look inside it"
+     * is not an entry point anyone finds. This gives speech a front door of its own and lands the
+     * user on the recorder. Registered only where the server can actually transcribe. */
+    if (dictationEnabled) {
+      api.registerComponent("docubite-dictate-icon", DictateIcon)
+      api.createMenu({
+        id: "docubite.dictate",
+        title: "Dictate",
+        tooltip: "Record a dictation and turn it into rows",
+        icon: "docubite-dictate-icon",
+        order: 1,
+        action: () => { setFormulaBuilderOpen(false); setDocumentsPanelOpen(false); setExtractOpen(true) },
+      }).appendTo("ribbon.start.history")
+    }
+
     /** Which documents contributed to this sheet, and a way to filter the grid down to one of
      * them without leaving the real, editable rows — see components/sheet/document-list-panel.tsx. */
     api.registerComponent("docubite-documents-icon", DocumentsIcon)
@@ -341,7 +363,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         <Sparkles className="h-3.5 w-3.5" />AI Assistant
       </button>
     ))
-  }, [clearFilter, fileId, openActiveCellSource, readOnly, workspaceId])
+  }, [clearFilter, dictationEnabled, fileId, openActiveCellSource, readOnly, workspaceId])
 
   const label = readOnly ? "Read only" : SAVE_LABELS[saveState]
 
@@ -410,6 +432,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         usage={usage}
         sheetCount={sheetCount}
         statuses={statuses}
+        dictationEnabled={dictationEnabled}
         onClose={() => setExtractOpen(false)}
         onDocumentsQueued={track} />}
     </main>

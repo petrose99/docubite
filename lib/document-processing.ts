@@ -3,6 +3,9 @@ import config from "@/lib/config"
 import { buildDocumentJsonSchema, buildDocumentPrompt, DocumentClassification, DocumentFieldDefinition, extractClassification, extractFieldConfidence, extractFieldProvenance, FieldProvenanceHints, findMissingRequiredFields, parseTemplateFields, ProvenanceHint, validateDocumentValues } from "@/lib/document-templates"
 import { documentBlocksKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
 import { processEmbedJob } from "@/lib/document-embedding"
+import { PERMANENT_ASR_ERROR_CODES, processTranscribeJob } from "@/lib/document-transcription"
+import { projectDocumentFields } from "@/lib/field-projection"
+import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { buildBlocksSidecar, buildDocumentProvenance } from "@/lib/provenance"
 import { buildShapeSignature } from "@/lib/shape-match"
 import { upsertExtractionShape } from "@/models/extraction-shapes"
@@ -169,6 +172,26 @@ export function mergeClassification(passes: DocumentClassification[]): DocumentC
   return { docType: first((pass) => pass.docType), entity: first((pass) => pass.entity), period: first((pass) => pass.period) }
 }
 
+/** Records a failed job attempt: the document and its job go back to `queued` with a backoff, or to
+ * `failed` once the attempt budget is spent or the error is one a retry cannot fix.
+ *
+ * Extracted so the transcribe path fails on exactly the same terms as the extract path — retry
+ * count, backoff curve, permanent-error list and audit event — rather than growing its own
+ * near-identical copy that would drift. */
+async function failDocumentJob(
+  job: { jobId: string; attempts: number; scheduledAt: Date; documentId: string; workspaceId: string },
+  error: unknown,
+) {
+  const errorCode = safeErrorCode(error)
+  const permanent = job.attempts >= 5 || PERMANENT_ERROR_CODES.includes(errorCode) || PERMANENT_ASR_ERROR_CODES.includes(errorCode)
+  const retryAt = new Date(Date.now() + Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.attempts - 1)))
+  await prisma.$transaction([
+    prisma.document.update({ where: { id: job.documentId }, data: { status: permanent ? "failed" : "queued", errorCode } }),
+    prisma.documentProcessingJob.update({ where: { id: job.jobId }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } }),
+    prisma.documentAuditEvent.create({ data: { workspaceId: job.workspaceId, documentId: job.documentId, type: permanent ? "extraction_failed" : "extraction_retrying" } }),
+  ])
+}
+
 export async function processDocumentJob(jobId: string) {
   const now = new Date()
   const claimed = await prisma.documentProcessingJob.updateMany({
@@ -183,6 +206,25 @@ export async function processDocumentJob(jobId: string) {
   // drivers — worker loop, internal route, in-process after() kick — funnel through here, so this
   // one switch fixes dispatch for every one of them at once.
   if (job.type === "embed") return await processEmbedJob({ id: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, document: job.document })
+  // Audio routes to ASR instead of MinerU. It funnels back into this same function afterwards for
+  // the embed kick, so a dictation is indexed by exactly the path an uploaded document is.
+  if (job.type === "transcribe") {
+    let transcribeError: unknown = null
+    let embedJobId: string | null = null
+    try {
+      await processTranscribeJob({ id: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, document: job.document })
+      if (config.embeddings.enabled) {
+        const fresh = await prisma.document.findUnique({ where: { id: job.document.id }, select: { ocrText: true } })
+        if (fresh?.ocrText) embedJobId = await enqueueEmbedJob(job.document, fresh.ocrText).catch(() => null)
+      }
+    } catch (error) {
+      await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: job.document.id, workspaceId: job.document.workspaceId }, error)
+      transcribeError = error
+    }
+    if (embedJobId) await processDocumentJob(embedJobId).catch(() => {})
+    if (transcribeError) throw transcribeError
+    return
+  }
   if (job.type !== "extract") {
     await prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "failed", errorCode: "unknown_job_type", completedAt: new Date(), leaseUntil: null } })
     return
@@ -308,20 +350,21 @@ export async function processDocumentJob(jobId: string) {
     // (The blocks sidecar was already written above, before the LLM step, so the embed job can use
     // it even when extraction fails.)
     const status = missing.length || batchFailures ? "needs_review" : "ready_for_review"
-    await prisma.$transaction([
-      prisma.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } }),
-      prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } }),
-    ])
+    // Flatten the merged values into the structured spine, written in the SAME transaction as
+    // reviewedData below so the two can never disagree — a projection that lagged its source would
+    // silently answer "all invoices from X" with a stale set, which is worse than not answering.
+    const fieldValues = projectDocumentFields({ fields, values: extraction, confidence: fieldConfidence, provenance, source: "llm_structured" })
+    // Interactive form (not the array form) because the projection is raw SQL and has to run on the
+    // same tx client. Timeout raised over the 5s default: a long line-item table projects to a few
+    // hundred rows, which is still only a handful of batched statements but not instant.
+    await prisma.$transaction(async (tx) => {
+      await tx.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } })
+      await tx.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } })
+      await tx.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } })
+      await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows: fieldValues }, tx)
+    }, { timeout: 20_000 })
   } catch (error) {
-    const errorCode = safeErrorCode(error)
-    const permanent = job.attempts >= 5 || PERMANENT_ERROR_CODES.includes(errorCode)
-    const retryAt = new Date(Date.now() + Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.attempts - 1)))
-    await prisma.$transaction([
-      prisma.document.update({ where: { id: document.id }, data: { status: permanent ? "failed" : "queued", errorCode } }),
-      prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: permanent ? "extraction_failed" : "extraction_retrying" } }),
-    ])
+    await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: document.id, workspaceId: document.workspaceId }, error)
     // Rethrown below, after the embed job is kicked — a document that OCR'd successfully is
     // searchable even if the LLM field-extraction failed.
     extractError = error

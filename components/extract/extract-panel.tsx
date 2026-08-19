@@ -11,12 +11,18 @@ import type { TrackedDocumentStatus } from "@/components/extract/use-extraction-
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import { parsePageRange } from "@/lib/page-range"
+import { DictationRecorder } from "@/components/dictation/dictation-recorder"
 import { ChevronsUpDown, CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-const ACCEPTED_TYPES = "application/pdf,image/jpeg,image/png,image/webp,image/heic"
+/** Must stay in sync with SUPPORTED_DOCUMENT_TYPES (models/documents.ts), SUPPORTED_AUDIO_TYPES
+ * (lib/asr/types.ts) and PROCESSABLE_TYPES (lib/document-processing.ts). The audio half is only
+ * offered when dictation is configured — otherwise the upload would be accepted here and refused
+ * by the server. */
+const DOCUMENT_TYPES = "application/pdf,image/jpeg,image/png,image/webp,image/heic"
+const AUDIO_TYPES = "audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/flac"
 const MAX_STAGED_FILES = 100
 
 const usageLabel = (used: number, limit: number) => (limit < 0 ? `${used} used` : `${used} of ${limit}`)
@@ -47,7 +53,7 @@ function UsageMeter({ usage }: { usage: WorkspaceUsage }) {
 
 /** Lido-style floating extraction panel: draggable, non-modal, so the sheet stays visible
  * behind it and freshly extracted rows appear next to it live. */
-export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
+export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount, onClose, onDocumentsQueued, statuses, dictationEnabled = false }: {
   workspaceId: string
   fileId: string
   template: SheetTemplate | null
@@ -56,7 +62,11 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   onClose: () => void
   onDocumentsQueued: (ids: string[]) => void
   statuses: Record<string, TrackedDocumentStatus>
+  /** Whether the deployment has speech-to-text configured. Defaults false so audio is only offered
+   * where the server can actually process it. */
+  dictationEnabled?: boolean
 }) {
+  const acceptedTypes = dictationEnabled ? `${DOCUMENT_TYPES},${AUDIO_TYPES}` : DOCUMENT_TYPES
   const router = useRouter()
   const sheetBase = `/workspaces/${workspaceId}/files/${fileId}/sheet`
 
@@ -166,7 +176,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   stagedRef.current = staged
   useEffect(() => () => { for (const row of stagedRef.current) if (row.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(row.previewUrl) }, [])
 
-  const acceptFile = (file: File) => ACCEPTED_TYPES.includes(file.type) && file.size > 0
+  const acceptFile = (file: File) => acceptedTypes.includes(file.type) && file.size > 0
 
   const addEntries = useCallback((entries: { file: File; relativePath?: string }[]) => {
     const accepted = entries.filter((entry) => acceptFile(entry.file))
@@ -448,7 +458,19 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
 
       <section>
         <h3 className="text-sm font-bold text-stone-900">Files</h3>
-        <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF or image)</p>
+        <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF{dictationEnabled ? ", image or audio" : " or image"})</p>
+        {dictationEnabled && <div className="mb-3">
+          {/* A dictation is staged exactly like an uploaded file — it becomes a Document, and the
+              transcribe job takes it from there — so it flows through the same review and
+              extraction UI rather than needing a parallel one. */}
+          <DictationRecorder
+            workspaceId={workspaceId}
+            disabled={busy}
+            onComplete={({ blob, mimeType }) => {
+              const extension = mimeType.split("/")[1]?.replace("x-", "") || "webm"
+              addFiles([new File([blob], `dictation-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`, { type: mimeType })])
+            }} />
+        </div>}
         {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
           {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}
@@ -461,7 +483,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
           <span><span className="font-semibold text-emerald-700">Click to upload</span> <span className="text-stone-500">or drag and drop</span></span>
           <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" onClick={(event) => { event.stopPropagation(); folderInputRef.current?.click() }}>or upload a whole folder</button>
         </button>
-        <input ref={inputRef} type="file" multiple className="hidden" accept={ACCEPTED_TYPES} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
+        <input ref={inputRef} type="file" multiple className="hidden" accept={acceptedTypes} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
         <input ref={folderInputRef} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
         <div className="mt-2.5 flex items-center gap-4 text-sm">
           <button type="button" className="font-medium text-stone-400 hover:text-stone-600 disabled:opacity-50" disabled={!staged.length || busy} onClick={resetAll}>Reset all files</button>

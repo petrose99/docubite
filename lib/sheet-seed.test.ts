@@ -45,7 +45,8 @@ describe("buildWorkbookSnapshot", () => {
   it("links every data cell back to the document it was extracted from", () => {
     const snapshot = buildWorkbookSnapshot("file-1", [{ sheetId: "s1", name: "Invoice", columns, rows: [row({ itemIndex: 3 })] }])
 
-    expect(cellsOf(snapshot, "s1")[1][0].custom).toEqual({ documentId: "doc-1", itemIndex: 3, fieldKey: "vendor", itemKey: null })
+    // filename rides along so the sheet can group and filter rows by source document without a lookup.
+    expect(cellsOf(snapshot, "s1")[1][0].custom).toEqual({ documentId: "doc-1", filename: "invoice.pdf", itemIndex: 3, fieldKey: "vendor", itemKey: null })
   })
 
   it("tints a low-confidence value amber and an empty required one red", () => {

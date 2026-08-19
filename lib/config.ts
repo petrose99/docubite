@@ -53,6 +53,45 @@ const envSchema = z.object({
   EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(768),
   EMBEDDINGS_BATCH_SIZE: z.coerce.number().int().positive().default(32),
   EMBEDDINGS_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // Query routing: parse a natural-language query into structured pre-filters plus a semantic
+  // remainder before searching. Off by default and fail-safe by design — with it off, or on any
+  // parse failure, retrieval behaves exactly as it did before the router existed.
+  RETRIEVAL_ROUTER_ENABLED: z.string().optional(),
+  // Cross-encoder reranking of fused hits. With no base URL the reranker is the identity function,
+  // which is the shipped default: ordering is not reranked until it has been measured as bad.
+  RERANK_BASE_URL: z.string().url().optional(),
+  RERANK_API_KEY: z.string().optional(),
+  RERANK_MODEL_NAME: z.string().default("BAAI/bge-reranker-base"),
+  RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  // Speech-to-text ingestion (dictation). Optional so the app boots without it: with no base URL
+  // audio uploads are refused as an unsupported type and the dictation UI stays hidden.
+  //
+  // The model default is Whisper, NOT Qwen3-ASR. Qwen/Qwen3-ASR-1.7B-hf was probed against HF
+  // serverless on 2026-08-19 and returns 400 "Model not supported by provider hf-inference" — it
+  // has no provider mapping at all, the same failure that ruled out nomic-embed for embeddings.
+  // whisper-large-v3-turbo is live there and returns segment timestamps, which audio provenance
+  // needs. Swapping backends is a config change; see lib/asr/index.ts.
+  ASR_BACKEND: z.enum(["huggingface"]).default("huggingface"),
+  ASR_BASE_URL: z.string().url().optional(),
+  ASR_API_KEY: z.string().optional(),
+  ASR_MODEL_NAME: z.string().default("openai/whisper-large-v3-turbo"),
+  ASR_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  ASR_MAX_AUDIO_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+  // Spoken language hint, as an ISO-639-1 code. Defaults to English; set it empty to let the model
+  // auto-detect. Auto-detection is NOT a safe default: on a short or quiet recording Whisper will
+  // confidently pick the wrong language and return fluent nonsense in it (observed: a 4-second
+  // English clip transcribed as Icelandic). A wrong hint degrades accuracy; no hint can destroy it.
+  ASR_LANGUAGE: z.string().default("en"),
+  // Workspace-scope guard (lib/workspace-scope.ts).
+  //   off   — no checking. The default in production, because a false positive here is an outage.
+  //   warn  — logs every unscoped query without changing behaviour. The default in development,
+  //           and the mode to run in production until the logs are clean.
+  //   throw — refuses them. The end state, adopted only once `warn` reports nothing.
+  // Staged deliberately: this touches every query in a live app, so it earns its way to `throw`.
+  DB_SCOPE_GUARD: z.enum(["off", "warn", "throw"]).optional(),
+  // Postgres row-level security (lib/db-rls.ts). The deeper guarantee, and the riskier change;
+  // gated so it can be rolled back without a redeploy, and only after DB_SCOPE_GUARD=throw holds.
+  DB_RLS_ENABLED: z.string().optional(),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -89,6 +128,29 @@ const config = {
     batchSize: env.EMBEDDINGS_BATCH_SIZE,
     timeoutMs: env.EMBEDDINGS_TIMEOUT_MS,
   },
+  // Retrieval behaviour on top of the hybrid search. Both are additive and both default to off,
+  // so an unconfigured deployment retrieves exactly as it did before Stage 2.
+  retrieval: {
+    routerEnabled: env.RETRIEVAL_ROUTER_ENABLED === "true",
+    rerankEnabled: Boolean(env.RERANK_BASE_URL),
+    rerankBaseUrl: (env.RERANK_BASE_URL || "").replace(/\/+$/, ""),
+    rerankApiKey: env.RERANK_API_KEY || "",
+    rerankModelName: env.RERANK_MODEL_NAME,
+    rerankTimeoutMs: env.RERANK_TIMEOUT_MS,
+  },
+  // `enabled` is the single feature gate for the whole dictation path: the accepted MIME lists,
+  // the transcribe job, and the dictation UI all read it. The API key falls back to the embeddings
+  // key because both are Hugging Face tokens in the default deployment.
+  asr: {
+    enabled: Boolean(env.ASR_BASE_URL),
+    backend: env.ASR_BACKEND,
+    baseUrl: (env.ASR_BASE_URL || "").replace(/\/+$/, ""),
+    apiKey: env.ASR_API_KEY || env.EMBEDDINGS_API_KEY || "",
+    modelName: env.ASR_MODEL_NAME,
+    timeoutMs: env.ASR_TIMEOUT_MS,
+    maxAudioBytes: env.ASR_MAX_AUDIO_BYTES,
+    language: env.ASR_LANGUAGE.trim() || null,
+  },
   aws: { region: env.AWS_REGION, documentsBucket: env.AWS_S3_DOCUMENTS_BUCKET, kmsKeyId: env.AWS_S3_KMS_KEY_ID, internalWorkerSecret: env.INTERNAL_WORKER_SECRET, malwareScanUrl: env.MALWARE_SCAN_URL },
   auth: { secret: env.BETTER_AUTH_SECRET, loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
   stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, starterPriceId: env.STRIPE_STARTER_PRICE_ID, growthPriceId: env.STRIPE_GROWTH_PRICE_ID },
@@ -96,6 +158,12 @@ const config = {
   // on. lib/plans.ts reads it through here so there is exactly one place that decides.
   billing: { enforcePlanLimits: env.ENFORCE_PLAN_LIMITS === "true" },
   email: { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM_EMAIL },
+  // Tenant isolation. Both default to their safe-for-a-live-app setting; see the env comments for
+  // the staged adoption path from `warn` to `throw` to RLS.
+  isolation: {
+    scopeGuard: env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn"),
+    rlsEnabled: env.DB_RLS_ENABLED === "true",
+  },
 } as const
 
 export default config

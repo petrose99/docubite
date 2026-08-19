@@ -22,6 +22,10 @@ export type SheetRow = {
   values: Record<string, unknown>
   fieldConfidence: Record<string, number>
   missingRequired: string[]
+  /** Dictated values the recording does not support — no confidence score and no pinnable moment
+   * in the audio. Rendered red, like a missing required field: the risk is a fabricated value, not
+   * an uncertain reading. Absent on documents that were never dictated. */
+  unsupportedFields?: string[]
 }
 
 export type DerivedSheet = { columns: SheetColumn[]; rows: SheetRow[]; multiRow: boolean }
@@ -54,7 +58,7 @@ export function deriveSheet(fields: DocumentFieldDefinition[], documents: Deriva
   ]
 
   const rows = documents.flatMap((document): SheetRow[] => {
-    const confidence = document.confidence as { missingRequiredFields?: string[]; fieldConfidence?: Record<string, number> } | null
+    const confidence = document.confidence as { missingRequiredFields?: string[]; fieldConfidence?: Record<string, number>; unsupportedFields?: string[] } | null
     // reviewedData is what a human confirmed; rawExtraction is what the model first said.
     const data = (document.reviewedData as Record<string, unknown> | null) ?? (document.rawExtraction as Record<string, unknown> | null) ?? {}
     const shared = {
@@ -62,6 +66,7 @@ export function deriveSheet(fields: DocumentFieldDefinition[], documents: Deriva
       filename: document.filename,
       fieldConfidence: confidence?.fieldConfidence ?? {},
       missingRequired: confidence?.missingRequiredFields ?? [],
+      unsupportedFields: confidence?.unsupportedFields ?? [],
     }
 
     if (!multiRow || !arrayField) {

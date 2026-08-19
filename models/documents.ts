@@ -1,6 +1,10 @@
+import { SUPPORTED_AUDIO_TYPES, isSupportedAudioBuffer } from "@/lib/asr/types"
 import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
+import { projectDocumentFields } from "@/lib/field-projection"
+import type { DocumentProvenance } from "@/lib/provenance"
+import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { prisma } from "@/lib/db"
 import { Document, Prisma } from "@/prisma/client"
@@ -9,7 +13,9 @@ import path from "path"
 import { randomUUID } from "crypto"
 
 const SUPPORTED_DOCUMENT_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"])
-export type DocumentSource = "upload"
+/** "dictation" is an audio recording rather than a scan; it takes the transcribe path instead of
+ * MinerU, and is otherwise an ordinary Document (see lib/document-transcription). */
+export type DocumentSource = "upload" | "dictation"
 
 export const documentHash = (buffer: Buffer) => crypto.createHash("sha256").update(buffer).digest("hex")
 
@@ -19,12 +25,27 @@ function cleanFilename(filename: string) {
 }
 
 export function isSupportedDocumentBuffer(buffer: Buffer, mimeType: string) {
+  // Audio is validated by its own container magic bytes, and only when dictation is configured —
+  // with ASR off an audio upload is refused as an unsupported type rather than accepted and queued
+  // for a job that can never run.
+  if (SUPPORTED_AUDIO_TYPES.has(mimeType)) return config.asr.enabled && isSupportedAudioBuffer(buffer, mimeType)
   if (!SUPPORTED_DOCUMENT_TYPES.has(mimeType)) return false
   if (mimeType === "application/pdf") return buffer.subarray(0, 5).toString("ascii") === "%PDF-"
   if (mimeType === "image/jpeg") return buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
   if (mimeType === "image/png") return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
   if (mimeType === "image/webp") return buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP"
   return buffer.subarray(4, 8).toString("ascii") === "ftyp"
+}
+
+/** Audio is always recorded as source "dictation", whatever the caller passed.
+ *
+ * A dictation is uploaded through the ordinary upload path — it IS an ordinary upload — so every
+ * caller passes "upload". But Document.source is what later decides whether a chunk is tagged `asr`
+ * or `vlm_ocr`, and trusting the caller meant every dictated snippet was cited as though it had
+ * been read off a printed page. Derived here, next to the job-type choice, so the two cannot
+ * disagree about what kind of document this is. */
+export function documentSourceFor(mimeType: string, fallback: DocumentSource): DocumentSource {
+  return SUPPORTED_AUDIO_TYPES.has(mimeType) ? "dictation" : fallback
 }
 
 export function validateDocumentInput(buffer: Buffer, mimeType: string) {
@@ -71,12 +92,15 @@ export async function createDocumentFromBuffer(input: {
   try {
     return await prisma.$transaction(async (tx) => {
       const document = await tx.document.create({ data: {
-        id, workspaceId: input.workspaceId, fileId: input.fileId, templateId: template.id, templateVersionId: version.id, source: input.source,
+        id, workspaceId: input.workspaceId, fileId: input.fileId, templateId: template.id, templateVersionId: version.id,
+        source: documentSourceFor(input.mimeType, input.source),
         status: "queued", filename: cleanFilename(input.filename), mimeType: input.mimeType, sizeBytes: input.buffer.length,
         sha256, storageKey, receivedAt, pageRange: input.pageRange?.trim() || null, uploadBatchId: input.uploadBatchId || null,
         fieldSnapshot: version.fields as Prisma.InputJsonValue, searchText: cleanFilename(input.filename),
       } })
-      const job = await tx.documentProcessingJob.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: "extract" } })
+      // Audio goes to the transcribe handler, everything else to MinerU extraction. This is the
+      // only place the two ingestion paths diverge — from the job onwards they are the same code.
+      const job = await tx.documentProcessingJob.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: SUPPORTED_AUDIO_TYPES.has(input.mimeType) ? "transcribe" : "extract" } })
       await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: "document_received" } })
       return { document, job, duplicate: false }
     })
@@ -99,10 +123,18 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   const fields = parseTemplateFields(document.fieldSnapshot)
   const reviewedData = validateDocumentValues(fields, input.reviewedData)
   const missing = findMissingRequiredFields(fields, reviewedData)
-  return prisma.$transaction([
-    prisma.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } }),
-  ])
+  // Re-project the structured spine from the values a human signed off on. Source is "manual"
+  // because these are now reviewed values, but the per-field scores are carried over from the
+  // extraction rather than being reset to 1: a bulk "mark reviewed" does not mean somebody read
+  // every field, and claiming certainty nobody asserted would make the confidence signal useless.
+  const priorConfidence = ((document.confidence as Record<string, unknown> | null)?.fieldConfidence as Record<string, number> | null) ?? null
+  const rows = projectDocumentFields({ fields, values: reviewedData, confidence: priorConfidence, provenance: document.provenance as DocumentProvenance | null, source: "manual" })
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } })
+    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } })
+    await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
+    return updated
+  }, { timeout: 20_000 })
 }
 
 /** Removes one field's source pin from a document's provenance record, returning the partial
@@ -134,14 +166,23 @@ export async function updateDocumentField(input: { workspaceId: string; document
   const missing = findMissingRequiredFields(fields, reviewedData)
   const prevConfidence = (document.confidence as Record<string, unknown> | null) ?? {}
   const prevFieldConfidence = (prevConfidence.fieldConfidence as Record<string, number> | null) ?? {}
-  const confidence = { ...prevConfidence, missingRequiredFields: missing, fieldConfidence: { ...prevFieldConfidence, [input.fieldKey]: 1 } } as Prisma.InputJsonValue
+  const nextFieldConfidence = { ...prevFieldConfidence, [input.fieldKey]: 1 }
+  const confidence = { ...prevConfidence, missingRequiredFields: missing, fieldConfidence: nextFieldConfidence } as Prisma.InputJsonValue
   // A hand-edited value no longer came from the document, so its source pin is dropped — a stale
   // highlight over the old printed value would be worse than none.
   const provenanceUpdate = clearFieldProvenance(document.provenance, input.fieldKey)
-  const [updated] = await prisma.$transaction([
-    prisma.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence, ...provenanceUpdate } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" } }),
-  ])
+  // Re-project the whole document rather than the one edited field: the projection is a pure
+  // function of the values, so replacing it wholesale is both simpler and immune to the drift a
+  // targeted patch would eventually introduce. The edited field's confidence is 1 (a person typed
+  // it) and its provenance was just cleared above, so it projects with no source pin.
+  const nextProvenance = ("provenance" in provenanceUpdate ? provenanceUpdate.provenance : document.provenance) as DocumentProvenance | null
+  const rows = projectDocumentFields({ fields, values: reviewedData, confidence: nextFieldConfidence, provenance: nextProvenance, source: "manual" })
+  const updated = await prisma.$transaction(async (tx) => {
+    const document_ = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence, ...provenanceUpdate } })
+    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" } })
+    await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
+    return document_
+  }, { timeout: 20_000 })
   return { document: updated, missingRequiredFields: missing }
 }
 
