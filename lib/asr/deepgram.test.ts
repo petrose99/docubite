@@ -11,6 +11,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock)
   asr.maxAudioBytes = 1024
   asr.apiKey = "k"
+  asr.modelName = "nova-2"
 })
 
 const audio = Buffer.from("fake audio")
@@ -84,12 +85,23 @@ describe("DeepgramAsrBackend", () => {
     expect(url).toContain("model=nova-2")
   })
 
-  it("passes bias terms as repeated keywords params, and the language hint as a query param", async () => {
+  it("passes bias terms as repeated keywords params on nova-2, and the language hint as a query param", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ results: { channels: [{ alternatives: [{ transcript: "x" }] }] } }) })
     await backend().transcribe(audio, { mimeType: "audio/webm", language: "en", biasTerms: ["stat", "afib"] })
     const url = new URL(fetchMock.mock.calls[0][0])
     expect(url.searchParams.get("language")).toBe("en")
     expect(url.searchParams.getAll("keywords")).toEqual(["stat", "afib"])
+    expect(url.searchParams.getAll("keyterm")).toEqual([])
+  })
+
+  it("passes bias terms as keyterm on nova-3 — it dropped the keywords param entirely", async () => {
+    asr.modelName = "nova-3-medical"
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ results: { channels: [{ alternatives: [{ transcript: "x" }] }] } }) })
+    await backend().transcribe(audio, { mimeType: "audio/webm", biasTerms: ["stat", "afib"] })
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(url.searchParams.getAll("keyterm")).toEqual(["stat", "afib"])
+    expect(url.searchParams.getAll("keywords")).toEqual([])
+    expect(url.searchParams.get("model")).toBe("nova-3-medical")
   })
 
   it("refuses audio over the configured size without calling the endpoint", async () => {

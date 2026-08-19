@@ -13,8 +13,11 @@ import type { AsrBackend, AsrResult, AsrSegment, TranscribeOptions } from "@/lib
  *  - returns word-level timestamps unconditionally, and utterance-level segments when `utterances`
  *    is requested — utterances are used here because they're closer to the sentence-level spans
  *    the HF backend produces from Whisper's chunks;
- *  - supports keyword biasing natively via repeated `keywords` query params, so this backend can
- *    honestly report supportsBiasTerms = true.
+ *  - supports keyword biasing natively, so this backend can honestly report supportsBiasTerms =
+ *    true — but the param name depends on the model generation: nova-2 (and earlier) take
+ *    repeated `keywords` params, while nova-3 replaced that mechanism with `keyterm` prompting and
+ *    does not accept `keywords` at all. Getting this wrong doesn't error; it silently stops
+ *    applying the domain vocabulary, so the model family is checked rather than hard-coding one.
  *
  * Retry/backoff mirrors the Hugging Face backend: only transport failures and transient statuses
  * are retried; 400/401/403/413 throw immediately. */
@@ -101,7 +104,10 @@ export class DeepgramAsrBackend implements AsrBackend {
       utterances: "true",
     })
     if (options.language) params.set("language", options.language)
-    for (const term of options.biasTerms ?? []) params.append("keywords", term)
+    // nova-3 dropped the `keywords` param in favour of `keyterm` prompting; every earlier
+    // generation (nova-2, enhanced, base) still expects `keywords`.
+    const biasParam = config.asr.modelName.startsWith("nova-3") ? "keyterm" : "keywords"
+    for (const term of options.biasTerms ?? []) params.append(biasParam, term)
 
     const url = `${LISTEN_URL}?${params.toString()}`
 
