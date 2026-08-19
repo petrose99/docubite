@@ -221,8 +221,9 @@ DB_RLS_ENABLED  = true|false       # requires a non-superuser role first
 
 ### Known gaps
 
-1. **Report drafting has no UI.** `createReportDraftAction` / `signReportAction` exist and work; nothing
-   calls them. The pipeline is verified in code only.
+1. ~~**Report drafting has no UI.**~~ **Closed** (`1e020bb`, after this doc was written): the dictation
+   page, template editor, and synoptic/narrative panes now call `createReportDraftAction` /
+   `signReportAction` directly. See `HANDOFF-DEEPGRAM-AND-FIELD-SUGGESTIONS.md` for what shipped after.
 2. **The 5 unscoped queries** above are unfixed.
 3. **The router's value is unmeasured** — needs a corpus with several documents per vendor.
 4. **ASR quality is mic-bound.** Real recordings mis-heard "US dollars" as "US Donuts". The pipeline
