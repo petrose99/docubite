@@ -7,6 +7,7 @@ import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { AsrSegment } from "@/lib/asr/types"
 import type { CompletenessReport } from "@/lib/report-completeness"
 import { parseNarrativeSections } from "@/lib/report-render/narrative"
+import { listPendingFieldSuggestions } from "@/models/field-suggestions"
 import { findReportTemplate } from "@/models/report-drafts"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
@@ -52,6 +53,7 @@ export default async function DictationDetailPage({ params }: { params: Promise<
   const sections = reportTemplate ? parseNarrativeSections(reportTemplate.narrativeSections) : []
 
   const latest = document.reportDrafts[0]
+  const fieldSuggestions = await listPendingFieldSuggestions(workspaceId, documentId)
 
   return (
     <DictationWorkspace
@@ -96,6 +98,16 @@ export default async function DictationDetailPage({ params }: { params: Promise<
         version: entry.version,
         status: entry.status,
         signedAt: entry.signedAt?.toISOString() ?? null,
+      }))}
+      fieldSuggestions={fieldSuggestions.map((suggestion) => ({
+        id: suggestion.id,
+        key: suggestion.key,
+        label: suggestion.label,
+        type: suggestion.type,
+        instruction: suggestion.instruction,
+        value: suggestion.value,
+        quote: suggestion.quote,
+        confidence: suggestion.confidence,
       }))}
     />
   )

@@ -40,6 +40,7 @@ model User {
   fileShares            DocumentFileShare[]
   signedReports         DocumentReportDraft[]
   editedTranscripts     Document[]            @relation("TranscriptEditor")
+  decidedFieldSuggestions FieldSuggestion[]   @relation("FieldSuggestionDecider")
 
   @@map("users")
 }
@@ -72,6 +73,7 @@ model Workspace {
   fieldValues     DocumentFieldValue[]
   reportTemplates ReportTemplate[]
   reportDrafts    DocumentReportDraft[]
+  fieldSuggestions FieldSuggestion[]
 
   @@map("workspaces")
 }
@@ -236,6 +238,7 @@ model DocumentTemplate {
   versions       DocumentTemplateVersion[]
   documents      Document[]
   shape          ExtractionShape?
+  fieldSuggestions FieldSuggestion[]
 
   @@unique([fileId, code])
   @@index([workspaceId])
@@ -285,6 +288,47 @@ model DocumentTemplateVersion {
 
   @@unique([templateId, version])
   @@map("document_template_versions")
+}
+
+/** A field the extraction model noticed was clearly stated in a dictation but has nowhere to go in
+ * the current template — proposed rather than silently dropped or silently invented as a new
+ * column, so growing the schema stays a human decision with an audit trail (who approved which
+ * field, and when) instead of the AI quietly renaming things between cases.
+ *
+ * `value` and `quote` are captured at proposal time because they came from a transcript the model
+ * already read once; re-reading the transcript on approval would risk a second pass disagreeing
+ * with the first. Approving copies them onto the document and appends the field definition to the
+ * template as a new DocumentTemplateVersion — every OTHER document stays pinned to its old
+ * snapshot, exactly as any other template edit works (see updateDocumentTemplateAction). */
+model FieldSuggestion {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  documentId  String    @map("document_id") @db.Uuid
+  /// Null when the document's template was deleted out from under a pending suggestion; the
+  /// suggestion can still be viewed and dismissed, just never approved.
+  templateId  String?   @map("template_id") @db.Uuid
+  key         String
+  label       String
+  type        String
+  instruction String
+  value       String
+  quote       String
+  confidence  Float?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  decidedAt   DateTime? @map("decided_at")
+  decidedById String?   @map("decided_by_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  template    DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  decidedBy   User?     @relation("FieldSuggestionDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  /// An approved/dismissed pair for the same key on the same document would be two different
+  /// answers to "did we add this field" that both claim to be final — the decision is made once.
+  @@unique([documentId, key])
+  @@index([workspaceId])
+  @@index([documentId, status])
+  @@map("field_suggestions")
 }
 
 model Document {
@@ -353,6 +397,7 @@ model Document {
   chunks            DocumentChunk[]
   fieldValues       DocumentFieldValue[]
   reportDrafts      DocumentReportDraft[]
+  fieldSuggestions  FieldSuggestion[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])

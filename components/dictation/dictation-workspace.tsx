@@ -2,6 +2,7 @@
 
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import { ReportPane } from "@/components/dictation/report-pane"
+import { SuggestedFields, type PendingFieldSuggestion } from "@/components/dictation/suggested-fields"
 import { SynopticForm } from "@/components/dictation/synoptic-form"
 import { TranscriptPane } from "@/components/dictation/transcript-pane"
 import type { AsrSegment } from "@/lib/asr/types"
@@ -48,7 +49,7 @@ export type DictationDraft = {
  * the thing you have to go looking for. */
 export function DictationWorkspace({
   workspaceId, document, fields, values, fieldConfidence, missingRequiredFields, unsupportedFields,
-  provenance, draft, draftHistory, sections, reportTemplateName, documentSearchEnabled,
+  provenance, draft, draftHistory, sections, reportTemplateName, documentSearchEnabled, fieldSuggestions,
 }: {
   workspaceId: string
   document: DictationDocument
@@ -63,6 +64,7 @@ export function DictationWorkspace({
   sections: { key: string; title: string }[]
   reportTemplateName: string | null
   documentSearchEnabled: boolean
+  fieldSuggestions: PendingFieldSuggestion[]
 }) {
   const router = useRouter()
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -131,6 +133,11 @@ export function DictationWorkspace({
 
         <div className="min-w-0 flex-1 overflow-y-auto bg-stone-50/60">
           <div className="mx-auto grid max-w-5xl gap-4 p-4 xl:grid-cols-2">
+            {fieldSuggestions.length > 0 && (
+              <div className="xl:col-span-2">
+                <SuggestedFields workspaceId={workspaceId} documentId={document.id} suggestions={fieldSuggestions} />
+              </div>
+            )}
             <SynopticForm
               workspaceId={workspaceId}
               documentId={document.id}

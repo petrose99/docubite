@@ -9,6 +9,7 @@ import { restructureFromTranscript } from "@/lib/document-transcription"
 import { dictationAdapters } from "@/lib/domains"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { createDocumentFromBuffer, deleteWorkspaceDocuments } from "@/models/documents"
+import { acceptFieldSuggestion, dismissFieldSuggestion } from "@/models/field-suggestions"
 import { ensureDictationFile } from "@/models/files"
 import { updateReportDraftNarrative } from "@/models/report-drafts"
 import { ensureWorkspaceReportTemplates, updateReportTemplate } from "@/models/report-templates"
@@ -103,6 +104,34 @@ export async function updateTranscriptAction(workspaceId: string, documentId: st
     return { success: true, data: { missing } }
   } catch (error) {
     return { success: false, error: errorMessage(error, "Could not re-read that transcript") }
+  }
+}
+
+/** Turns a proposed field into a real one: a new template version with the field appended, and
+ * this document's own value backfilled onto it. See models/field-suggestions.ts for what changes
+ * and — just as importantly — what does not (every other document stays on its old template). */
+export async function acceptFieldSuggestionAction(workspaceId: string, documentId: string, suggestionId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    await acceptFieldSuggestion({ workspaceId, documentId, suggestionId, actorId: user.id })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    return { success: true, data: null }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not add that field") }
+  }
+}
+
+/** Declines a proposal. The template and every document, including this one, are untouched. */
+export async function dismissFieldSuggestionAction(workspaceId: string, documentId: string, suggestionId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    await dismissFieldSuggestion({ workspaceId, documentId, suggestionId, actorId: user.id })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    return { success: true, data: null }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not dismiss that suggestion") }
   }
 }
 

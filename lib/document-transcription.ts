@@ -10,8 +10,10 @@ import {
 } from "@/lib/document-templates"
 import { readDocumentSource } from "@/lib/document-storage"
 import { projectDocumentFields } from "@/lib/field-projection"
+import { buildFieldSuggestionInstructions, parseSuggestedTranscriptFields, suggestedFieldsSchemaProperty } from "@/lib/field-suggestions"
 import { buildAudioProvenance } from "@/lib/provenance-audio"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
+import { createFieldSuggestions } from "@/models/field-suggestions"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
 // Type-only: a runtime import of Prisma in a module reachable from a test breaks vitest's
 // resolution of @/prisma/client. Only the InputJsonValue type is needed here.
@@ -66,6 +68,7 @@ export function buildTranscriptPrompt(templateName: string, fields: DocumentFiel
     "and `_provenance`: for each field, a short verbatim quote (under 120 characters) of the transcript around where it was said.",
     "Page numbers do not apply to audio; omit `page`.",
     "Also return `_classification`: doc_type, entity, period.",
+    buildFieldSuggestionInstructions(),
     customPrompt?.trim() ? `\nWorkspace instructions:\n${customPrompt.trim()}` : "",
     "",
     "Transcript:",
@@ -106,6 +109,7 @@ type TranscribeJobDocument = {
   id: string
   workspaceId: string
   fileId: string
+  templateId: string | null
   mimeType: string
   storageKey: string | null
   fieldSnapshot: Prisma.JsonValue
@@ -149,11 +153,14 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   if (!apiKey) throw new Error("platform_ai_not_configured")
 
   const biasTerms = biasTermsForTemplate(document.template?.code)
+  const schema = buildDocumentJsonSchema(fields)
   const response = await requestLLM(
     { providers: [{ provider: config.ai.provider, apiKey, model }] },
     {
       prompt: buildTranscriptPrompt(document.template?.name || "document", fields, transcript.text, biasTerms, document.templateVersion?.prompt),
-      schema: buildDocumentJsonSchema(fields),
+      // additionalProperties: false on the base schema means the suggestion property must be
+      // spliced in here rather than appended by the caller after the fact.
+      schema: { ...schema, properties: { ...schema.properties, _suggested_fields: suggestedFieldsSchemaProperty() } },
     },
   )
   if (response.error) throw new Error("ai_structuring_failed")
@@ -165,6 +172,7 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   const provenance = buildAudioProvenance(fields, hints, values, transcript.segments)
   const missing = findMissingRequiredFields(fields, values)
   const unsupportedFields = findUnsupportedFields(fields, values, fieldConfidence, provenance)
+  const suggestions = parseSuggestedTranscriptFields(response.output, new Set(fields.map((field) => field.key)))
 
   // source "asr": every value here originated in speech, which is a materially different
   // reliability story from OCR'd print and is surfaced as such next to the value. The audio
@@ -185,6 +193,14 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
       },
     })
     await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
+    // Re-running structuring (a transcript edit) replaces this pass's proposals with a fresh set,
+    // since a corrected transcript can change what has no home in the schema. An already-approved
+    // suggestion is untouched — it is no longer "pending" — and its key will not be re-proposed
+    // anyway (see the existingKeys filter in structureTranscript above, once the field is real).
+    await tx.fieldSuggestion.deleteMany({ where: { documentId: document.id, status: "pending" } })
+    if (suggestions.length) {
+      await createFieldSuggestions({ workspaceId: document.workspaceId, documentId: document.id, templateId: document.templateId, suggestions }, tx)
+    }
   }, { timeout: 20_000 })
 
   return { values, missing }
@@ -193,7 +209,7 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
 /** The document fields structuring needs. Selected rather than loaded whole because ocrText can be
  * 100k characters and none of the callers below need the rest of the row. */
 const TRANSCRIBE_JOB_SELECT = {
-  id: true, workspaceId: true, fileId: true, mimeType: true, storageKey: true, fieldSnapshot: true,
+  id: true, workspaceId: true, fileId: true, templateId: true, mimeType: true, storageKey: true, fieldSnapshot: true,
   aiQuotaClaimed: true, ocrText: true, transcript: true,
   workspace: { select: { aiEnabled: true } },
   template: { select: { name: true, code: true } },
