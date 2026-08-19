@@ -3,7 +3,7 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { CreditCard, Files, Settings, Users } from "lucide-react"
+import { CreditCard, Files, Mic, Settings, Users } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -13,10 +13,14 @@ import { usePathname } from "next/navigation"
  * It steps aside for the spreadsheet. Lido gives an open file the whole window and navigates
  * back out through the file bar's "← Files" rather than a persistent rail, and a grid is the
  * one screen where 224px of chrome costs real columns. */
-export function Sidebar({ workspaceId, workspaces, user }: {
+export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = false }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
+  /** The server's config.asr.enabled. Dictation gets a rail entry only where the server can
+   * actually transcribe — a front door onto a page that answers "not configured" is worse than
+   * no door. */
+  dictationEnabled?: boolean
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
@@ -24,6 +28,7 @@ export function Sidebar({ workspaceId, workspaces, user }: {
   const base = `/workspaces/${workspaceId}`
   const items = [
     { href: `${base}/files`, label: "Files", icon: Files },
+    ...(dictationEnabled ? [{ href: `${base}/dictation`, label: "Dictation", icon: Mic }] : []),
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
     { href: `${base}/settings/templates`, label: "Settings", icon: Settings },

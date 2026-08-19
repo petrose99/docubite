@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db"
 import { buildCompletenessReport, type CompletenessReport } from "@/lib/report-completeness"
-import { parseNarrativeSections, renderNarrative } from "@/lib/report-render/narrative"
+import { NOT_DICTATED, parseNarrativeSections, renderNarrative } from "@/lib/report-render/narrative"
 import { parseSynopticFields, renderSynoptic } from "@/lib/report-render/synoptic"
 import { biasTermsForTemplate } from "@/lib/domains"
 import type { Prisma } from "@/prisma/client"
@@ -136,6 +136,48 @@ export async function signReport(input: { workspaceId: string; draftId: string; 
     }),
   ])
   return signed
+}
+
+/** Edits a draft's narrative prose and re-renders it.
+ *
+ * REFUSES A SIGNED DRAFT. A signed report is a clinical document with someone's name on it; the
+ * text they signed must stay exactly the text they signed, so a correction after sign-off is a new
+ * draft version (createReportDraft already versions), never a rewrite of the old one.
+ *
+ * Only the narrative half is editable. The synoptic block is rendered deterministically from the
+ * extracted values, and letting it be typed over would sever the one link between what the report
+ * says and what was actually dictated — correcting a synoptic slot means correcting the field it
+ * came from, which re-projects the structured spine with it. */
+export async function updateReportDraftNarrative(input: { workspaceId: string; draftId: string; narrative: Record<string, string> }) {
+  const draft = await prisma.documentReportDraft.findFirst({
+    where: { id: input.draftId, workspaceId: input.workspaceId },
+    include: { template: true },
+  })
+  if (!draft) throw new Error("report_draft_not_found")
+  if (draft.status !== "draft") throw new Error("report_already_signed")
+
+  const sections = draft.template ? parseNarrativeSections(draft.template.narrativeSections) : []
+  // Iterates the template's sections, never the submitted keys, so a request naming a section the
+  // template does not have cannot introduce one — the same rule renderSynoptic follows.
+  const current = (draft.narrative ?? {}) as Record<string, string>
+  const narrative = Object.fromEntries(sections.map((section) => {
+    const submitted = input.narrative[section.key]
+    const text = typeof submitted === "string" ? submitted.trim() : ""
+    return [section.key, text || current[section.key] || NOT_DICTATED]
+  }))
+
+  const synopticText = draft.renderedText
+    .split("\n\n")
+    .find((block) => block.startsWith("DIAGNOSIS / SYNOPTIC\n"))
+    ?.replace("DIAGNOSIS / SYNOPTIC\n", "") ?? ""
+
+  return prisma.documentReportDraft.update({
+    where: { id: draft.id },
+    data: {
+      narrative: narrative as Prisma.InputJsonValue,
+      renderedText: renderReportText({ signed: false, synopticText, narrative, sections }),
+    },
+  })
 }
 
 export async function getReportDraft(workspaceId: string, draftId: string) {

@@ -190,6 +190,36 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   return { values, missing }
 }
 
+/** The document fields structuring needs. Selected rather than loaded whole because ocrText can be
+ * 100k characters and none of the callers below need the rest of the row. */
+const TRANSCRIBE_JOB_SELECT = {
+  id: true, workspaceId: true, fileId: true, mimeType: true, storageKey: true, fieldSnapshot: true,
+  aiQuotaClaimed: true, ocrText: true, transcript: true,
+  workspace: { select: { aiEnabled: true } },
+  template: { select: { name: true, code: true } },
+  templateVersion: { select: { prompt: true } },
+} as const
+
+/** Re-runs structuring against a transcript a person has corrected.
+ *
+ * The audio is not touched and not re-transcribed — the recording is unchanged, only our reading of
+ * it is. The stored segments are reused as-is for provenance, which means an edited phrase no longer
+ * matches any segment and `resolveAudioRef` scores it below ACCEPT_SCORE, so that field comes back
+ * with no audio pin. That is the correct answer rather than a shortcoming: an edited sentence
+ * genuinely has no moment in the recording where it was said, and a pin to the nearest thing that
+ * *was* said would be a false citation. The verify screen shows the absent pin.
+ *
+ * Deliberately not a queued job. It is one LLM call on text already in hand, and the person who
+ * made the correction is sitting in front of the result waiting to see whether it took. */
+export async function restructureFromTranscript(workspaceId: string, documentId: string) {
+  const document = await prisma.document.findFirst({ where: { id: documentId, workspaceId }, select: TRANSCRIBE_JOB_SELECT })
+  if (!document) throw new Error("document_not_found")
+  if (!document.ocrText.trim()) throw new Error("transcript_empty")
+
+  const segments = Array.isArray(document.transcript) ? (document.transcript as unknown as AsrResult["segments"]) : []
+  return structureTranscript(document, { text: document.ocrText, segments, language: config.asr.language, model: "edited" })
+}
+
 /** The transcribe job handler, mirroring processDocumentJob's contract: it owns claiming through to
  * completion for its own job row, and quota is consumed exactly once per document. */
 export async function processTranscribeJob(job: { id: string; attempts: number; scheduledAt: Date; document: TranscribeJobDocument }) {

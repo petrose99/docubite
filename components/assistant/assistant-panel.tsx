@@ -36,16 +36,27 @@ const TOOL_LABELS: Record<string, string> = {
  *
  * Tool calls are executed here in the browser (see sheet-tools.ts) and the results posted back,
  * so the assistant answers from the workbook on screen rather than from the saved snapshot. */
-export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEnabled = false, onOpenSource }: {
+export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEnabled = false, onOpenSource, surface = "sheet", intents, emptyHint, title = "AI Assistant", className }: {
   workspaceId: string
   /** The live grid. A ref rather than a value because the panel mounts before Univer finishes
-   * booting, and a question asked in that window still has to find a workbook to read. */
+   * booting, and a question asked in that window still has to find a workbook to read. On a page
+   * with no grid (the dictation verify screen) this is a ref that stays null and the server is
+   * told not to register the sheet tools at all — see `surface`. */
   apiRef: RefObject<FUniver | null>
   onClose: () => void
   /** Additive and default-off: callers that do not pass these see today's behaviour exactly. When
    * on, the empty state gains a document intent and the search tool renders its Sources card. */
   documentSearchEnabled?: boolean
   onOpenSource?: (hit: SourceHit) => void
+  /** Which page is asking. Sent to /api/ai-chat, which registers the spreadsheet tools only for
+   * "sheet" — offering the model seven tools that can only answer "the spreadsheet is still
+   * loading" wastes its step budget on the way to the same answer. */
+  surface?: "sheet" | "dictation"
+  /** Starter prompts for the empty state. Defaults to the spreadsheet's. */
+  intents?: string[]
+  emptyHint?: string
+  title?: string
+  className?: string
 }) {
   const [input, setInput] = useState("")
   const scroller = useRef<HTMLDivElement>(null)
@@ -56,7 +67,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   const [pendingCount, setPendingCount] = useState(0)
 
   const { messages, sendMessage, addToolResult, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/ai-chat", body: { workspaceId } }),
+    transport: new DefaultChatTransport({ api: "/api/ai-chat", body: { workspaceId, surface } }),
     // Without this the loop stops dead after the first tool call: the browser runs the tool and
     // records the result, but nothing sends it back, so the model never gets to answer.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
@@ -95,10 +106,10 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-r bg-stone-50">
+    <aside className={className ?? "flex w-80 shrink-0 flex-col border-r bg-stone-50"}>
       <div className="flex items-center gap-2 border-b bg-white px-3 py-2">
         <Sparkles className="h-4 w-4 text-emerald-700" />
-        <span className="text-sm font-semibold text-stone-800">AI Assistant</span>
+        <span className="text-sm font-semibold text-stone-800">{title}</span>
         <button type="button" aria-label="Close AI Assistant" className="ml-auto rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700" onClick={onClose}>
           <X className="h-4 w-4" />
         </button>
@@ -108,11 +119,11 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
         {!messages.length && (
           <div className="space-y-2">
             <p className="text-xs text-stone-500">
-              {documentSearchEnabled
+              {emptyHint ?? (documentSearchEnabled
                 ? "Ask about the data in this sheet — or what the documents behind it actually say."
-                : "Ask about the data in this sheet. The assistant reads the grid as you see it."}
+                : "Ask about the data in this sheet. The assistant reads the grid as you see it.")}
             </p>
-            {(documentSearchEnabled ? [...INTENTS, DOCUMENT_INTENT] : INTENTS).map((intent) => (
+            {(intents ?? (documentSearchEnabled ? [...INTENTS, DOCUMENT_INTENT] : INTENTS)).map((intent) => (
               <button key={intent} type="button" className="block w-full rounded-md border bg-white px-2.5 py-2 text-left text-xs text-stone-600 hover:border-emerald-300 hover:text-stone-900" onClick={() => ask(intent)}>
                 {intent}
               </button>

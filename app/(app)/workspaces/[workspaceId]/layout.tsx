@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/shell/sidebar"
 import { getCurrentUser } from "@/lib/auth"
+import config from "@/lib/config"
 import { getWorkspaceMembership, getWorkspacesForUser } from "@/models/workspaces"
 import { redirect } from "next/navigation"
 
@@ -19,7 +20,8 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     <Sidebar
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
-      user={{ name: user.name, email: user.email }} />
+      user={{ name: user.name, email: user.email }}
+      dictationEnabled={config.asr.enabled} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

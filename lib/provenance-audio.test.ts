@@ -36,6 +36,18 @@ describe("resolveAudioRef", () => {
     expect(resolveAudioRef("anything", [])).toBeNull()
   })
 
+  /** The verify screen lets a pathologist correct a mis-transcribed word, and re-derives the fields
+   * from the corrected text against the ORIGINAL segments. A value that came from an edit therefore
+   * has no moment in the recording where it was said, and must come back unpinned — a pin to the
+   * nearest thing that WAS said would be a false citation on a clinical document. */
+  it("declines to pin a value that was typed in, not spoken", () => {
+    // The speaker said "Nottingham grade two"; the reviewer corrected it to a different diagnosis
+    // entirely. Nothing in the audio supports the new wording.
+    expect(resolveAudioRef("papillary thyroid carcinoma with lymphatic spread", segments)).toBeNull()
+    // A phrase that IS in the audio still pins, so this is not simply rejecting everything.
+    expect(resolveAudioRef("Nottingham grade two", segments)?.startMs).toBe(9000)
+  })
+
   it("prefers the shorter window when a single segment matches as well as a merged pair", () => {
     // Precision is the point of a timestamp: a 5s citation beats an 11s one at equal score.
     const ref = resolveAudioRef("Nottingham grade two", segments)

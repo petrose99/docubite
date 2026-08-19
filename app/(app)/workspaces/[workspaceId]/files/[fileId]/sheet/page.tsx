@@ -88,6 +88,5 @@ export default async function SheetPage({ params, searchParams }: {
     queuedIds={queued.map((document) => document.id)}
     hasRows={documentCount > 0}
     documentSearchEnabled={config.embeddings.enabled}
-    dictationEnabled={config.asr.enabled}
     initialSource={initialSource} />
 }

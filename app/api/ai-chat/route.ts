@@ -29,6 +29,22 @@ Changing the sheet:
 - Never edit cells the user did not ask you to touch, and never delete data to make room.
 - Finish any turn that changed the sheet by calling task_complete, with one entry in changes per thing you did ("Sheet1!G1", "added Line Total header"). The user sees these as clickable links, so give real references.`
 
+/** The dictation page's assistant. Same retrieval, no grid.
+ *
+ * A separate prompt rather than the spreadsheet one with the sheet paragraphs deleted, because the
+ * two answer different questions: on the sheet the assistant is looking at a grid of many
+ * documents, here it is sitting beside one clinical case that a person is about to sign. The
+ * standing instruction not to interpret findings is the point — this assistant retrieves and
+ * quotes; it does not offer a second opinion. */
+const DICTATION_SYSTEM_PROMPT = `You are the DocuBite assistant, helping a clinician review a dictated case they are about to verify and sign.
+
+How to work:
+- You have no spreadsheet here. Answer from the documents, using search_documents and find_documents.
+- Answer in plain prose, briefly. No preamble, no restating the question.
+- Quote what a document says. Never paraphrase a diagnosis, grade, stage, or measurement — give the wording as recorded.
+- NEVER offer a diagnosis, an interpretation, or a clinical opinion of your own, and never suggest what a finding "is consistent with". You retrieve and quote what is on record; the clinician decides what it means.
+- If the record does not contain what was asked, say so plainly rather than filling the gap.`
+
 /** Appended to the system prompt only when the document-search tool is registered (i.e. embeddings
  * are configured). Kept separate so the model is never told about a tool it does not have. */
 const DOCUMENT_SEARCH_PROMPT = `
@@ -110,7 +126,12 @@ const sheetTools = {
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()
-  const { messages, workspaceId }: { messages: UIMessage[]; workspaceId: string } = await request.json()
+  // `surface` says which page is asking. The dictation page has no Univer grid, so registering the
+  // sheet tools there would offer the model seven tools whose every call comes back "the
+  // spreadsheet is still loading" — burning steps to reach the same answer it could have given
+  // straight away. Unknown or absent means the sheet, so every existing caller is unaffected.
+  const { messages, workspaceId, surface }: { messages: UIMessage[]; workspaceId: string; surface?: string } = await request.json()
+  const onSheet = surface !== "dictation"
 
   if (!workspaceId || !(await getWorkspaceMembership(workspaceId, user.id))) return Response.json({ error: "forbidden" }, { status: 403 })
 
@@ -141,9 +162,10 @@ export async function POST(request: Request) {
   // configured — the single feature gate. Its result flows back through the stream; the browser's
   // onToolCall is guarded to ignore it (see components/assistant/assistant-panel.tsx). No extra
   // quota: this turn already consumed one AI unit above.
+  const gridTools = onSheet ? sheetTools : {}
   const tools = config.embeddings.enabled
     ? {
-        ...sheetTools,
+        ...gridTools,
         search_documents: tool({
           description: "Search the user's uploaded documents (invoices, receipts, bank statements) for text relevant to a question, and get back matching snippets with their filename and page. Use this for questions about what a document says, rather than about the spreadsheet grid.",
           inputSchema: z.object({ query: z.string().min(2).describe("What to look for, in a few words or a short phrase") }),
@@ -178,11 +200,13 @@ export async function POST(request: Request) {
           },
         }),
       }
-    : sheetTools
+    : gridTools
+
+  const base = onSheet ? SYSTEM_PROMPT : DICTATION_SYSTEM_PROMPT
 
   const result = streamText({
     model: google(config.ai.geminiModelName),
-    system: config.embeddings.enabled ? SYSTEM_PROMPT + DOCUMENT_SEARCH_PROMPT : SYSTEM_PROMPT,
+    system: config.embeddings.enabled ? base + DOCUMENT_SEARCH_PROMPT : base,
     messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(MAX_STEPS),

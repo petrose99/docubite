@@ -147,13 +147,11 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
         </div>
       )}
 
-      {/* Says what actually happened, not what sounds reassuring. Stopping hands the audio to the
-          staged-file list; nothing is transcribed until Extract is pressed, and a spinner claiming
-          otherwise would have the user waiting for work that was never started. */}
+      {/* Says what actually happened, not what sounds reassuring: stopping hands the complete
+          recording to onComplete, and what happens next is the caller's business, not a claim this
+          component is in a position to make. */}
       {!recording && !!elapsedMs && (
-        <p className="mt-2 text-sm text-stone-500">
-          Recording added below ({Math.max(1, Math.round(elapsedMs / 1000))}s). Press <span className="font-medium text-stone-700">Extract</span> to transcribe it.
-        </p>
+        <p className="mt-2 text-sm text-stone-500">Recorded {Math.max(1, Math.round(elapsedMs / 1000))}s.</p>
       )}
     </div>
   )

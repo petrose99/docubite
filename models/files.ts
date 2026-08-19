@@ -4,6 +4,7 @@
 // publish every export as a callable endpoint. Server actions live in
 // app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
 import { DEFAULT_DOCUMENT_TEMPLATES, parseTemplateFields } from "@/lib/document-templates"
+import { dictationAdapters } from "@/lib/domains"
 import { deleteDocumentSource, documentStorageKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
 import { Prisma } from "@/prisma/client"
@@ -36,18 +37,31 @@ export type FileSortField = (typeof FILE_SORT_FIELDS)[number]
 
 const cleanName = (name: string | undefined | null, fallback: string) => (name ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 120) || fallback
 
+/** The shape createFile seeds worksheets from — the domain packs in lib/domains/ all satisfy it. */
+type SeedTemplate = { code: string; name: string; documentType: string; multiRow: boolean; fields: readonly unknown[] }
+
 /** Every file starts as a usable blank workbook: the same system worksheets a brand-new
  * workspace used to be seeded with, so `New file` lands somewhere you can immediately upload
- * into rather than on an empty tab strip. */
-export async function createFile(input: { workspaceId: string; userId: string; name?: string; folderId?: string | null }) {
+ * into rather than on an empty tab strip.
+ *
+ * `templates` and `kind` are parameters rather than constants because the dictation container is
+ * the same row with a different worksheet in it — see ensureDictationFile. Both default to what
+ * every existing caller already got. */
+export async function createFile(input: {
+  workspaceId: string; userId: string; name?: string; folderId?: string | null
+  templates?: readonly SeedTemplate[]
+  kind?: "sheet" | "dictation"
+}) {
+  const templates = input.templates ?? DEFAULT_DOCUMENT_TEMPLATES
   return prisma.documentFile.create({
     data: {
       workspaceId: input.workspaceId,
       folderId: input.folderId || null,
       createdById: input.userId,
       name: cleanName(input.name, "untitled"),
+      kind: input.kind ?? "sheet",
       templates: {
-        create: DEFAULT_DOCUMENT_TEMPLATES.map((template) => ({
+        create: templates.map((template) => ({
           workspaceId: input.workspaceId,
           code: template.code,
           name: template.name,
@@ -61,6 +75,48 @@ export async function createFile(input: { workspaceId: string; userId: string; n
   })
 }
 
+/** The workspace's dictation container, created on first use and kept in step with the registry.
+ *
+ * A Document needs a fileId and a templateId, so a dictation needs a file to live in. Rather than
+ * inventing a second ingestion path that skips those, the dictation page gets one app-managed file
+ * seeded with the dictation domains' worksheets — which is what lets a dictation reuse
+ * createDocumentFromBuffer, the transcribe job, chunking, embedding, field projection, quota and
+ * audit untouched.
+ *
+ * The DB's partial unique index on (workspace_id) WHERE kind = 'dictation' is what makes creation
+ * safe under concurrent first loads: two simultaneous callers race, one loses on the constraint,
+ * and the loser re-reads the winner's row instead of creating a duplicate.
+ *
+ * Missing worksheets are added on every call, not only at creation. Otherwise registering a second
+ * dictation domain would work for new workspaces and silently do nothing for every existing one —
+ * the same "seeded once, diverges forever" trap DEFAULT_DOCUMENT_TEMPLATES already has. */
+export async function ensureDictationFile(workspaceId: string, userId: string) {
+  const templates = dictationAdapters()
+  const existing = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "dictation" } })
+  const file = existing ?? await createFile({ workspaceId, userId, name: "Dictations", templates, kind: "dictation" })
+    .catch(async () => {
+      const raced = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "dictation" } })
+      if (!raced) throw new Error("dictation_file_unavailable")
+      return raced
+    })
+
+  // Scoped by workspaceId as well as fileId. fileId alone is not exploitable here — the file was
+  // just resolved from this workspace — but the scope guard is right to flag it: isolation that
+  // depends on every caller remembering is isolation that eventually fails.
+  const present = new Set((await prisma.documentTemplate.findMany({ where: { workspaceId, fileId: file.id }, select: { code: true } })).map((row) => row.code))
+  const missing = templates.filter((template) => !present.has(template.code))
+  for (const template of missing) {
+    await prisma.documentTemplate.create({
+      data: {
+        workspaceId, fileId: file.id, code: template.code, name: template.name,
+        documentType: template.documentType, isSystem: true, multiRow: template.multiRow,
+        versions: { create: { version: 1, fields: parseTemplateFields(template.fields) } },
+      },
+    })
+  }
+  return file
+}
+
 export type FileListItem = Awaited<ReturnType<typeof listFiles>>[number]
 
 export async function listFiles(workspaceId: string, options: { folderId?: string | null; query?: string; sort?: FileSortField; dir?: "asc" | "desc" } = {}) {
@@ -70,7 +126,11 @@ export async function listFiles(workspaceId: string, options: { folderId?: strin
   return prisma.documentFile.findMany({
     // A search spans the whole workspace: filtering by folder as well would hide the matches
     // the user is searching *for*, which are usually in some other folder.
-    where: { workspaceId, ...(query ? { name: { contains: query, mode: "insensitive" } } : { folderId: options.folderId ?? null }) },
+    //
+    // kind "sheet" only: the dictation container is app-managed furniture with its own page, and
+    // listing it here would offer to rename, share, move and delete something the dictation page
+    // depends on existing.
+    where: { workspaceId, kind: "sheet", ...(query ? { name: { contains: query, mode: "insensitive" } } : { folderId: options.folderId ?? null }) },
     include: { _count: { select: { documents: true, shares: true } }, folder: { select: { id: true, name: true } } },
     orderBy: { [sort]: dir },
     take: 500,

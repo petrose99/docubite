@@ -1,6 +1,7 @@
 import { TemplateForm } from "@/components/workspace/template-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getCurrentUser } from "@/lib/auth"
+import config from "@/lib/config"
 import { listFiles } from "@/models/files"
 import { prisma } from "@/lib/db"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -18,11 +19,16 @@ export default async function TemplatesPage({ params }: { params: Promise<{ work
     prisma.documentTemplate.findMany({ where: { workspaceId }, include: { versions: { orderBy: { version: "desc" }, take: 1 } }, orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
   ])
   const byFile = new Map(files.map((file) => [file.id, templates.filter((template) => template.fileId === file.id)]))
+  const dictationEnabled = config.asr.enabled
 
   return <main className="space-y-6">
     <header>
       <h1 className="text-3xl font-bold">Document templates</h1>
       <p className="mt-1 text-muted-foreground">Every file starts with Invoice, Receipt, and Custom document. Custom templates support PDFs and images only.</p>
+      {dictationEnabled && <p className="mt-2 text-sm text-muted-foreground">
+        Looking for the format a dictated case is written up in? That is{" "}
+        <Link className="font-medium text-emerald-700 hover:underline" href={`/workspaces/${workspaceId}/settings/reports`}>Report templates</Link>.
+      </p>}
     </header>
 
     <div className="space-y-4">

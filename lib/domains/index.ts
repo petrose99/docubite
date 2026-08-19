@@ -64,6 +64,22 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
   return DOMAIN_ADAPTERS.find((adapter) => adapter.code === code) ?? null
 }
 
+/** The template codes the dictation page offers, in the order it offers them.
+ *
+ * A list rather than "every adapter", because dictating a bill of lading is not a thing anyone
+ * does — a domain is registered for extraction long before speech makes sense for it. Adding a
+ * second dictation domain is one entry here plus its pack file; nothing else changes.
+ *
+ * Lives here rather than beside the actions because a "use server" module may only export async
+ * functions, so a constant cannot sit in one. */
+export const DICTATION_TEMPLATE_CODES = ["pathology_report"] as const
+
+/** The adapters behind DICTATION_TEMPLATE_CODES, skipping any code with no registered pack so a
+ * typo removes one option rather than breaking the page. */
+export function dictationAdapters(): DomainAdapter[] {
+  return DICTATION_TEMPLATE_CODES.map((code) => findDomainAdapter(code)).filter((adapter): adapter is DomainAdapter => adapter !== null)
+}
+
 /** ASR bias terms for a template code, falling back to the union of nothing (rather than every
  * domain's vocabulary) when the code is unknown — biasing towards the wrong domain is worse than
  * not biasing at all. */

@@ -39,6 +39,7 @@ model User {
   createdFiles          DocumentFile[]        @relation("FileCreator")
   fileShares            DocumentFileShare[]
   signedReports         DocumentReportDraft[]
+  editedTranscripts     Document[]            @relation("TranscriptEditor")
 
   @@map("users")
 }
@@ -171,6 +172,13 @@ model DocumentFile {
   folderId    String?             @map("folder_id") @db.Uuid
   name        String              @default("untitled")
   createdById String?             @map("created_by_id") @db.Uuid
+  /// What this file is for: "sheet" (a user-created workbook, the only kind the Files browser
+  /// lists) or "dictation" (the per-workspace container the dictation page puts recordings in).
+  /// A Document needs a fileId and a templateId, so dictations need a file to belong to — but it
+  /// is app-managed furniture, not something anyone opens as a spreadsheet, so listFiles hides it.
+  /// A partial unique index in the migration makes "one dictation container per workspace" a
+  /// database fact rather than a convention ensureDictationFile has to remember.
+  kind        String              @default("sheet")
   /** Link sharing, keyed on the file id itself the way Lido keys on ?lidoFileId=<uuid>:
    * none | view | interact | edit. */
   linkAccess  String              @default("none") @map("link_access")
@@ -315,6 +323,14 @@ model Document {
   /// through the existing chunking/embedding path with no new retrieval code.
   transcript        Json?
   transcriptModel   String?                  @map("transcript_model")
+  /// Set when a person corrected the transcript on the verify screen.
+  ///
+  /// The transcript is otherwise a faithful record of what the microphone heard. Once it is
+  /// editable it stops being only that, and a report drawn from an edited transcript must not be
+  /// read as an unedited ASR pass — so the edit is stamped and shown, never silent. Null means
+  /// every word is the machine's.
+  transcriptEditedAt   DateTime?             @map("transcript_edited_at")
+  transcriptEditedById String?               @map("transcript_edited_by_id") @db.Uuid
   aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
   searchText        String                   @default("") @map("search_text")
   ocrText           String                   @default("") @map("ocr_text")
@@ -331,6 +347,7 @@ model Document {
   template          DocumentTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
   templateVersion   DocumentTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
   shape             ExtractionShape?         @relation(fields: [shapeId], references: [id], onDelete: SetNull)
+  transcriptEditedBy User?                   @relation("TranscriptEditor", fields: [transcriptEditedById], references: [id], onDelete: SetNull)
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
   chunks            DocumentChunk[]
