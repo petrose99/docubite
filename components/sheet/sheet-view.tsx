@@ -7,11 +7,13 @@ import { ExtractPanel } from "@/components/extract/extract-panel"
 import type { SheetTemplate, WorkspaceUsage } from "@/components/extract/types"
 import { useExtractionProgress } from "@/components/extract/use-extraction-progress"
 import { FileHeader } from "@/components/files/file-header"
+import type { FWorksheet } from "@univerjs/preset-sheets-core"
 import type { FUniver, IWorkbookData } from "@univerjs/presets"
-import { Database, Download, FileDown, FileText, Sparkles } from "lucide-react"
+import { Database, Download, FileDown, FileText, Files, Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { registerAiFormulas } from "./custom-functions"
+import { DocumentListPanel, type ActiveFilter, type DocumentGroup } from "./document-list-panel"
 import { appendExtractionRows } from "./extraction-bridge"
 import { FormulaBuilder } from "./formula-builder"
 import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "./source-preview"
@@ -35,6 +37,7 @@ const FormulaIcon = () => <Sparkles className="h-4 w-4" />
 const SourceIcon = () => <FileText className="h-4 w-4" />
 const DownloadIcon = () => <Download className="h-4 w-4" />
 const DownloadCsvIcon = () => <FileDown className="h-4 w-4" />
+const DocumentsIcon = () => <Files className="h-4 w-4" />
 
 /** The whole sheet surface: a file bar, the assistant docked left, and the grid filling the
  * rest of the window.
@@ -65,6 +68,11 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [extractOpen, setExtractOpen] = useState(false)
   const [formulaBuilderOpen, setFormulaBuilderOpen] = useState(false)
+  const [documentsPanelOpen, setDocumentsPanelOpen] = useState(false)
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter | null>(null)
+  // Read inside callbacks that must not depend on (and re-create on) every filter change — the
+  // BeforeActiveSheetChange listener registered once in handleReady, in particular.
+  const activeFilterRef = useRef<ActiveFilter | null>(null)
   const [source, setSource] = useState<SourceDocument | null>(null)
   const [target, setTarget] = useState<ProvenanceTarget | null>(null)
   // The revision the server settled on after absorbing an extraction, handed to the grid so its
@@ -148,6 +156,34 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
     setTarget(info.data.ref ? { page: info.data.ref.page, bbox: info.data.ref.bbox, quote: info.data.ref.quote } : null)
   }, [workspaceId])
 
+  /** Un-hides exactly the ranges a filter hid — never a blanket `1..lastRow`, which would also
+   * reveal rows a user had hidden by hand for reasons of their own. A no-op once the sheet the
+   * filter applied to is no longer the active one (its rows are already visible again, restored
+   * by the BeforeActiveSheetChange handler below). */
+  const clearFilter = useCallback((sheet: FWorksheet | null | undefined, filter: ActiveFilter | null) => {
+    if (!sheet || !filter || sheet.getSheetId() !== filter.sheetId) return
+    filter.hiddenRanges.forEach(([start, count]) => sheet.showRows(start, count))
+  }, [])
+
+  /** Filters the live grid down to one document's rows. Reverses any filter already in effect
+   * first, so switching straight from one document to another does not leave the first
+   * document's rows stranded hidden underneath the new selection. */
+  const applyFilter = useCallback((doc: DocumentGroup) => {
+    const sheet = apiRef.current?.getActiveWorkbook()?.getActiveSheet()
+    if (!sheet) return
+    clearFilter(sheet, activeFilterRef.current)
+    doc.hideRanges.forEach(([start, count]) => sheet.hideRows(start, count))
+    const next: ActiveFilter = { sheetId: sheet.getSheetId(), documentId: doc.documentId, filename: doc.filename, hiddenRanges: doc.hideRanges }
+    activeFilterRef.current = next
+    setActiveFilter(next)
+  }, [clearFilter])
+
+  const showAll = useCallback(() => {
+    clearFilter(apiRef.current?.getActiveWorkbook()?.getActiveSheet(), activeFilterRef.current)
+    activeFilterRef.current = null
+    setActiveFilter(null)
+  }, [clearFilter])
+
   /** Opens the document behind a source the assistant cited, at the matching page and highlight.
    * The snippet is clipped to a short quote — the raw chunk snippet runs to hundreds of characters
    * and would swallow the viewer's quote pill. A hit with no page opens the document without a
@@ -182,6 +218,18 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
      * saved in the snapshot are what that viewer sees instead. */
     registerAiFormulas(api, workspaceId)
 
+    /** A filter applied on one tab must not silently follow the user to another: un-hide its
+     * rows and clear it before the switch completes, or a filter would either leave rows hidden
+     * on a tab the user has navigated away from with no visible indicator, or (if left tracked)
+     * wrongly apply "Show all" to a tab it was never for. */
+    api.addEvent(api.Event.BeforeActiveSheetChange, (params) => {
+      const filter = activeFilterRef.current
+      if (!filter || params.oldActiveSheet.getSheetId() !== filter.sheetId) return
+      clearFilter(params.oldActiveSheet, filter)
+      activeFilterRef.current = null
+      setActiveFilter(null)
+    })
+
     /** Extract Data goes in the leading toolbar group rather than the trailing one because
      * Univer collapses the toolbar from the right: anything in `ribbon.start.others` is first
      * into the ⋮ overflow on a narrow window, and the primary action of the whole product
@@ -205,8 +253,22 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       tooltip: "Describe a calculation and get the formula for it",
       icon: "docubite-formula-icon",
       order: -1,
-      action: () => setFormulaBuilderOpen(true),
+      // Both this and the Documents panel render bottom-6-right-6, so opening one closes the
+      // other rather than stacking two panels on top of each other.
+      action: () => { setDocumentsPanelOpen(false); setFormulaBuilderOpen(true) },
     }).appendTo("ribbon.formulas.basic")
+
+    /** Which documents contributed to this sheet, and a way to filter the grid down to one of
+     * them without leaving the real, editable rows — see components/sheet/document-list-panel.tsx. */
+    api.registerComponent("docubite-documents-icon", DocumentsIcon)
+    api.createMenu({
+      id: "docubite.documents",
+      title: "Documents",
+      tooltip: "See which documents are in this sheet, and filter to one",
+      icon: "docubite-documents-icon",
+      order: 2,
+      action: () => { setFormulaBuilderOpen(false); setDocumentsPanelOpen(true) },
+    }).appendTo("ribbon.start.history")
 
     /** Download, next to Extract Data: the two ends of the same job, documents in and a
      * spreadsheet out. Navigating rather than fetching so the browser's own download machinery
@@ -279,7 +341,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         <Sparkles className="h-3.5 w-3.5" />AI Assistant
       </button>
     ))
-  }, [fileId, openActiveCellSource, readOnly, workspaceId])
+  }, [clearFilter, fileId, openActiveCellSource, readOnly, workspaceId])
 
   const label = readOnly ? "Read only" : SAVE_LABELS[saveState]
 
@@ -323,6 +385,22 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       {source && <SourcePreview source={source} target={target} onClose={() => { setSource(null); setTarget(null) }} />}
 
       {formulaBuilderOpen && !readOnly && <FormulaBuilder workspaceId={workspaceId} apiRef={apiRef} onClose={() => setFormulaBuilderOpen(false)} />}
+
+      {documentsPanelOpen && !readOnly && (
+        <DocumentListPanel apiRef={apiRef} activeFilter={activeFilter} onFilter={applyFilter} onShowAll={showAll} onClose={() => setDocumentsPanelOpen(false)} />
+      )}
+
+      {/* Survives closing the Documents panel (X) — closing it must not strand the user in a
+          filtered grid with no way back. Sits above the "View source" pill so the two don't
+          overlap when both are visible. */}
+      {activeFilter && !readOnly && (
+        <button
+          type="button"
+          onClick={showAll}
+          className="fixed bottom-24 right-6 z-40 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-lg transition-colors hover:border-emerald-400 hover:bg-emerald-50">
+          <Files className="h-4 w-4" />Showing: {activeFilter.filename} · Show all
+        </button>
+      )}
 
       {extractOpen && <ExtractPanel
         key={template?.id ?? "new"}

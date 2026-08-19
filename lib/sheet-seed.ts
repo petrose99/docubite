@@ -56,7 +56,7 @@ function rowCells(row: SheetRow, columns: SheetColumn[]): Record<number, Cell> {
     cells[index] = {
       ...(cell ?? {}),
       ...(style ? { s: style } : {}),
-      custom: { documentId: row.documentId, itemIndex: row.itemIndex, fieldKey: column.fieldKey, itemKey: column.itemKey },
+      custom: { documentId: row.documentId, filename: row.filename, itemIndex: row.itemIndex, fieldKey: column.fieldKey, itemKey: column.itemKey },
     }
   })
   return cells
