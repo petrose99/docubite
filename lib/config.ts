@@ -71,10 +71,16 @@ const envSchema = z.object({
   // has no provider mapping at all, the same failure that ruled out nomic-embed for embeddings.
   // whisper-large-v3-turbo is live there and returns segment timestamps, which audio provenance
   // needs. Swapping backends is a config change; see lib/asr/index.ts.
-  ASR_BACKEND: z.enum(["huggingface"]).default("huggingface"),
+  //
+  // "deepgram" talks to Deepgram's prerecorded /v1/listen endpoint directly (lib/asr/deepgram.ts)
+  // — no ASR_BASE_URL needed, since Deepgram's URL is fixed; only ASR_API_KEY. It supports native
+  // keyword biasing, which HF serverless Whisper does not.
+  ASR_BACKEND: z.enum(["huggingface", "deepgram"]).default("huggingface"),
   ASR_BASE_URL: z.string().url().optional(),
   ASR_API_KEY: z.string().optional(),
-  ASR_MODEL_NAME: z.string().default("openai/whisper-large-v3-turbo"),
+  // No blanket default: Whisper and Deepgram model names look nothing alike ("openai/whisper-
+  // large-v3-turbo" vs "nova-2"), so the right default is picked per-backend below.
+  ASR_MODEL_NAME: z.string().optional(),
   ASR_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   ASR_MAX_AUDIO_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
   // Spoken language hint, as an ISO-639-1 code. Defaults to English; set it empty to let the model
@@ -140,13 +146,17 @@ const config = {
   },
   // `enabled` is the single feature gate for the whole dictation path: the accepted MIME lists,
   // the transcribe job, and the dictation UI all read it. The API key falls back to the embeddings
-  // key because both are Hugging Face tokens in the default deployment.
+  // key because both are Hugging Face tokens in the default deployment — that fallback only makes
+  // sense for the huggingface backend, so deepgram requires its own ASR_API_KEY.
+  //
+  // Deepgram's URL is fixed (lib/asr/deepgram.ts), so `enabled` for it depends on the API key
+  // being set rather than on ASR_BASE_URL, which huggingface needs but deepgram does not.
   asr: {
-    enabled: Boolean(env.ASR_BASE_URL),
+    enabled: env.ASR_BACKEND === "deepgram" ? Boolean(env.ASR_API_KEY) : Boolean(env.ASR_BASE_URL),
     backend: env.ASR_BACKEND,
     baseUrl: (env.ASR_BASE_URL || "").replace(/\/+$/, ""),
-    apiKey: env.ASR_API_KEY || env.EMBEDDINGS_API_KEY || "",
-    modelName: env.ASR_MODEL_NAME,
+    apiKey: env.ASR_API_KEY || (env.ASR_BACKEND === "huggingface" ? env.EMBEDDINGS_API_KEY : undefined) || "",
+    modelName: env.ASR_MODEL_NAME || (env.ASR_BACKEND === "deepgram" ? "nova-2" : "openai/whisper-large-v3-turbo"),
     timeoutMs: env.ASR_TIMEOUT_MS,
     maxAudioBytes: env.ASR_MAX_AUDIO_BYTES,
     language: env.ASR_LANGUAGE.trim() || null,
