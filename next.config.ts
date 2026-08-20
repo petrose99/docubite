@@ -6,7 +6,16 @@ const nextConfig: NextConfig = {
     unoptimized: true, // FIXME: bug on prod, images always empty, investigate later
   },
   // Resolves its own native driver at runtime and must not be bundled.
-  serverExternalPackages: ["@prisma/adapter-pg"],
+  //
+  // sharp: `next` itself carries a nested, older sharp as an optional dependency (for next/image,
+  // which we don't use — images.unoptimized is true above). With two sharp versions in the tree,
+  // Turbopack's function bundler traced/externalized the wrong native binary against the wrong JS
+  // bindings, producing a version-mismatched libvips .so at runtime in production:
+  // "ERR_DLOPEN_FAILED: libvips-cpp.so.8.18.3: cannot open shared object file". Excluding sharp
+  // from bundling makes it load straight out of node_modules at runtime instead, the same fix as
+  // @prisma/adapter-pg for the same underlying reason (a native binary a JS bundler cannot trace
+  // correctly).
+  serverExternalPackages: ["@prisma/adapter-pg", "sharp"],
   experimental: {
     serverActions: {
       bodySizeLimit: "256mb",
