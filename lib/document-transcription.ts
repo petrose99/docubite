@@ -10,7 +10,10 @@ import {
 } from "@/lib/document-templates"
 import { readDocumentSource } from "@/lib/document-storage"
 import { projectDocumentFields } from "@/lib/field-projection"
-import { buildFieldSuggestionInstructions, parseSuggestedTranscriptFields, suggestedFieldsSchemaProperty } from "@/lib/field-suggestions"
+import {
+  buildFieldSuggestionInstructions, type FieldSuggestionMode, parseSuggestedTitle, parseSuggestedTranscriptFields,
+  suggestedFieldsSchemaProperty, suggestedTitleSchemaProperty,
+} from "@/lib/field-suggestions"
 import { buildAudioProvenance } from "@/lib/provenance-audio"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { createFieldSuggestions } from "@/models/field-suggestions"
@@ -47,12 +50,15 @@ export const PERMANENT_ASR_ERROR_CODES = [
  * target fields named and described, filling them is a sorting task with a right answer, rather
  * than a generative one where a plausible-sounding value would pass unnoticed. */
 export function buildTranscriptPrompt(templateName: string, fields: DocumentFieldDefinition[], transcript: string, biasTerms: string[], customPrompt?: string | null): string {
+  const mode: FieldSuggestionMode = fields.length === 0 ? "discover" : "supplement"
   return [
-    `The text below is an automatic transcript of a spoken ${templateName}. Sort what was SAID into the fields below.`,
+    mode === "discover"
+      ? `The text below is an automatic transcript of a spoken ${templateName}. There is no predefined field list — read what was actually said and propose the fields below.`
+      : `The text below is an automatic transcript of a spoken ${templateName}. Sort what was SAID into the fields below.`,
     "",
     "Rules:",
     "- Extract only values the speaker actually stated. Never infer, complete, or normalise a value that was not spoken.",
-    "- A field the speaker did not mention is omitted entirely. Do not guess it from the other fields.",
+    ...(mode === "supplement" ? ["- A field the speaker did not mention is omitted entirely. Do not guess it from the other fields."] : []),
     "- Where the transcript is garbled or a word is uncertain, extract the most plausible reading ONLY if it is unambiguous; otherwise use the literal text [unclear].",
     "- Speech has false starts, corrections and filler. Where the speaker corrected themselves, take the CORRECTED value.",
     "- Spoken numbers and dates become digits (\"the fourteenth of March twenty twenty-six\" -> 2026-03-14). Dates use YYYY-MM-DD.",
@@ -63,12 +69,14 @@ export function buildTranscriptPrompt(templateName: string, fields: DocumentFiel
       "of these, but never substitute one for a word that was clearly something else:",
       biasTerms.join(", "),
     ] : []),
-    "",
-    "Also return `_confidence` (0-1 per top-level field, reflecting BOTH how clearly it was spoken and how certain the mapping is),",
-    "and `_provenance`: for each field, a short verbatim quote (under 120 characters) of the transcript around where it was said.",
-    "Page numbers do not apply to audio; omit `page`.",
+    ...(mode === "supplement" ? [
+      "",
+      "Also return `_confidence` (0-1 per top-level field, reflecting BOTH how clearly it was spoken and how certain the mapping is),",
+      "and `_provenance`: for each field, a short verbatim quote (under 120 characters) of the transcript around where it was said.",
+      "Page numbers do not apply to audio; omit `page`.",
+    ] : []),
     "Also return `_classification`: doc_type, entity, period.",
-    buildFieldSuggestionInstructions(),
+    buildFieldSuggestionInstructions(mode),
     customPrompt?.trim() ? `\nWorkspace instructions:\n${customPrompt.trim()}` : "",
     "",
     "Transcript:",
@@ -152,6 +160,7 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   const model = config.ai.provider === "gemini" ? config.ai.geminiModelName : config.ai.openaiModelName
   if (!apiKey) throw new Error("platform_ai_not_configured")
 
+  const mode: FieldSuggestionMode = fields.length === 0 ? "discover" : "supplement"
   const biasTerms = biasTermsForTemplate(document.template?.code)
   const schema = buildDocumentJsonSchema(fields)
   const response = await requestLLM(
@@ -160,7 +169,14 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
       prompt: buildTranscriptPrompt(document.template?.name || "document", fields, transcript.text, biasTerms, document.templateVersion?.prompt),
       // additionalProperties: false on the base schema means the suggestion property must be
       // spliced in here rather than appended by the caller after the fact.
-      schema: { ...schema, properties: { ...schema.properties, _suggested_fields: suggestedFieldsSchemaProperty() } },
+      schema: {
+        ...schema,
+        properties: {
+          ...schema.properties,
+          _suggested_fields: suggestedFieldsSchemaProperty(),
+          ...(mode === "discover" ? { _suggested_title: suggestedTitleSchemaProperty() } : {}),
+        },
+      },
     },
   )
   if (response.error) throw new Error("ai_structuring_failed")
@@ -172,7 +188,8 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   const provenance = buildAudioProvenance(fields, hints, values, transcript.segments)
   const missing = findMissingRequiredFields(fields, values)
   const unsupportedFields = findUnsupportedFields(fields, values, fieldConfidence, provenance)
-  const suggestions = parseSuggestedTranscriptFields(response.output, new Set(fields.map((field) => field.key)))
+  const suggestions = parseSuggestedTranscriptFields(response.output, new Set(fields.map((field) => field.key)), mode)
+  const suggestedTitle = mode === "discover" ? parseSuggestedTitle(response.output) : null
 
   // source "asr": every value here originated in speech, which is a materially different
   // reliability story from OCR'd print and is surfaced as such next to the value. The audio
@@ -180,16 +197,22 @@ export async function structureTranscript(document: TranscribeJobDocument, trans
   // moment it was spoken — the audio equivalent of citing a page and rectangle.
   const rows = projectDocumentFields({ fields, values, confidence: fieldConfidence, provenance, source: "asr" })
 
+  // With no fields at all, `missing` is trivially empty — but the entire content of the dictation
+  // is sitting unapproved in `suggestions`, not in any field. Landing that as "ready_for_review"
+  // would look done when nothing has actually been reviewed yet.
+  const needsReview = missing.length > 0 || (fields.length === 0 && suggestions.length > 0)
+
   await prisma.$transaction(async (tx) => {
     await tx.document.update({
       where: { id: document.id },
       data: {
-        status: missing.length ? "needs_review" : "ready_for_review",
+        status: needsReview ? "needs_review" : "ready_for_review",
         rawExtraction: values as Prisma.InputJsonValue,
         reviewedData: values as Prisma.InputJsonValue,
         provenance: provenance as unknown as Prisma.InputJsonValue,
         classification: classification as unknown as Prisma.InputJsonValue,
         confidence: { missingRequiredFields: missing, fieldConfidence, unsupportedFields, source: "asr" } as Prisma.InputJsonValue,
+        ...(suggestedTitle ? { suggestedTitle } : {}),
       },
     })
     await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)

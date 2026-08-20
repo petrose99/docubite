@@ -17,10 +17,17 @@ import { documentFieldSchema, type DocumentFieldDefinition } from "@/lib/documen
  * disagreeing with the first about what was actually said. */
 
 const SUGGESTABLE_TYPES = new Set(["string", "number", "date", "boolean"])
-/** Caps how many proposals one dictation can generate. A transcript with a dozen genuinely novel
- * facts is the exception; a cap turns "the model went generative" into an honest small mistake
- * rather than a wall of noise a reviewer has to triage. */
-const MAX_SUGGESTIONS = 6
+/** Caps how many proposals one dictation can generate.
+ *
+ * "supplement" (a template with fields already, e.g. pathology) — 6. A transcript with a dozen
+ * genuinely novel facts on top of an existing schema is the exception; a low cap turns "the model
+ * went generative" into an honest small mistake rather than a wall of noise a reviewer has to triage.
+ *
+ * "discover" (a blank/ephemeral template, e.g. the general-report dictation) — 24. Here proposing
+ * fields IS the extraction; a low cap would silently drop content a person actually said. */
+const MAX_SUGGESTIONS: Record<FieldSuggestionMode, number> = { supplement: 6, discover: 24 }
+
+export type FieldSuggestionMode = "supplement" | "discover"
 
 export type ParsedFieldSuggestion = {
   key: string
@@ -32,20 +39,43 @@ export type ParsedFieldSuggestion = {
   confidence: number | null
 }
 
-/** Appended to buildTranscriptPrompt's instructions. Framed as a last resort ("only if... cannot
- * be placed") rather than an invitation, because the model defaults to restructuring and this must
+/** Appended to buildTranscriptPrompt's instructions.
+ *
+ * "supplement" (a template with fields already) is framed as a last resort ("only if... cannot be
+ * placed") rather than an invitation, because the model defaults to restructuring and this must
  * stay the exception — a schema that grows by one field per dictation is not dynamic, it is
- * unusable. */
-export function buildFieldSuggestionInstructions(): string {
+ * unusable.
+ *
+ * "discover" (no fields at all) flips that framing: with nothing to sort values into, proposing a
+ * field per distinct stated fact IS the extraction, not an exception to it. The "never infer, only
+ * what was said" rule is unchanged either way — discover mode widens what gets proposed, not what
+ * gets invented. */
+export function buildFieldSuggestionInstructions(mode: FieldSuggestionMode = "supplement"): string {
+  const rule = mode === "discover"
+    ? [
+      "",
+      "This dictation has no predefined fields. Also return `_suggested_fields`: one entry per",
+      "distinct fact the speaker CLEARLY and FACTUALLY stated — a value, a measurement, a named",
+      "finding. Do not merge unrelated facts into one entry, and do not invent a field for filler",
+      "or something that was not actually said.",
+    ]
+    : [
+      "",
+      "Also return `_suggested_fields`: an array for content the speaker CLEARLY and FACTUALLY stated",
+      "that cannot be placed in ANY field above — not filler, not something a listed field already",
+      "covers even loosely. Leave this empty unless something genuinely has nowhere to go.",
+    ]
   return [
-    "",
-    "Also return `_suggested_fields`: an array for content the speaker CLEARLY and FACTUALLY stated",
-    "that cannot be placed in ANY field above — not filler, not something a listed field already",
-    "covers even loosely. Leave this empty unless something genuinely has nowhere to go.",
+    ...rule,
     "For each: key (snake_case), label (short Title Case), type (string, number, date, or boolean),",
     "instruction (one sentence a future extractor could follow), value (what was said, in the same",
     "normalised form as any other field value), quote (a short verbatim quote from the transcript),",
     "and confidence (0-1, exactly like the top-level `_confidence` scores).",
+    ...(mode === "discover" ? [
+      "",
+      "Also return `_suggested_title`: a short (under 60 characters) plain-language title for this",
+      "dictation, drawn only from what was said — never invented or generic.",
+    ] : []),
   ].join("\n")
 }
 
@@ -71,6 +101,13 @@ export function suggestedFieldsSchemaProperty() {
       additionalProperties: false,
     },
   } as const
+}
+
+/** The `_suggested_title` JSON Schema property, appended only in discover mode (see
+ * buildFieldSuggestionInstructions) — a template that already names its document type does not
+ * need the model guessing a title for it. */
+export function suggestedTitleSchemaProperty() {
+  return { type: "string", description: "A short plain-language title for this dictation, drawn only from what was said" } as const
 }
 
 const coerceKey = (raw: unknown) => {
@@ -105,18 +142,30 @@ function coerceOne(raw: unknown): ParsedFieldSuggestion | null {
  * not a new field, it is the model failing to use the field it already had — dropped rather than
  * stored, since surfacing it as an "approve this" choice would just be confusing. Duplicate keys
  * within the output itself keep only the first. */
-export function parseSuggestedTranscriptFields(output: unknown, existingKeys: Set<string>): ParsedFieldSuggestion[] {
+export function parseSuggestedTranscriptFields(output: unknown, existingKeys: Set<string>, mode: FieldSuggestionMode = "supplement"): ParsedFieldSuggestion[] {
   if (!output || typeof output !== "object" || Array.isArray(output)) return []
   const raw = (output as Record<string, unknown>)._suggested_fields
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>(existingKeys)
   const result: ParsedFieldSuggestion[] = []
+  const cap = MAX_SUGGESTIONS[mode]
   for (const entry of raw) {
     const parsed = coerceOne(entry)
     if (!parsed || seen.has(parsed.key)) continue
     seen.add(parsed.key)
     result.push(parsed)
-    if (result.length >= MAX_SUGGESTIONS) break
+    if (result.length >= cap) break
   }
   return result
+}
+
+/** The model's proposed title for a discover-mode dictation (see buildFieldSuggestionInstructions).
+ * Returns null rather than a fallback string — the caller (structureTranscript) already has a
+ * timestamp-based filename to fall back to, and a placeholder here would just get stored as if it
+ * were a real suggestion. */
+export function parseSuggestedTitle(output: unknown): string | null {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return null
+  const raw = (output as Record<string, unknown>)._suggested_title
+  const title = coerceText(raw, 60)
+  return title || null
 }

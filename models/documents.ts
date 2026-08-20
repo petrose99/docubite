@@ -19,7 +19,7 @@ export type DocumentSource = "upload" | "dictation"
 
 export const documentHash = (buffer: Buffer) => crypto.createHash("sha256").update(buffer).digest("hex")
 
-function cleanFilename(filename: string) {
+export function cleanFilename(filename: string) {
   const sanitized = path.basename(filename).replace(/[\u0000-\u001f<>:"/\\|?*]/g, "_").trim()
   return (sanitized || "document").slice(0, 255)
 }
@@ -53,7 +53,7 @@ export function validateDocumentInput(buffer: Buffer, mimeType: string) {
   if (!isSupportedDocumentBuffer(buffer, mimeType)) throw new Error("unsupported_document_type")
 }
 
-function searchableText(data: Record<string, unknown>, filename: string) {
+export function searchableText(data: Record<string, unknown>, filename: string) {
   const flatten = (value: unknown): string[] => {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return [String(value)]
     if (Array.isArray(value)) return value.flatMap(flatten)
@@ -214,10 +214,20 @@ export async function getDocumentsStatus(workspaceId: string, documentIds: strin
   // With document search off, skip the chunk-count join entirely and report searchable: false.
   if (!config.embeddings.enabled) {
     const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true } })
-    return rows.map((row) => ({ ...row, searchable: false }))
+    return rows.map((row) => ({ ...row, searchable: false, indexing: false }))
   }
-  const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true, _count: { select: { chunks: true } } } })
-  return rows.map(({ _count, ...row }) => ({ ...row, searchable: _count.chunks > 0 }))
+  const rows = await prisma.document.findMany({
+    where,
+    select: {
+      id: true, status: true, errorCode: true, filename: true,
+      _count: { select: { chunks: true } },
+      // Was implied — a poller had to guess indexing was still happening from "not searchable
+      // yet" and a fixed tick budget. This makes it a fact: a queued/processing embed job exists,
+      // full stop, rather than something inferred from the absence of a result.
+      jobs: { where: { type: "embed", status: { in: ["queued", "processing"] } }, select: { id: true }, take: 1 },
+    },
+  })
+  return rows.map(({ _count, jobs, ...row }) => ({ ...row, searchable: _count.chunks > 0, indexing: jobs.length > 0 }))
 }
 
 /** Deletes documents with their stored sources. Quota is deliberately not refunded: the

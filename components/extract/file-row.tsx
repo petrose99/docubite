@@ -9,11 +9,16 @@ import { createPortal } from "react-dom"
 const formatSize = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
 
 function StatusBadge({ staged }: { staged: StagedFile }) {
-  // A second chip once the document has been indexed, next to the extraction status. Renders only
-  // when the searchable flag is set — nothing when document search is off or indexing hasn't run.
-  const searchable = (staged.status === "done" || staged.status === "attention") && staged.searchable
+  // A second chip reflecting document-search indexing, next to the extraction status. Extraction
+  // finishing does not mean embedding has too (lib/document-processing.ts::kickEmbedJob may run it
+  // in a separate invocation) — "Indexing…" makes that gap visible instead of the row just going
+  // quiet until the flag flips. Neither renders when document search is off.
+  const settled = staged.status === "done" || staged.status === "attention"
+  const searchable = settled && staged.searchable
     ? <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-400" title="Indexed for document search — ask the AI Assistant about its contents"><FileSearch className="h-3 w-3" />Searchable</span>
-    : null
+    : settled && staged.indexing
+      ? <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-400" title="Being indexed for document search"><Loader2 className="h-3 w-3 animate-spin" />Indexing…</span>
+      : null
 
   let status: ReactNode = null
   if (staged.status === "uploading") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500"><Loader2 className="h-3 w-3 animate-spin" />Uploading</span>

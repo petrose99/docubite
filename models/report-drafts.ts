@@ -1,8 +1,10 @@
+import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
+import { biasTermsForTemplate } from "@/lib/domains"
 import { buildCompletenessReport, type CompletenessReport } from "@/lib/report-completeness"
 import { NOT_DICTATED, parseNarrativeSections, renderNarrative } from "@/lib/report-render/narrative"
-import { parseSynopticFields, renderSynoptic } from "@/lib/report-render/synoptic"
-import { biasTermsForTemplate } from "@/lib/domains"
+import { parseSynopticFields, renderSynoptic, renderSynopticText, type SynopticLine } from "@/lib/report-render/synoptic"
+import { deriveSynopticFields } from "@/lib/report-templates"
 import type { Prisma } from "@/prisma/client"
 
 /** Report drafting and the sign-off boundary.
@@ -34,16 +36,27 @@ export async function findReportTemplate(workspaceId: string, specimenType: stri
   return prisma.reportTemplate.findFirst({ where: { workspaceId, specimenType: null } })
 }
 
-/** Assembles the full report text: banner (drafts only), synoptic block, then narrative sections. */
+/** The synoptic block's heading. Neutral rather than clinical — "DIAGNOSIS / SYNOPTIC" was
+ * pathology-specific wording that made no sense on a general report, and every consumer that once
+ * looked for that literal (signReport, updateReportDraftNarrative) has been switched to reading
+ * `draft.synoptic` directly instead of parsing this heading back out of rendered text. */
+const SYNOPTIC_HEADING = "SUMMARY"
+
+/** Assembles the full report text: banner (drafts only), title, synoptic block, then narrative
+ * sections. `title` is the dictation's own title (Document.filename or an accepted
+ * `_suggested_title`) — the report otherwise has no name of its own once it stops being "the
+ * pathology report for case #…". */
 export function renderReportText(params: {
   signed: boolean
+  title?: string
   synopticText: string
   narrative: Record<string, string>
   sections: { key: string; title: string }[]
 }): string {
   const blocks: string[] = []
   if (!params.signed) blocks.push(DRAFT_BANNER)
-  if (params.synopticText.trim()) blocks.push(`DIAGNOSIS / SYNOPTIC\n${params.synopticText}`)
+  if (params.title?.trim()) blocks.push(params.title.trim())
+  if (params.synopticText.trim()) blocks.push(`${SYNOPTIC_HEADING}\n${params.synopticText}`)
   for (const section of params.sections) {
     const text = params.narrative[section.key]
     if (text) blocks.push(`${section.title.toUpperCase()}\n${text}`)
@@ -58,16 +71,24 @@ export function renderReportText(params: {
 export async function createReportDraft(input: { workspaceId: string; documentId: string }): Promise<ReportDraftResult | null> {
   const document = await prisma.document.findFirst({
     where: { id: input.documentId, workspaceId: input.workspaceId },
-    select: { id: true, ocrText: true, reviewedData: true, rawExtraction: true, template: { select: { code: true } } },
+    select: { id: true, filename: true, ocrText: true, reviewedData: true, rawExtraction: true, fieldSnapshot: true, template: { select: { code: true } } },
   })
   if (!document) throw new Error("document_not_found")
 
   const values = ((document.reviewedData ?? document.rawExtraction) as Record<string, unknown> | null) ?? {}
+  // Only consulted when it happens to exist — a discover-mode dictation (lib/domains/blank.ts) has
+  // no fixed schema and therefore no specimen_type key at all, so this simply falls through to the
+  // workspace's null-specimenType template, same as findReportTemplate always did for an unmatched
+  // specimen.
   const specimenType = typeof values.specimen_type === "string" ? values.specimen_type : null
   const template = await findReportTemplate(input.workspaceId, specimenType)
   if (!template) return null
 
-  const synopticFields = parseSynopticFields(template.synopticFields)
+  // An empty synopticFields list means "derive from what this document actually has" rather than a
+  // fixed slot list (lib/report-templates.ts) — the general report template's default, and what
+  // makes a discovered field set actually reach the report instead of being invisible once accepted.
+  const templateSlots = parseSynopticFields(template.synopticFields)
+  const synopticFields = templateSlots.length ? templateSlots : deriveSynopticFields(parseTemplateFields(document.fieldSnapshot))
   const sections = parseNarrativeSections(template.narrativeSections)
 
   // Deterministic half first, and independent of the LLM: even if narrative generation fails
@@ -76,7 +97,7 @@ export async function createReportDraft(input: { workspaceId: string; documentId
   const synoptic = renderSynoptic(synopticFields, values)
   const narrative = await renderNarrative(sections, document.ocrText, values, biasTermsForTemplate(document.template?.code))
   const completeness = buildCompletenessReport(synoptic, narrative, Object.fromEntries(sections.map((section) => [section.key, section.title])))
-  const renderedText = renderReportText({ signed: false, synopticText: synoptic.text, narrative, sections })
+  const renderedText = renderReportText({ signed: false, title: document.filename, synopticText: synoptic.text, narrative, sections })
 
   const previous = await prisma.documentReportDraft.findFirst({ where: { documentId: document.id }, orderBy: { version: "desc" }, select: { version: true } })
   const draft = await prisma.documentReportDraft.create({
@@ -86,7 +107,10 @@ export async function createReportDraft(input: { workspaceId: string; documentId
       templateId: template.id,
       status: "draft",
       version: (previous?.version ?? 0) + 1,
-      synoptic: Object.fromEntries(synoptic.lines.map((line) => [line.key, line.value])) as Prisma.InputJsonValue,
+      // The full lines (label, value, missing, required) — not just key->value — so a later
+      // re-render (signReport, updateReportDraftNarrative) can reproduce this exact text without
+      // re-deriving it from live document values, which may have moved on since this draft.
+      synoptic: synoptic.lines as unknown as Prisma.InputJsonValue,
       narrative: narrative as Prisma.InputJsonValue,
       renderedText,
       missingFields: completeness as unknown as Prisma.InputJsonValue,
@@ -109,18 +133,19 @@ export async function createReportDraft(input: { workspaceId: string; documentId
 export async function signReport(input: { workspaceId: string; draftId: string; actorId: string }) {
   const draft = await prisma.documentReportDraft.findFirst({
     where: { id: input.draftId, workspaceId: input.workspaceId },
-    include: { template: true },
+    include: { template: true, document: { select: { filename: true } } },
   })
   if (!draft) throw new Error("report_draft_not_found")
   if (draft.status === "signed") throw new Error("report_already_signed")
 
   const sections = draft.template ? parseNarrativeSections(draft.template.narrativeSections) : []
-  const synopticText = draft.renderedText
-    .split("\n\n")
-    .find((block) => block.startsWith("DIAGNOSIS / SYNOPTIC\n"))
-    ?.replace("DIAGNOSIS / SYNOPTIC\n", "") ?? ""
+  // Re-derived from the stored lines (see createReportDraft), not parsed back out of the previous
+  // renderedText — a heading is UI, not data, and round-tripping through it broke the moment the
+  // heading stopped being a fixed clinical literal.
+  const synopticText = renderSynopticText((draft.synoptic ?? []) as unknown as SynopticLine[])
   const renderedText = renderReportText({
     signed: true,
+    title: draft.document.filename,
     synopticText,
     narrative: (draft.narrative ?? {}) as Record<string, string>,
     sections,
@@ -151,7 +176,7 @@ export async function signReport(input: { workspaceId: string; draftId: string; 
 export async function updateReportDraftNarrative(input: { workspaceId: string; draftId: string; narrative: Record<string, string> }) {
   const draft = await prisma.documentReportDraft.findFirst({
     where: { id: input.draftId, workspaceId: input.workspaceId },
-    include: { template: true },
+    include: { template: true, document: { select: { filename: true } } },
   })
   if (!draft) throw new Error("report_draft_not_found")
   if (draft.status !== "draft") throw new Error("report_already_signed")
@@ -166,16 +191,13 @@ export async function updateReportDraftNarrative(input: { workspaceId: string; d
     return [section.key, text || current[section.key] || NOT_DICTATED]
   }))
 
-  const synopticText = draft.renderedText
-    .split("\n\n")
-    .find((block) => block.startsWith("DIAGNOSIS / SYNOPTIC\n"))
-    ?.replace("DIAGNOSIS / SYNOPTIC\n", "") ?? ""
+  const synopticText = renderSynopticText((draft.synoptic ?? []) as unknown as SynopticLine[])
 
   return prisma.documentReportDraft.update({
     where: { id: draft.id },
     data: {
       narrative: narrative as Prisma.InputJsonValue,
-      renderedText: renderReportText({ signed: false, synopticText, narrative, sections }),
+      renderedText: renderReportText({ signed: false, title: draft.document.filename, synopticText, narrative, sections }),
     },
   })
 }

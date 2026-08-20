@@ -232,7 +232,7 @@ export async function saveExtractionSheetAction(workspaceId: string, fileId: str
 }
 
 /** Interval-polled by the extraction progress hook; deliberately no revalidatePath. */
-export async function getDocumentProcessingStatusAction(workspaceId: string, documentIds: string[]): Promise<ActionState<Array<{ id: string; status: string; errorCode: string | null; filename: string; searchable: boolean }>>> {
+export async function getDocumentProcessingStatusAction(workspaceId: string, documentIds: string[]): Promise<ActionState<Array<{ id: string; status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean }>>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
   try {

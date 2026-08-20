@@ -17,5 +17,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ documentId
 
   if (!document.storageKey) return new Response("Source not available", { status: 410 })
   const body = await readDocumentSource(document.storageKey)
-  return new Response(new Uint8Array(body), { headers: { "content-type": document.mimeType, "content-disposition": `inline; filename="${document.filename.replaceAll('"', "")}"`, "cache-control": "private, no-store" } })
+  return new Response(new Uint8Array(body), { headers: { "content-type": document.mimeType, "content-disposition": contentDisposition(document.filename), "cache-control": "private, no-store" } })
+}
+
+/** `Headers` values must be ByteStrings (Latin-1) — a filename with any character above code point
+ * 255 (an em dash, an accent, non-Latin text) throws at the point of setting the header, not at
+ * render time, so this crashed source-of-truth playback outright rather than showing a mangled
+ * name. RFC 5987's filename* carries the exact UTF-8 name for browsers that understand it; the
+ * plain filename= stays a pure-ASCII fallback (non-ASCII bytes stripped) for anything that doesn't. */
+function contentDisposition(filename: string): string {
+  const asciiFallback = filename.replaceAll('"', "").replace(/[^\x20-\x7e]/g, "_") || "download"
+  const encoded = encodeURIComponent(filename.replaceAll('"', ""))
+  return `inline; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`
 }

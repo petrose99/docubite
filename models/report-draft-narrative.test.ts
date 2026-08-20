@@ -27,8 +27,10 @@ const draft = {
   documentId: "doc-1",
   status: "draft",
   narrative: { gross: "Received fresh.", micro: NOT_DICTATED },
-  renderedText: "*** DRAFT ***\n\nDIAGNOSIS / SYNOPTIC\nDiagnosis: IDC\n\nGROSS DESCRIPTION\nReceived fresh.",
+  synoptic: [{ key: "diagnosis", label: "Diagnosis", value: "IDC", missing: false, required: true }],
+  renderedText: "*** DRAFT ***\n\nSUMMARY\nDiagnosis: IDC\n\nGROSS DESCRIPTION\nReceived fresh.",
   template,
+  document: { filename: "Case 2026-01" },
 }
 
 beforeEach(() => {
@@ -78,7 +80,7 @@ describe("updateReportDraftNarrative", () => {
     const result = await updateReportDraftNarrative({ workspaceId: "w", draftId: "draft-1", narrative: { gross: "Received fresh in formalin." } })
     // The synoptic half is deterministic and is NOT re-derived here; an edit to the prose must not
     // be able to disturb the part of the report that came straight from the dictated values.
-    expect(result.renderedText).toContain("DIAGNOSIS / SYNOPTIC\nDiagnosis: IDC")
+    expect(result.renderedText).toContain("SUMMARY\nDiagnosis: IDC")
     expect(result.renderedText).toContain("Received fresh in formalin.")
     expect(result.renderedText).toContain("NOT FOR CLINICAL USE")
   })

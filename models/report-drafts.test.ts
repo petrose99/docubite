@@ -38,6 +38,24 @@ describe("renderReportText", () => {
     expect(text).toContain("GROSS DESCRIPTION")
     expect(text).not.toContain("MICROSCOPIC")
   })
+
+  it("puts the title right after the banner when both are present", () => {
+    const text = renderReportText({ signed: false, title: "Kitchen inspection — 2026-08-19", synopticText: "Diagnosis: IDC", narrative, sections })
+    const lines = text.split("\n\n")
+    expect(lines[0]).toBe(DRAFT_BANNER)
+    expect(lines[1]).toBe("Kitchen inspection — 2026-08-19")
+  })
+
+  it("omits the title block entirely when none is given", () => {
+    const text = renderReportText({ signed: true, synopticText: "Diagnosis: IDC", narrative, sections })
+    expect(text.split("\n\n")[0]).toBe("SUMMARY\nDiagnosis: IDC")
+  })
+
+  it("uses a neutral SUMMARY heading rather than pathology-specific wording", () => {
+    const text = renderReportText({ signed: true, synopticText: "Diagnosis: IDC", narrative, sections })
+    expect(text).toContain("SUMMARY\nDiagnosis: IDC")
+    expect(text).not.toContain("DIAGNOSIS / SYNOPTIC")
+  })
 })
 
 /** These assert a security property by reading the source, which is unusual but deliberate: the

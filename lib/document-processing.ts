@@ -221,7 +221,7 @@ export async function processDocumentJob(jobId: string) {
       await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: job.document.id, workspaceId: job.document.workspaceId }, error)
       transcribeError = error
     }
-    if (embedJobId) await processDocumentJob(embedJobId).catch(() => {})
+    if (embedJobId) await kickEmbedJob(embedJobId)
     if (transcribeError) throw transcribeError
     return
   }
@@ -369,11 +369,40 @@ export async function processDocumentJob(jobId: string) {
     // searchable even if the LLM field-extraction failed.
     extractError = error
   }
-  // Kick the embed job in-process now that extraction has finished (either way). Awaited so the
-  // serverless after() context keeps the function alive until indexing completes; the embed job's
-  // atomic claim makes this a no-op if the worker already picked it up.
-  if (embedJobId) await processDocumentJob(embedJobId).catch(() => {})
+  // Kick the embed job now that extraction has finished (either way). Awaited so the serverless
+  // after() context keeps the function alive until the kick itself has been dispatched — but see
+  // kickEmbedJob: in detached mode that await only covers sending the request, not the embed
+  // finishing, so this producing job returns as soon as ITS OWN work is done. The embed job's
+  // atomic claim makes this a no-op if a worker or the drain cron already picked it up.
+  if (embedJobId) await kickEmbedJob(embedJobId)
   if (extractError) throw extractError
+}
+
+/** Runs the embed job, or hands it off to run in a separate invocation.
+ *
+ * Default (config.embeddings.detached === false): identical to today — awaited in-process, so the
+ * producing request does not return until the document is fully searchable.
+ *
+ * Detached: a fire-and-forget POST to the internal drain route. The `await` here covers only
+ * DISPATCHING that request, not the embed job completing — that is the entire point, indexing runs
+ * in a separate invocation while this one returns as soon as its own OCR/ASR + LLM work is done. A
+ * dropped or failed kick is not fatal: the job row is already durable and queued, and the drain
+ * cron required by EMBED_DETACHED (see lib/config.ts) picks it up on its next pass regardless. */
+async function kickEmbedJob(jobId: string): Promise<void> {
+  if (!config.embeddings.detached) {
+    await processDocumentJob(jobId).catch(() => {})
+    return
+  }
+  try {
+    await fetch(`${config.app.baseURL}/api/internal/jobs/process`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${config.aws.internalWorkerSecret}` },
+      body: JSON.stringify({ jobId }),
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch {
+    // Swallowed on purpose — see the doc comment above.
+  }
 }
 
 /** Enqueues the embed job for a freshly OCR'd document and persists its ocrText, so indexing can

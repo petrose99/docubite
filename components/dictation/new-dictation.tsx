@@ -22,6 +22,7 @@ export function NewDictation({ workspaceId, templates }: {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
   const [templateCode, setTemplateCode] = useState(templates[0]?.code ?? "")
+  const [title, setTitle] = useState("")
   const [saving, setSaving] = useState(false)
 
   const upload = async (audio: File, note: string) => {
@@ -30,12 +31,11 @@ export function NewDictation({ workspaceId, templates }: {
       const formData = new FormData()
       formData.append("audio", audio)
       formData.append("templateCode", templateCode)
-      // No slashes or colons: cleanFilename runs path.basename over this, so a locale date like
-      // "19/08/2026, 4:38:20 pm" is truncated to its last path segment and the report type is lost
-      // from the title entirely. Formatted piecewise for that reason.
-      const now = new Date()
-      const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}.${String(now.getMinutes()).padStart(2, "0")}`
-      formData.append("filename", `${templates.find((template) => template.code === templateCode)?.name ?? "Dictation"} — ${stamp}`)
+      // Leaving this blank is deliberate: with no fixed template name to fall back on for a
+      // multi-industry dictation, a typed title beats a generic default, and an untyped one falls
+      // through to the server's timestamp-only fallback (dictation-actions.ts) rather than a
+      // composed "{template name} — {stamp}" that no longer names anything specific.
+      if (title.trim()) formData.append("filename", title.trim())
 
       const result = await createDictationAction(workspaceId, formData)
       if (!result.success || !result.data) {
@@ -67,16 +67,28 @@ export function NewDictation({ workspaceId, templates }: {
           <h2 className="text-sm font-semibold text-stone-900">New dictation</h2>
           <p className="mt-0.5 text-xs text-stone-500">Choose the report type first — it sets the vocabulary and the fields.</p>
         </div>
-        <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
-          Report type
-          <select
-            value={templateCode}
-            disabled={saving}
-            onChange={(event) => setTemplateCode(event.target.value)}
-            className="rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-emerald-400 focus:outline-none disabled:opacity-50">
-            {templates.map((template) => <option key={template.code} value={template.code}>{template.name}</option>)}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+            Title
+            <input
+              type="text"
+              value={title}
+              disabled={saving}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Leave blank and we'll suggest one"
+              className="w-56 rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+            Report type
+            <select
+              value={templateCode}
+              disabled={saving}
+              onChange={(event) => setTemplateCode(event.target.value)}
+              className="rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-emerald-400 focus:outline-none disabled:opacity-50">
+              {templates.map((template) => <option key={template.code} value={template.code}>{template.name}</option>)}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="mt-3">

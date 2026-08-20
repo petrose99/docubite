@@ -65,7 +65,7 @@ export const documentFieldSchema = z.object({
   }
 })
 
-export const documentTemplateFieldsSchema = z.array(documentFieldSchema).min(1).max(50).superRefine(uniqueKeysRefinement)
+export const documentTemplateFieldsSchema = z.array(documentFieldSchema).min(0).max(50).superRefine(uniqueKeysRefinement)
 
 export type DocumentFieldDefinition = z.infer<typeof documentFieldSchema>
 
@@ -209,26 +209,33 @@ const provenanceEntrySchema = {
 } as const
 
 export function buildDocumentJsonSchema(fields: DocumentFieldDefinition[]) {
+  // With no fields (discover-mode dictation, lib/field-suggestions.ts), _confidence and _provenance
+  // would each be `{ type: "object", properties: {}, additionalProperties: false }` — a structured-
+  // output schema with no way to ever put anything in it, which providers reject outright. Omitting
+  // both keys is correct anyway: there is nothing to score or cite yet, since every value in this
+  // pass arrives only via `_suggested_fields`, which carries its own confidence and quote per entry.
   return {
     type: "object",
     properties: {
       ...Object.fromEntries(fields.map((field) => [field.key, jsonSchemaProperty(field)])),
-      _confidence: {
-        type: "object",
-        properties: Object.fromEntries(fields.map((field) => [field.key, { type: "number", description: "Confidence from 0 to 1 that this value is correct" }])),
-        additionalProperties: false,
-        description: "A confidence score from 0 to 1 for each top-level field above",
-      },
-      // Listed last, after every value property, so a salvage truncation of an over-long response
-      // drops provenance before it drops any extracted value.
-      _provenance: {
-        type: "object",
-        properties: Object.fromEntries(fields.map((field) => [field.key, field.type === "array"
-          ? { type: "array", items: provenanceEntrySchema, description: "One source-location entry per row, in the same order as the rows" }
-          : provenanceEntrySchema])),
-        additionalProperties: false,
-        description: "For each field above, where in the document the value was found (page and a short verbatim quote)",
-      },
+      ...(fields.length ? {
+        _confidence: {
+          type: "object",
+          properties: Object.fromEntries(fields.map((field) => [field.key, { type: "number", description: "Confidence from 0 to 1 that this value is correct" }])),
+          additionalProperties: false,
+          description: "A confidence score from 0 to 1 for each top-level field above",
+        },
+        // Listed last, after every value property, so a salvage truncation of an over-long response
+        // drops provenance before it drops any extracted value.
+        _provenance: {
+          type: "object",
+          properties: Object.fromEntries(fields.map((field) => [field.key, field.type === "array"
+            ? { type: "array", items: provenanceEntrySchema, description: "One source-location entry per row, in the same order as the rows" }
+            : provenanceEntrySchema])),
+          additionalProperties: false,
+          description: "For each field above, where in the document the value was found (page and a short verbatim quote)",
+        },
+      } : {}),
       _classification: {
         type: "object",
         properties: {

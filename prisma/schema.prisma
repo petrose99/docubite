@@ -375,6 +375,10 @@ model Document {
   /// every word is the machine's.
   transcriptEditedAt   DateTime?             @map("transcript_edited_at")
   transcriptEditedById String?               @map("transcript_edited_by_id") @db.Uuid
+  /// The model's proposed title for a discover-mode dictation (lib/field-suggestions.ts), offered
+  /// as a one-click fill on the verify screen. Never applied automatically — filename stays the
+  /// source of truth for the title shown until a person accepts this or types their own.
+  suggestedTitle       String?               @map("suggested_title")
   aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
   searchText        String                   @default("") @map("search_text")
   ocrText           String                   @default("") @map("ocr_text")

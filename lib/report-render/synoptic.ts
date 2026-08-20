@@ -20,7 +20,10 @@ export const synopticFieldSchema = z.object({
   unit: z.string().max(16).optional(),
 })
 
-export const synopticFieldsSchema = z.array(synopticFieldSchema).min(1).max(100)
+// min(0): an empty synoptic field list is meaningful — it means "derive from the document's own
+// fields at draft time" (models/report-drafts.ts::createReportDraft) rather than a fixed slot
+// list, which is what a template with no predetermined schema needs.
+export const synopticFieldsSchema = z.array(synopticFieldSchema).min(0).max(100)
 export type SynopticField = z.infer<typeof synopticFieldSchema>
 
 export function parseSynopticFields(fields: unknown): SynopticField[] {
@@ -65,6 +68,18 @@ export type SynopticRender = {
   text: string
 }
 
+/** Joins already-computed lines into the synoptic block's text — the same formatting renderSynoptic
+ * uses, factored out so a stored draft's lines (models/report-drafts.ts) can be re-rendered
+ * verbatim without re-deriving them from live document values. An optional slot with nothing
+ * dictated is dropped; a REQUIRED one is never dropped, because its absence is itself information
+ * the reader needs. */
+export function renderSynopticText(lines: SynopticLine[]): string {
+  return lines
+    .filter((line) => !line.missing || line.required)
+    .map((line) => `${line.label}: ${line.value ?? MISSING_MARKER(line.label)}`)
+    .join("\n")
+}
+
 /** Slots the document's values into the template's fields, in template order.
  *
  * Iterates the TEMPLATE, never the values: a value the template does not name cannot appear in the
@@ -77,11 +92,6 @@ export function renderSynoptic(fields: SynopticField[], values: Record<string, u
   return {
     lines,
     missingRequired: lines.filter((line) => line.missing && line.required).map((line) => line.label),
-    text: lines
-      // An optional slot with nothing dictated is dropped; a REQUIRED one is never dropped, because
-      // its absence is itself information the reader needs.
-      .filter((line) => !line.missing || line.required)
-      .map((line) => `${line.label}: ${line.value ?? MISSING_MARKER(line.label)}`)
-      .join("\n"),
+    text: renderSynopticText(lines),
   }
 }

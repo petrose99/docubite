@@ -149,8 +149,8 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
       // extraction finishes, once embedding has run. With document search off it is always false.
       if (polled.status === "queued" || polled.status === "processing") return { ...row, status: "processing" }
       if (polled.status === "failed") return { ...row, status: "failed", error: polled.errorCode?.replaceAll("_", " ") || "Extraction failed" }
-      if (polled.status === "needs_review") return { ...row, status: "attention", searchable: polled.searchable }
-      if (polled.status === "ready_for_review" || polled.status === "reviewed") return { ...row, status: "done", searchable: polled.searchable }
+      if (polled.status === "needs_review") return { ...row, status: "attention", searchable: polled.searchable, indexing: polled.indexing }
+      if (polled.status === "ready_for_review" || polled.status === "reviewed") return { ...row, status: "done", searchable: polled.searchable, indexing: polled.indexing }
       return row
     }))
   }, [statuses])

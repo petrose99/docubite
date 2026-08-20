@@ -3,6 +3,7 @@ import { NewDictation } from "@/components/dictation/new-dictation"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import { parseTemplateFields } from "@/lib/document-templates"
 import { dictationAdapters } from "@/lib/domains"
 import { ensureDictationFile } from "@/models/files"
 import { ensureWorkspaceReportTemplates } from "@/models/report-templates"
@@ -14,9 +15,9 @@ export const dynamic = "force-dynamic"
 
 /** The dictation index: record a new case, or pick up one already recorded.
  *
- * Deliberately not the spreadsheet. A dictated pathology report is a clinical document somebody
- * reads back and signs, not a row — the extract panel's staged-file list was the wrong shape for
- * it and gave speech no front door of its own. */
+ * Deliberately not the spreadsheet. A dictated report is a document somebody reads back and signs,
+ * not a row — the extract panel's staged-file list was the wrong shape for it and gave speech no
+ * front door of its own. */
 export default async function DictationPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params
   // 404 rather than a disabled screen: with no ASR backend there is nothing here to show, and the
@@ -40,7 +41,7 @@ export default async function DictationPage({ params }: { params: Promise<{ work
     take: 100,
     select: {
       id: true, filename: true, status: true, receivedAt: true, errorCode: true,
-      transcriptEditedAt: true, reviewedData: true,
+      transcriptEditedAt: true, reviewedData: true, fieldSnapshot: true,
       template: { select: { name: true, code: true } },
       reportDrafts: { orderBy: { version: "desc" }, take: 1, select: { id: true, version: true, status: true, signedAt: true } },
     },
@@ -74,7 +75,7 @@ export default async function DictationPage({ params }: { params: Promise<{ work
           receivedAt: dictation.receivedAt.toISOString(),
           transcriptEdited: Boolean(dictation.transcriptEditedAt),
           templateName: dictation.template?.name ?? "Dictation",
-          summary: summarise(dictation.reviewedData),
+          summary: summarise(dictation.fieldSnapshot, dictation.reviewedData),
           draft: dictation.reportDrafts[0]
             ? {
                 version: dictation.reportDrafts[0].version,
@@ -88,12 +89,19 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   )
 }
 
-/** A one-line "what case is this" for the list. Reads only the two fields that identify a case;
- * the diagnosis deliberately does not appear in a list view. */
-function summarise(reviewedData: unknown): string | null {
+/** A one-line "what case is this" for the list.
+ *
+ * Reads the document's own field order rather than three hard-coded pathology keys — a discover-
+ * mode dictation (lib/domains/blank.ts) has no accession_no or specimen_type, so a fixed key list
+ * would show nothing for it. The first few populated values, in the order the fields were defined,
+ * are shown instead; capped at three so the list stays scannable. */
+function summarise(fieldSnapshot: unknown, reviewedData: unknown): string | null {
   if (!reviewedData || typeof reviewedData !== "object") return null
   const values = reviewedData as Record<string, unknown>
-  const parts = [values.accession_no, values.specimen_type, values.anatomical_site]
+  const fields = parseTemplateFields(fieldSnapshot)
+  const parts = fields
+    .map((field) => values[field.key])
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .slice(0, 3)
   return parts.length ? parts.join(" · ") : null
 }

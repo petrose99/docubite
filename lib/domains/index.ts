@@ -1,4 +1,5 @@
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
+import { BLANK_BIAS_TERMS, BLANK_TEMPLATES } from "@/lib/domains/blank"
 import { FINANCE_BIAS_TERMS, FINANCE_TEMPLATES } from "@/lib/domains/finance"
 import { LOGISTICS_BIAS_TERMS, LOGISTICS_TEMPLATES } from "@/lib/domains/logistics"
 import { PATHOLOGY_BIAS_TERMS, PATHOLOGY_TEMPLATES } from "@/lib/domains/pathology"
@@ -19,7 +20,7 @@ export type DomainAdapter = {
   name: string
   documentType: string
   /** The domain this template belongs to, for domain-scoped queries and ASR term selection. */
-  domain: "finance" | "pathology" | "logistics"
+  domain: "finance" | "pathology" | "logistics" | "general"
   isSystem: boolean
   multiRow: boolean
   fields: DocumentFieldDefinition[]
@@ -27,6 +28,10 @@ export type DomainAdapter = {
   prompt: string | null
   /** Vocabulary the ASR backend is biased towards for this domain (Stage 3). */
   biasTerms: readonly string[]
+  /** True for domains with no fixed schema: field approvals are per-document (the document's own
+   * fieldSnapshot), never a shared DocumentTemplateVersion, so one dictation never inherits another
+   * unrelated dictation's discovered fields. Undefined/false for every hard-coded industry pack. */
+  ephemeral?: boolean
 }
 
 /** The packs are `as const` for their literal types; parseTemplateFields is what turns their field
@@ -38,12 +43,13 @@ function pack(
   domain: DomainAdapter["domain"],
   biasTerms: readonly string[],
   prompt: string | null = null,
+  ephemeral = false,
 ): DomainAdapter[] {
   return templates.map((template) => ({
     code: template.code, name: template.name, documentType: template.documentType, domain,
     isSystem: template.isSystem, multiRow: template.multiRow,
     fields: template.fields as DocumentFieldDefinition[],
-    prompt, biasTerms,
+    prompt, biasTerms, ephemeral,
   }))
 }
 
@@ -57,6 +63,7 @@ export const DOMAIN_ADAPTERS: DomainAdapter[] = [
   ...pack(FINANCE_TEMPLATES, "finance", FINANCE_BIAS_TERMS),
   ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT),
   ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS),
+  ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true),
 ]
 
 export function findDomainAdapter(code: string | null | undefined): DomainAdapter | null {
@@ -72,7 +79,7 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
  *
  * Lives here rather than beside the actions because a "use server" module may only export async
  * functions, so a constant cannot sit in one. */
-export const DICTATION_TEMPLATE_CODES = ["pathology_report"] as const
+export const DICTATION_TEMPLATE_CODES = ["general_report"] as const
 
 /** The adapters behind DICTATION_TEMPLATE_CODES, skipping any code with no registered pack so a
  * typo removes one option rather than breaking the page. */
@@ -87,4 +94,4 @@ export function biasTermsForTemplate(code: string | null | undefined): string[] 
   return [...(findDomainAdapter(code)?.biasTerms ?? [])]
 }
 
-export { FINANCE_TEMPLATES, LOGISTICS_TEMPLATES, PATHOLOGY_TEMPLATES }
+export { BLANK_TEMPLATES, FINANCE_TEMPLATES, LOGISTICS_TEMPLATES, PATHOLOGY_TEMPLATES }

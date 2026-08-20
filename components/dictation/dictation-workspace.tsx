@@ -1,5 +1,6 @@
 "use client"
 
+import { renameDictationAction } from "@/app/(app)/workspaces/[workspaceId]/dictation-actions"
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import { ReportPane } from "@/components/dictation/report-pane"
 import { SuggestedFields, type PendingFieldSuggestion } from "@/components/dictation/suggested-fields"
@@ -10,14 +11,16 @@ import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { CompletenessReport } from "@/lib/report-completeness"
 import type { FUniver } from "@univerjs/presets"
-import { ArrowLeft, Loader2, Sparkles, TriangleAlert } from "lucide-react"
+import { ArrowLeft, Check, FileSearch, Loader2, Pencil, Sparkles, TriangleAlert, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
 export type DictationDocument = {
   id: string
   filename: string
+  suggestedTitle: string | null
   status: string
   errorCode: string | null
   mimeType: string
@@ -49,7 +52,7 @@ export type DictationDraft = {
  * the thing you have to go looking for. */
 export function DictationWorkspace({
   workspaceId, document, fields, values, fieldConfidence, missingRequiredFields, unsupportedFields,
-  provenance, draft, draftHistory, sections, reportTemplateName, documentSearchEnabled, fieldSuggestions,
+  provenance, draft, draftHistory, sections, reportTemplateName, documentSearchEnabled, indexing, searchable, fieldSuggestions,
 }: {
   workspaceId: string
   document: DictationDocument
@@ -64,6 +67,8 @@ export function DictationWorkspace({
   sections: { key: string; title: string }[]
   reportTemplateName: string | null
   documentSearchEnabled: boolean
+  indexing: boolean
+  searchable: boolean
   fieldSuggestions: PendingFieldSuggestion[]
 }) {
   const router = useRouter()
@@ -87,6 +92,15 @@ export function DictationWorkspace({
   const failed = document.status === "failed"
   const signed = draft?.status === "signed"
 
+  // Refreshes server data while the embed job is still in flight, so the Indexing… pill above
+  // flips to Searchable on its own rather than needing a manual reload. Stops the moment either
+  // flag settles — indexing false or searchable true both end the loop.
+  useEffect(() => {
+    if (!indexing || searchable) return
+    const timer = setInterval(() => router.refresh(), 3000)
+    return () => clearInterval(timer)
+  }, [indexing, searchable, router])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-3 border-b border-stone-200 bg-white px-4 py-2.5">
@@ -96,12 +110,19 @@ export function DictationWorkspace({
           <ArrowLeft className="h-4 w-4" />Dictation
         </Link>
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold text-stone-900">{document.filename}</h1>
+          <DictationTitle workspaceId={workspaceId} documentId={document.id} filename={document.filename} suggestedTitle={document.suggestedTitle} />
           <p className="truncate text-xs text-stone-500">{document.templateName} · {new Date(document.receivedAt).toLocaleString()}</p>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
           {transcribing && <span className="flex items-center gap-1.5 text-xs text-stone-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />Transcribing…</span>}
+          {!transcribing && documentSearchEnabled && (
+            searchable
+              ? <span className="flex items-center gap-1.5 text-xs text-stone-400" title="Indexed for document search"><FileSearch className="h-3.5 w-3.5" />Searchable</span>
+              : indexing
+                ? <span className="flex items-center gap-1.5 text-xs text-stone-400" title="Being indexed for document search"><Loader2 className="h-3.5 w-3.5 animate-spin" />Indexing…</span>
+                : null
+          )}
           {signed && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">Signed</span>}
           {documentSearchEnabled && (
             <button
@@ -168,18 +189,97 @@ export function DictationWorkspace({
             workspaceId={workspaceId}
             apiRef={noGrid}
             surface="dictation"
-            title="Case assistant"
+            title="Assistant"
             className="flex w-80 shrink-0 flex-col border-l bg-stone-50"
             documentSearchEnabled
-            emptyHint="Ask about this case or anything else on record. Answers are quoted from the documents, never interpreted."
+            emptyHint="Ask about this dictation or anything else on record. Answers are quoted from the documents, never interpreted."
             intents={[
-              "What does this dictation say about the margins?",
-              "Have we seen this accession number before?",
-              "Find other cases with the same specimen type",
+              "Summarize what this dictation says",
+              "Have we seen this before?",
+              "Find other dictations like this one",
             ]}
             onClose={() => setAssistantOpen(false)} />
         )}
       </div>
+    </div>
+  )
+}
+
+/** The dictation's title, editable in place. Filename is always the source of truth for what's
+ * shown — a suggestion is offered as a one-click fill (structureTranscript's discover-mode
+ * `_suggested_title`) but never applied automatically, same as every other proposal in this
+ * feature: nothing changes until a person acts on it. */
+function DictationTitle({ workspaceId, documentId, filename, suggestedTitle }: {
+  workspaceId: string
+  documentId: string
+  filename: string
+  suggestedTitle: string | null
+}) {
+  const router = useRouter()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(filename)
+  const [saving, setSaving] = useState(false)
+
+  const rename = async (title: string) => {
+    if (!title.trim() || title.trim() === filename) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      const result = await renameDictationAction(workspaceId, documentId, title.trim())
+      if (!result.success) {
+        toast.error(result.error ?? "Could not rename that dictation")
+        return
+      }
+      setEditing(false)
+      router.refresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          autoFocus
+          value={value}
+          disabled={saving}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void rename(value)
+            if (event.key === "Escape") { setValue(filename); setEditing(false) }
+          }}
+          className="min-w-0 flex-1 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-sm font-semibold text-stone-900 focus:outline-none" />
+        <button type="button" disabled={saving} onClick={() => void rename(value)} className="flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+        </button>
+        <button type="button" disabled={saving} onClick={() => { setValue(filename); setEditing(false) }} className="flex h-6 w-6 items-center justify-center rounded text-stone-500 hover:bg-stone-100 disabled:opacity-50">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => { setValue(filename); setEditing(true) }}
+        className="group flex min-w-0 items-center gap-1.5 text-left">
+        <h1 className="truncate text-sm font-semibold text-stone-900">{filename}</h1>
+        <Pencil className="h-3 w-3 shrink-0 text-stone-300 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+      {suggestedTitle && suggestedTitle !== filename && (
+        <button
+          type="button"
+          onClick={() => void rename(suggestedTitle)}
+          className="shrink-0 truncate rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+          title={`Use suggested title: ${suggestedTitle}`}>
+          Use: {suggestedTitle}
+        </button>
+      )}
     </div>
   )
 }

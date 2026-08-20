@@ -7,6 +7,7 @@ import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { AsrSegment } from "@/lib/asr/types"
 import type { CompletenessReport } from "@/lib/report-completeness"
 import { parseNarrativeSections } from "@/lib/report-render/narrative"
+import { getDocumentsStatus } from "@/models/documents"
 import { listPendingFieldSuggestions } from "@/models/field-suggestions"
 import { findReportTemplate } from "@/models/report-drafts"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -54,14 +55,18 @@ export default async function DictationDetailPage({ params }: { params: Promise<
 
   const latest = document.reportDrafts[0]
   const fieldSuggestions = await listPendingFieldSuggestions(workspaceId, documentId)
+  const [indexStatus] = config.embeddings.enabled ? await getDocumentsStatus(workspaceId, [documentId]) : []
 
   return (
     <DictationWorkspace
       workspaceId={workspaceId}
       documentSearchEnabled={config.embeddings.enabled}
+      indexing={indexStatus?.indexing ?? false}
+      searchable={indexStatus?.searchable ?? false}
       document={{
         id: document.id,
         filename: document.filename,
+        suggestedTitle: document.suggestedTitle,
         status: document.status,
         errorCode: document.errorCode,
         mimeType: document.mimeType,

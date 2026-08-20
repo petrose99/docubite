@@ -88,6 +88,15 @@ const envSchema = z.object({
   // confidently pick the wrong language and return fluent nonsense in it (observed: a 4-second
   // English clip transcribed as Icelandic). A wrong hint degrades accuracy; no hint can destroy it.
   ASR_LANGUAGE: z.string().default("en"),
+  // Off by default: the embed job runs inline, awaited at the tail of whichever job produced the
+  // text (extract or transcribe), exactly as it always has. On, that await is replaced by a
+  // fire-and-forget kick to /api/internal/jobs/process — a SEPARATE invocation embeds the document,
+  // so the producing request returns as soon as its own work (OCR/ASR + LLM) is done. This requires
+  // a drain driver hitting that same route on an interval as the safety net for a dropped kick — an
+  // external cron (e.g. cron-job.org) calling it every minute or so is enough; there is nothing
+  // Vercel-specific about the endpoint. See EMBED_DETACHED in config.embeddings below for the full
+  // gate (also requires INTERNAL_WORKER_SECRET to be set for real).
+  EMBED_DETACHED: z.enum(["true", "false"]).default("false"),
   // Workspace-scope guard (lib/workspace-scope.ts).
   //   off   — no checking. The default in production, because a false positive here is an outage.
   //   warn  — logs every unscoped query without changing behaviour. The default in development,
@@ -133,6 +142,10 @@ const config = {
     dimensions: env.EMBEDDINGS_DIMENSIONS,
     batchSize: env.EMBEDDINGS_BATCH_SIZE,
     timeoutMs: env.EMBEDDINGS_TIMEOUT_MS,
+    // Gated on the worker secret being a REAL secret, not just EMBED_DETACHED=true — detaching
+    // with no working bearer auth means the fire-and-forget kick 401s every time and every embed
+    // silently falls back to whatever drains the queue (nothing, on an unconfigured deployment).
+    detached: env.EMBED_DETACHED === "true" && env.INTERNAL_WORKER_SECRET !== PLACEHOLDER_WORKER_SECRET,
   },
   // Retrieval behaviour on top of the hybrid search. Both are additive and both default to off,
   // so an unconfigured deployment retrieves exactly as it did before Stage 2.

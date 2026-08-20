@@ -48,7 +48,7 @@ function buildNarrativeSchema(sections: NarrativeSection[]) {
 
 export function buildNarrativePrompt(sections: NarrativeSection[], transcript: string, values: Record<string, unknown>, biasTerms: string[]): string {
   return [
-    "You are transcribing a dictated pathology report into named sections. You are NOT writing a report.",
+    "You are transcribing a dictated report into named sections. You are NOT writing a report.",
     "",
     "Absolute rules:",
     "- Use ONLY what the transcript below states. Never add a finding, measurement, diagnosis, or interpretation that was not dictated.",

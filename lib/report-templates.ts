@@ -15,9 +15,10 @@ import type { SynopticField } from "@/lib/report-render/synoptic"
  * `[missing: …]` forever and nobody can tell whether the field was never dictated or the template
  * simply names a field that cannot exist. Deriving makes that class of drift unrepresentable. */
 
-/** Fields excluded from the synoptic block. Not "unimportant" — `patient_id` is a direct
- * identifier, and repeating it inside the report body is a disclosure the header already makes. */
-const SUPPRESSED_SLOTS = new Set(["patient_id"])
+/** Fields excluded from the synoptic block. `patient_id` was pathology's direct identifier — kept
+ * as a mechanism (a future hard-coded pack can populate it again) but empty now that the default
+ * seed is the generic, industry-agnostic template and has no identifier field of its own to name. */
+const SUPPRESSED_SLOTS = new Set<string>([])
 
 /** Units for slots where the extraction schema stores a bare number. Keyed by field key, so adding
  * a measured field to the domain pack without a unit here renders the number alone rather than
@@ -77,14 +78,48 @@ export type ReportTemplateSeed = {
   narrativeSections: NarrativeSection[]
 }
 
-const pathology = PATHOLOGY_TEMPLATES[0]
-
-export const DEFAULT_REPORT_TEMPLATES: ReportTemplateSeed[] = [
+/** The prose half of a generic report — two sections rather than pathology's four, since a
+ * general-purpose dictation has no fixed clinical structure to describe. */
+const GENERAL_NARRATIVE_SECTIONS: NarrativeSection[] = [
   {
-    name: pathology.name,
-    specimenType: null,
-    documentTemplateCode: pathology.code,
-    synopticFields: deriveSynopticFields(parseTemplateFields(pathology.fields)),
-    narrativeSections: PATHOLOGY_NARRATIVE_SECTIONS,
+    key: "summary",
+    title: "Summary",
+    instruction: "A concise summary of what was dictated. Do not add anything not actually said.",
+  },
+  {
+    key: "details",
+    title: "Details",
+    instruction: "Any further detail, observation, or note the speaker made that belongs in the body rather than the summary.",
   },
 ]
+
+/** ensureWorkspaceReportTemplates upserts by name and never overwrites an existing row (see
+ * models/report-templates.ts), so a workspace that already has a pathology report template from
+ * before this change keeps it untouched — this list only decides what a workspace gets when it has
+ * NOTHING yet. Pathology's template seed is deliberately not listed here any more: it remains
+ * addressable (findReportTemplate can still be pointed at a pathology-specimen row directly, and
+ * the pack itself is unwired, not deleted, from lib/domains/index.ts), it just is not what a new
+ * workspace starts with. */
+export const DEFAULT_REPORT_TEMPLATES: ReportTemplateSeed[] = [
+  {
+    name: "General report",
+    specimenType: null,
+    documentTemplateCode: "general_report",
+    // Empty means "derive from the document's own fields at draft time" (deriveSynopticFields,
+    // called from createReportDraft) rather than a fixed slot list — the whole point of a template
+    // with no predetermined schema.
+    synopticFields: [],
+    narrativeSections: GENERAL_NARRATIVE_SECTIONS,
+  },
+]
+
+/** Kept for the pathology pack, which is unwired but not deleted (lib/domains/index.ts) — a
+ * workspace that wants to opt back into structured pathology reporting can still be pointed at
+ * this seed directly; it is simply no longer part of DEFAULT_REPORT_TEMPLATES. */
+export const PATHOLOGY_REPORT_TEMPLATE: ReportTemplateSeed = {
+  name: PATHOLOGY_TEMPLATES[0].name,
+  specimenType: null,
+  documentTemplateCode: PATHOLOGY_TEMPLATES[0].code,
+  synopticFields: deriveSynopticFields(parseTemplateFields(PATHOLOGY_TEMPLATES[0].fields)),
+  narrativeSections: PATHOLOGY_NARRATIVE_SECTIONS,
+}

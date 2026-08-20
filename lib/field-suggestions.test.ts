@@ -1,11 +1,60 @@
 import { describe, expect, it } from "vitest"
-import { buildFieldSuggestionInstructions, parseSuggestedTranscriptFields, suggestedFieldsSchemaProperty } from "@/lib/field-suggestions"
+import { buildDocumentJsonSchema } from "@/lib/document-templates"
+import {
+  buildFieldSuggestionInstructions, parseSuggestedTitle, parseSuggestedTranscriptFields,
+  suggestedFieldsSchemaProperty, suggestedTitleSchemaProperty,
+} from "@/lib/field-suggestions"
 
 describe("buildFieldSuggestionInstructions", () => {
-  it("frames suggestions as a last resort, not an invitation", () => {
-    const instructions = buildFieldSuggestionInstructions()
+  it("frames supplement-mode suggestions as a last resort, not an invitation", () => {
+    const instructions = buildFieldSuggestionInstructions("supplement")
     expect(instructions).toContain("_suggested_fields")
     expect(instructions).toContain("cannot be placed")
+  })
+
+  it("defaults to supplement mode when no mode is given", () => {
+    expect(buildFieldSuggestionInstructions()).toEqual(buildFieldSuggestionInstructions("supplement"))
+  })
+
+  it("flips discover mode to propose a field per stated fact, and asks for a title", () => {
+    const instructions = buildFieldSuggestionInstructions("discover")
+    expect(instructions).toContain("no predefined fields")
+    expect(instructions).toContain("_suggested_title")
+    expect(instructions).not.toContain("cannot be placed")
+  })
+})
+
+describe("suggestedTitleSchemaProperty", () => {
+  it("is a plain string property", () => {
+    expect(suggestedTitleSchemaProperty().type).toBe("string")
+  })
+})
+
+describe("parseSuggestedTitle", () => {
+  it("extracts and trims a title", () => {
+    expect(parseSuggestedTitle({ _suggested_title: "  Kitchen inspection  " })).toBe("Kitchen inspection")
+  })
+
+  it("returns null rather than a placeholder when absent or malformed", () => {
+    expect(parseSuggestedTitle({})).toBeNull()
+    expect(parseSuggestedTitle({ _suggested_title: "" })).toBeNull()
+    expect(parseSuggestedTitle({ _suggested_title: 42 })).toBeNull()
+    expect(parseSuggestedTitle(null)).toBeNull()
+  })
+})
+
+describe("buildDocumentJsonSchema with no fields (discover mode)", () => {
+  it("omits _confidence and _provenance, which would otherwise be unsatisfiable empty-object schemas", () => {
+    const schema = buildDocumentJsonSchema([])
+    expect(schema.properties).not.toHaveProperty("_confidence")
+    expect(schema.properties).not.toHaveProperty("_provenance")
+    expect(schema.properties).toHaveProperty("_classification")
+  })
+
+  it("still emits both when fields are present", () => {
+    const schema = buildDocumentJsonSchema([{ key: "diagnosis", label: "Diagnosis", type: "string", instruction: "", required: true }])
+    expect(schema.properties).toHaveProperty("_confidence")
+    expect(schema.properties).toHaveProperty("_provenance")
   })
 })
 
@@ -58,10 +107,16 @@ describe("parseSuggestedTranscriptFields", () => {
     expect(result).toEqual([{ key: "extra_note", label: "Extra Note", type: "string", instruction: "", value: "something odd", quote: "", confidence: null }])
   })
 
-  it("caps the number of suggestions so one dictation cannot flood the review queue", () => {
+  it("caps supplement-mode suggestions at 6 so one dictation cannot flood the review queue", () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ key: `field_${i}`, label: `Field ${i}`, type: "string", value: "x" }))
     const result = parseSuggestedTranscriptFields({ _suggested_fields: many }, new Set())
-    expect(result.length).toBeLessThanOrEqual(6)
+    expect(result).toHaveLength(6)
+  })
+
+  it("caps discover-mode suggestions at 24 — here proposing fields IS the extraction", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ key: `field_${i}`, label: `Field ${i}`, type: "string", value: "x" }))
+    const result = parseSuggestedTranscriptFields({ _suggested_fields: many }, new Set(), "discover")
+    expect(result).toHaveLength(24)
   })
 
   it("tolerates a missing or malformed _suggested_fields", () => {

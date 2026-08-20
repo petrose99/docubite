@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-export type TrackedDocumentStatus = { status: string; errorCode: string | null; filename: string; searchable: boolean }
+export type TrackedDocumentStatus = { status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean }
 
 const TERMINAL_STATUSES = new Set(["ready_for_review", "needs_review", "reviewed", "failed"])
 const POLL_MS = 2500
-/** After a document reaches a terminal success it may still be embedding, so its searchable flag
- * lags. When trackSearchable is on we keep polling that one document for at most this many extra
- * ticks (~60s at POLL_MS) — a bound so a disabled or stuck embed pipeline can never keep the poller
- * alive indefinitely. */
+/** Backstop only. Whether to keep polling a settled document is now driven by the real `indexing`
+ * flag (an actual queued/processing embed job, models/documents.ts::getDocumentsStatus) — this cap
+ * exists only in case that flag is somehow stuck on, so a disabled or wedged embed pipeline can
+ * never keep the poller alive indefinitely (~60s at POLL_MS). */
 const MAX_INDEX_TICKS = 24
 
 /** Polls processing status for the documents of the current upload batch (plus any ids
@@ -28,9 +28,10 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
   const [statuses, setStatuses] = useState<Record<string, TrackedDocumentStatus>>({})
   const tracked = useRef(new Set<string>(seedIds))
   const lastSeen = useRef<Record<string, string>>({})
-  // The last searchable flag seen per document, and how many extra ticks each has spent waiting for
-  // it — the bound that lets polling stop once indexing has (or never will) caught up.
+  // The last searchable/indexing flags seen per document, and how many extra ticks each has spent
+  // waiting — the backstop that lets polling stop even if the real `indexing` signal gets stuck.
   const lastSearchable = useRef<Record<string, boolean>>({})
+  const lastIndexing = useRef<Record<string, boolean>>({})
   const indexTicks = useRef<Record<string, number>>({})
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   const polling = useRef(false)
@@ -48,6 +49,9 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
       const status = lastSeen.current[id] || ""
       if (!TERMINAL_STATUSES.has(status)) return true
       if (!trackSearchable || status === "failed" || lastSearchable.current[id]) return false
+      // Real signal first — an actual queued/processing embed job. The tick cap only backstops a
+      // flag that is somehow stuck true; it doesn't decide when to stop under normal operation.
+      if (lastIndexing.current[id] === false) return false
       return (indexTicks.current[id] ?? 0) < MAX_INDEX_TICKS
     }
     const pending = [...tracked.current].filter(isPending)
@@ -62,7 +66,7 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
       const settled: string[] = []
       const next: Record<string, TrackedDocumentStatus> = {}
       for (const row of result.data) {
-        next[row.id] = { status: row.status, errorCode: row.errorCode, filename: row.filename, searchable: row.searchable }
+        next[row.id] = { status: row.status, errorCode: row.errorCode, filename: row.filename, searchable: row.searchable, indexing: row.indexing }
         const wasTerminal = TERMINAL_STATUSES.has(lastSeen.current[row.id] || "")
         if (!wasTerminal && TERMINAL_STATUSES.has(row.status)) {
           transitioned = true
@@ -75,6 +79,7 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
         // The searchable flag flips silently — no toast. Count the ticks a settled document spends
         // still un-indexed so the bounded poll above eventually gives up on it.
         lastSearchable.current[row.id] = row.searchable
+        lastIndexing.current[row.id] = row.indexing
         if (trackSearchable && TERMINAL_STATUSES.has(row.status) && row.status !== "failed" && !row.searchable) {
           indexTicks.current[row.id] = (indexTicks.current[row.id] ?? 0) + 1
         }
@@ -96,6 +101,7 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
       tracked.current.add(id)
       delete lastSeen.current[id]
       delete lastSearchable.current[id]
+      delete lastIndexing.current[id]
       delete indexTicks.current[id]
     }
     if (ids.length && !timer.current) {

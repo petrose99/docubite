@@ -8,8 +8,9 @@ import { processDocumentJob } from "@/lib/document-processing"
 import { restructureFromTranscript } from "@/lib/document-transcription"
 import { dictationAdapters } from "@/lib/domains"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
-import { createDocumentFromBuffer, deleteWorkspaceDocuments } from "@/models/documents"
-import { acceptFieldSuggestion, dismissFieldSuggestion } from "@/models/field-suggestions"
+import { cleanFilename, createDocumentFromBuffer, deleteWorkspaceDocuments, searchableText } from "@/models/documents"
+import type { DocumentFieldDefinition } from "@/lib/document-templates"
+import { acceptFieldSuggestion, acceptFieldSuggestions, dismissFieldSuggestion, dismissFieldSuggestions } from "@/models/field-suggestions"
 import { ensureDictationFile } from "@/models/files"
 import { updateReportDraftNarrative } from "@/models/report-drafts"
 import { ensureWorkspaceReportTemplates, updateReportTemplate } from "@/models/report-templates"
@@ -135,6 +136,39 @@ export async function dismissFieldSuggestionAction(workspaceId: string, document
   }
 }
 
+/** Accepts several proposals at once — the discover-mode path, where a whole field set arrives
+ * together and reviewing them one Accept click at a time would mean one template version per
+ * field. Each item may carry the person's edit to the label, type, or value made on the verify
+ * screen before accepting; omitted fields fall back to what the model proposed. */
+export async function acceptFieldSuggestionsAction(
+  workspaceId: string,
+  documentId: string,
+  items: { suggestionId: string; label?: string; type?: DocumentFieldDefinition["type"]; value?: string }[],
+): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    await acceptFieldSuggestions({ workspaceId, documentId, actorId: user.id, items })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    return { success: true, data: null }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not add those fields") }
+  }
+}
+
+/** Declines every pending proposal on the document at once ("Dismiss all"). */
+export async function dismissFieldSuggestionsAction(workspaceId: string, documentId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    await dismissFieldSuggestions({ workspaceId, documentId, actorId: user.id })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    return { success: true, data: null }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not dismiss those suggestions") }
+  }
+}
+
 export async function updateDraftNarrativeAction(workspaceId: string, draftId: string, narrative: Record<string, string>): Promise<ActionState<{ renderedText: string }>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
@@ -163,6 +197,28 @@ export async function updateReportTemplateAction(workspaceId: string, templateId
     // A Zod failure here means a slot key or a section key is malformed, which the renderer looks
     // values up by — so it is refused at save time rather than at the moment somebody presses Draft.
     return { success: false, error: errorMessage(error, "Could not save that template") }
+  }
+}
+
+/** Renames a dictation, either from a typed title or a one-click accept of the model's
+ * `_suggested_title` (structureTranscript, discover mode only). searchText is recomputed so a
+ * rename is findable immediately, not just after the next re-extraction. */
+export async function renameDictationAction(workspaceId: string, documentId: string, title: string): Promise<ActionState<{ filename: string }>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  const filename = cleanFilename(title)
+  try {
+    const document = await prisma.document.findFirst({ where: { id: documentId, workspaceId, source: "dictation" }, select: { id: true, reviewedData: true } })
+    if (!document) return { success: false, error: "Dictation not found" }
+    await prisma.document.update({
+      where: { id: document.id },
+      data: { filename, searchText: searchableText((document.reviewedData as Record<string, unknown> | null) ?? {}, filename) },
+    })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    revalidatePath(paths(workspaceId).dictation)
+    return { success: true, data: { filename } }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not rename that dictation") }
   }
 }
 
