@@ -379,6 +379,11 @@ model Document {
   /// as a one-click fill on the verify screen. Never applied automatically — filename stays the
   /// source of truth for the title shown until a person accepts this or types their own.
   suggestedTitle       String?               @map("suggested_title")
+  /// Agnostic dictation's routing decision (lib/dictation/pipeline.ts): { intent, format,
+  /// formatSource, routeScore, routeVia, commands }. Null for anything drafted before this feature,
+  /// and for a dictation whose entry point never runs the router/extraction at all. Informational —
+  /// nothing downstream currently branches on it being present.
+  dictationRouting Json?                    @map("dictation_routing")
   aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
   searchText        String                   @default("") @map("search_text")
   ocrText           String                   @default("") @map("ocr_text")

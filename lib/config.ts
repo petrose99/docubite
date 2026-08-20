@@ -107,6 +107,22 @@ const envSchema = z.object({
   // Postgres row-level security (lib/db-rls.ts). The deeper guarantee, and the riskier change;
   // gated so it can be rolled back without a redeploy, and only after DB_SCOPE_GUARD=throw holds.
   DB_RLS_ENABLED: z.string().optional(),
+  // Agnostic dictation: routes a free-form dictation to a task type and output format instead of
+  // requiring a pre-selected template. Off by default — see lib/dictation/router.ts.
+  DICTATION_ROUTER_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Cosine-similarity floor a route must clear to be used. Below it (or on any router failure) the
+  // dictation falls through to the general handler rather than forcing a wrong route.
+  //
+  // 0.65, not a rounder number: calibrated live against the real embedding model (BAAI/bge-base-
+  // en-v1.5) and this file's seed examples, not guessed. Six real dictated-style sentences, one per
+  // route plus one deliberately off-topic ramble, scored 0.675-0.785 for the six on-topic ones and
+  // 0.441 for the ramble — a wide, clean gap. The initial guess of 0.72 sat inside that on-topic
+  // cluster and rejected a genuine logistics dictation (0.675); 0.65 keeps a safety margin above the
+  // ramble while accepting the full on-topic range observed.
+  DICTATION_ROUTE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.65),
+  // Small/fast model for the command/content-separation call (Stage B). Falls back to the main
+  // structuring model when unset — see lib/dictation/extraction.ts.
+  DICTATION_FAST_MODEL_NAME: z.string().optional(),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -186,6 +202,14 @@ const config = {
   isolation: {
     scopeGuard: env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn"),
     rlsEnabled: env.DB_RLS_ENABLED === "true",
+  },
+  // Agnostic dictation (lib/dictation). Off by default and fail-safe by design: with it off, or on
+  // any router/extraction failure, a dictation with no pre-selected template still gets the general
+  // handler's default format — never a forced route, never a blocked recording.
+  dictation: {
+    routerEnabled: env.DICTATION_ROUTER_ENABLED === "true",
+    routeThreshold: env.DICTATION_ROUTE_THRESHOLD,
+    fastModelName: env.DICTATION_FAST_MODEL_NAME || "",
   },
 } as const
 

@@ -6,13 +6,12 @@ import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { processDocumentJob } from "@/lib/document-processing"
 import { restructureFromTranscript } from "@/lib/document-transcription"
-import { dictationAdapters } from "@/lib/domains"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { cleanFilename, createDocumentFromBuffer, deleteWorkspaceDocuments, searchableText } from "@/models/documents"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import { acceptFieldSuggestion, acceptFieldSuggestions, dismissFieldSuggestion, dismissFieldSuggestions } from "@/models/field-suggestions"
-import { ensureDictationFile } from "@/models/files"
-import { updateReportDraftNarrative } from "@/models/report-drafts"
+import { ensureDictationFile, saveDocumentAsTemplate } from "@/models/files"
+import { applyDictationFormatChoice, updateReportDraftNarrative } from "@/models/report-drafts"
 import { ensureWorkspaceReportTemplates, updateReportTemplate } from "@/models/report-templates"
 import { revalidatePath } from "next/cache"
 import { after } from "next/server"
@@ -38,9 +37,8 @@ export async function createDictationAction(workspaceId: string, formData: FormD
   if (!(audio instanceof File) || !audio.size) return { success: false, error: "No recording was received." }
   if (audio.size > MAX_AUDIO_BYTES) return { success: false, error: "That recording is too long to transcribe in one pass." }
 
-  const code = String(formData.get("templateCode") || "")
-  const adapter = dictationAdapters().find((candidate) => candidate.code === code)
-  if (!adapter) return { success: false, error: "Choose a report type." }
+  const templateId = String(formData.get("templateId") || "")
+  if (!templateId) return { success: false, error: "Choose a report type." }
 
   try {
     // Both are idempotent, and both are needed before the first dictation can produce a report:
@@ -50,7 +48,11 @@ export async function createDictationAction(workspaceId: string, formData: FormD
       ensureDictationFile(workspaceId, user.id),
       ensureWorkspaceReportTemplates(workspaceId),
     ])
-    const template = await prisma.documentTemplate.findFirst({ where: { fileId: file.id, code: adapter.code } })
+    // Scoped to this workspace's dictation file, never just an id: a template id from a different
+    // file (or a different workspace) must not be usable here. Covers both the built-in worksheets
+    // (the built-in general_report worksheet) AND any workspace-created template — see "Save as a template" on the
+    // verify screen, which is what makes template mode useful beyond the single blank starting point.
+    const template = await prisma.documentTemplate.findFirst({ where: { id: templateId, workspaceId, fileId: file.id } })
     if (!template) return { success: false, error: "This workspace has no worksheet for that report type." }
 
     const buffer = Buffer.from(await audio.arrayBuffer())
@@ -169,6 +171,23 @@ export async function dismissFieldSuggestionsAction(workspaceId: string, documen
   }
 }
 
+/** Answers Stage 4's clarifying question: the router could not confidently decide this dictation's
+ * intent or output format on its own (lib/dictation/pipeline.ts::checkDictationAmbiguity), so the
+ * verify screen asks the person instead of guessing. Drafts (or re-drafts) the report against the
+ * chosen format and clears the prompt. */
+export async function resolveDictationClarificationAction(workspaceId: string, documentId: string, formatName: string): Promise<ActionState<{ draftId: string; renderedText: string } | null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    const result = await applyDictationFormatChoice({ workspaceId, documentId, formatName })
+    revalidatePath(`${paths(workspaceId).dictation}/${documentId}`)
+    if (!result) return { success: false, error: "This workspace has no report template configured." }
+    return { success: true, data: { draftId: result.draftId, renderedText: result.renderedText } }
+  } catch (error) {
+    return { success: false, error: errorMessage(error, "Could not save that choice") }
+  }
+}
+
 export async function updateDraftNarrativeAction(workspaceId: string, draftId: string, narrative: Record<string, string>): Promise<ActionState<{ renderedText: string }>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
@@ -196,6 +215,25 @@ export async function updateReportTemplateAction(workspaceId: string, templateId
   } catch (error) {
     // A Zod failure here means a slot key or a section key is malformed, which the renderer looks
     // values up by — so it is refused at save time rather than at the moment somebody presses Draft.
+    return { success: false, error: errorMessage(error, "Could not save that template") }
+  }
+}
+
+/** Turns this dictation's discovered fields into a reusable workspace template — the growth path
+ * that makes template mode useful beyond the single blank starting point (models/files.ts has the
+ * mechanism and why it is safe to reuse). Fails on a dictation with no fields yet (nothing to save)
+ * rather than creating an empty template that would just be a second copy of the blank one. */
+export async function saveDictationAsTemplateAction(workspaceId: string, documentId: string, name: string): Promise<ActionState<{ templateId: string }>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  const trimmed = name.trim()
+  if (!trimmed) return { success: false, error: "Give the template a name." }
+  try {
+    const template = await saveDocumentAsTemplate({ workspaceId, documentId, name: trimmed })
+    revalidatePath(paths(workspaceId).dictation)
+    return { success: true, data: { templateId: template.id } }
+  } catch (error) {
+    if (error instanceof Error && error.message === "no_fields_to_save") return { success: false, error: "This dictation has no fields to save yet." }
     return { success: false, error: errorMessage(error, "Could not save that template") }
   }
 }

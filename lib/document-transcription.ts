@@ -3,7 +3,10 @@ import { getAsrBackend } from "@/lib/asr"
 import type { AsrResult } from "@/lib/asr/types"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
-import { biasTermsForTemplate } from "@/lib/domains"
+import { biasTermsForTemplate, findDomainAdapter } from "@/lib/domains"
+import { extractDictationCommands } from "@/lib/dictation/extraction"
+import { checkDictationAmbiguity, resolveDictationRouting } from "@/lib/dictation/pipeline"
+import { routeDictation, type RoutedIntent } from "@/lib/dictation/router"
 import {
   buildDocumentJsonSchema, extractClassification, extractFieldConfidence, extractFieldProvenance,
   findMissingRequiredFields, parseTemplateFields, validateDocumentValues, type DocumentFieldDefinition,
@@ -118,6 +121,7 @@ type TranscribeJobDocument = {
   workspaceId: string
   fileId: string
   templateId: string | null
+  templateVersionId?: string | null
   mimeType: string
   storageKey: string | null
   fieldSnapshot: Prisma.JsonValue
@@ -259,6 +263,92 @@ export async function restructureFromTranscript(workspaceId: string, documentId:
   return structureTranscript(document, { text: document.ocrText, segments, language: config.asr.language, model: "edited" })
 }
 
+/** Agnostic dictation's routing step, run between transcription and structuring.
+ *
+ * Two entry points, one resolution (lib/dictation/pipeline.ts): a dictation recorded against the
+ * blank `general_report` template is agnostic — the embedding router (lib/dictation/router.ts)
+ * decides its intent; anything else is template mode, whose own default format short-circuits the
+ * router entirely. Stage B (lib/dictation/extraction.ts) always runs regardless of mode, since an
+ * explicitly spoken format ("actually make this a table") overrides either source.
+ *
+ * NEVER THROWS and never changes what structureTranscript would have done if this function did not
+ * exist: on any failure the document is returned unchanged and no `dictationRouting` is persisted —
+ * the same "narrow, never break" contract every other router/extraction call in this codebase
+ * follows. Returns the (possibly re-pointed) document for the caller to structure against. */
+async function applyDictationRouting(document: TranscribeJobDocument, transcript: AsrResult): Promise<TranscribeJobDocument> {
+  const startedAt = Date.now()
+  try {
+    const isAgnostic = !document.template || document.template.code === "general_report"
+    const adapterDefaultFormat = document.template ? findDomainAdapter(document.template.code)?.defaultFormat : undefined
+
+    const stageStartedAt = Date.now()
+    const [routed, extraction]: [RoutedIntent, Awaited<ReturnType<typeof extractDictationCommands>>] = await Promise.all([
+      isAgnostic ? routeDictation(transcript.text) : Promise.resolve<RoutedIntent>({ intent: "template", route: null, score: 0, via: "template" }),
+      extractDictationCommands(transcript.text),
+    ])
+    // Stage A and B run in parallel (both only need the transcript), so this one number is the
+    // latency that actually gates the pipeline — not two separately-timed halves that would double-
+    // count the wall-clock cost. Logged as a structured line so p95/p99 can be pulled from
+    // aggregated function logs once deployed; there is no in-app metrics store to write to instead.
+    console.log(`[dictation-routing] stage_ab_ms=${Date.now() - stageStartedAt} document=${document.id}`)
+
+    const routing = resolveDictationRouting({
+      ...(isAgnostic ? {} : { preselectedTemplateFormat: adapterDefaultFormat ?? null }),
+      routed, extraction,
+    })
+    const ambiguity = checkDictationAmbiguity(routing)
+    if (ambiguity.ambiguous) {
+      // Structured and greppable on purpose — the brief asks for these events to inform threshold
+      // tuning and new route examples, and there is no metrics backend in this codebase to send
+      // them to instead. A repeat-detection system (the same workspace hitting this often) would
+      // need its own store and is deliberately not built here — this is the event that one would
+      // be built on top of, not a replacement for it.
+      console.warn(`[dictation-routing] ambiguous reason=${ambiguity.reason} intent=${routing.intent} score=${routing.routeScore.toFixed(3)} threshold=${config.dictation.routeThreshold} document=${document.id}`)
+    }
+
+    // Re-point onto a matching workspace template ONLY for an agnostic dictation that scored a real
+    // route match naming a hint — a route with no hint (email_draft, summary, todo, general_note)
+    // has nothing to look for, and a template-mode dictation already has its schema. Best-effort:
+    // no candidate template, or the lookup itself failing, leaves the document exactly as recorded
+    // (discover mode still runs against the blank schema) rather than blocking on it.
+    let effective = document
+    if (isAgnostic && routed.route?.workspaceTemplateHint) {
+      const candidate = await prisma.documentTemplate.findFirst({
+        where: { workspaceId: document.workspaceId, fileId: document.fileId, code: { not: "general_report" }, name: { contains: routed.route.workspaceTemplateHint, mode: "insensitive" } },
+        include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+      })
+      const version = candidate?.versions[0]
+      if (candidate && version) {
+        await prisma.document.update({
+          where: { id: document.id },
+          data: { templateId: candidate.id, templateVersionId: version.id, fieldSnapshot: version.fields as Prisma.InputJsonValue },
+        })
+        effective = {
+          ...document,
+          templateId: candidate.id, templateVersionId: version.id, fieldSnapshot: version.fields,
+          template: { name: candidate.name, code: candidate.code },
+          templateVersion: { prompt: version.prompt },
+        }
+      }
+    }
+
+    // The format's own sections aren't stored — lib/dictation/formats.ts is the source of truth for
+    // those and can change independently; only the name is a foreign key back into it.
+    const persisted = {
+      intent: routing.intent, format: routing.format.name, formatLabel: routing.format.label,
+      formatSource: routing.formatSource, routeScore: routing.routeScore, routeVia: routing.routeVia,
+      commands: routing.commands, needsClarification: ambiguity.ambiguous, clarificationReason: ambiguity.reason,
+    }
+    await prisma.document.update({ where: { id: document.id }, data: { dictationRouting: persisted as unknown as Prisma.InputJsonValue } })
+
+    console.log(`[dictation-routing] total_ms=${Date.now() - startedAt} document=${document.id} via=${routing.routeVia} format=${routing.format.name}`)
+    return effective
+  } catch (error) {
+    console.error("dictation routing: leaving document unrouted:", error instanceof Error ? error.message : error)
+    return document
+  }
+}
+
 /** The transcribe job handler, mirroring processDocumentJob's contract: it owns claiming through to
  * completion for its own job row, and quota is consumed exactly once per document. */
 export async function processTranscribeJob(job: { id: string; attempts: number; scheduledAt: Date; document: TranscribeJobDocument }) {
@@ -275,7 +365,11 @@ export async function processTranscribeJob(job: { id: string; attempts: number; 
     await prisma.document.update({ where: { id: document.id }, data: { aiQuotaClaimed: true } })
   }
   const transcript = await transcribeDocumentAudio(document)
-  await structureTranscript(document, transcript)
+  // Off by default (DICTATION_ROUTER_ENABLED) — an unconfigured deployment pays no extra LLM call
+  // and structures exactly as it always has. On, this decides intent/format and may re-point an
+  // agnostic dictation onto a matching workspace template before structuring reads its fields.
+  const routedDocument = config.dictation.routerEnabled ? await applyDictationRouting(document, transcript) : document
+  await structureTranscript(routedDocument, transcript)
   await prisma.$transaction([
     prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
     prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } }),

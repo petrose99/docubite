@@ -2,6 +2,7 @@
 // trust a caller-supplied workspaceId that is assumed already authorised, and the directive would
 // publish every export as a callable endpoint. Auth lives in the actions that call these.
 import { prisma } from "@/lib/db"
+import type { DictationFormat } from "@/lib/dictation/formats"
 import { DEFAULT_REPORT_TEMPLATES } from "@/lib/report-templates"
 import { parseNarrativeSections } from "@/lib/report-render/narrative"
 import { parseSynopticFields } from "@/lib/report-render/synoptic"
@@ -31,6 +32,41 @@ export async function ensureWorkspaceReportTemplates(workspaceId: string) {
       isSystem: true,
     },
   })))
+}
+
+/** The name (and lookup key) a format's per-workspace ReportTemplate row is stored under. */
+const formatTemplateName = (label: string) => `Format — ${label}`
+
+/** Gets or creates the ReportTemplate row a resolved dictation format drafts against.
+ *
+ * Agnostic dictation resolves a FORMAT (lib/dictation/pipeline.ts), not a specimen type, so it
+ * cannot go through findReportTemplate's specimenType matching — and must not: sharing
+ * `specimenType: null` with the workspace's real fallback template would make that lookup
+ * nondeterministic between two rows that both claim to be "the" fallback. Instead this is looked up
+ * BY NAME, keyed one-to-one with the format, with `specimenType` set to a value
+ * (`format:<name>`) that can never collide with a real dictated specimen type.
+ *
+ * Upserts on the existing @@unique([workspaceId, name]) with `update: {}`, matching
+ * ensureWorkspaceReportTemplates' policy exactly: a workspace that has since customised this
+ * format's wording in the template editor keeps that customisation on the next dictation that
+ * resolves to the same format, rather than being silently reset to the registry's default text. */
+export async function ensureFormatReportTemplate(workspaceId: string, format: DictationFormat) {
+  const name = formatTemplateName(format.label)
+  return prisma.reportTemplate.upsert({
+    where: { workspaceId_name: { workspaceId, name } },
+    update: {},
+    create: {
+      workspaceId,
+      name,
+      specimenType: `format:${format.name}`,
+      // Empty means "derive from the document's own discovered fields at draft time" — see
+      // deriveSynopticFields / createReportDraft — which is what every agnostic dictation needs
+      // regardless of format, since its field schema is not known ahead of time.
+      synopticFields: [] as unknown as Prisma.InputJsonValue,
+      narrativeSections: format.sections as unknown as Prisma.InputJsonValue,
+      isSystem: true,
+    },
+  })
 }
 
 export async function listReportTemplates(workspaceId: string) {

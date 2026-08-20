@@ -17,11 +17,11 @@ const AUDIO_TYPES = "audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x
  * re-running the whole pipeline on a change of mind, or quietly using the wrong one. */
 export function NewDictation({ workspaceId, templates }: {
   workspaceId: string
-  templates: { code: string; name: string }[]
+  templates: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
-  const [templateCode, setTemplateCode] = useState(templates[0]?.code ?? "")
+  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "")
   const [title, setTitle] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -30,7 +30,7 @@ export function NewDictation({ workspaceId, templates }: {
     try {
       const formData = new FormData()
       formData.append("audio", audio)
-      formData.append("templateCode", templateCode)
+      formData.append("templateId", templateId)
       // Leaving this blank is deliberate: with no fixed template name to fall back on for a
       // multi-industry dictation, a typed title beats a generic default, and an untyped one falls
       // through to the server's timestamp-only fallback (dictation-actions.ts) rather than a
@@ -81,11 +81,11 @@ export function NewDictation({ workspaceId, templates }: {
           <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
             Report type
             <select
-              value={templateCode}
+              value={templateId}
               disabled={saving}
-              onChange={(event) => setTemplateCode(event.target.value)}
+              onChange={(event) => setTemplateId(event.target.value)}
               className="rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-emerald-400 focus:outline-none disabled:opacity-50">
-              {templates.map((template) => <option key={template.code} value={template.code}>{template.name}</option>)}
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
             </select>
           </label>
         </div>
@@ -97,7 +97,7 @@ export function NewDictation({ workspaceId, templates }: {
               <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />Saving the recording…
             </p>
           : <>
-              <DictationRecorder workspaceId={workspaceId} disabled={!templateCode} onComplete={submit} />
+              <DictationRecorder workspaceId={workspaceId} disabled={!templateId} onComplete={submit} />
               {/* Not everything is dictated at a desk. A recording made on a handheld dictaphone or
                   a phone is the same audio taking the same transcribe job, and with audio removed
                   from the extract panel this page is now the only place it can be brought in. */}
@@ -105,7 +105,7 @@ export function NewDictation({ workspaceId, templates }: {
                 <span>Already have a recording?</span>
                 <button
                   type="button"
-                  disabled={!templateCode}
+                  disabled={!templateId}
                   onClick={() => fileInput.current?.click()}
                   className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline disabled:opacity-50">
                   <Upload className="h-3.5 w-3.5" />Upload an audio file

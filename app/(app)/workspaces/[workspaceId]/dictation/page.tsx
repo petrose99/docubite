@@ -4,8 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { parseTemplateFields } from "@/lib/document-templates"
-import { dictationAdapters } from "@/lib/domains"
-import { ensureDictationFile } from "@/models/files"
+import { ensureDictationFile, getFileTemplates } from "@/models/files"
 import { ensureWorkspaceReportTemplates } from "@/models/report-templates"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { Mic } from "lucide-react"
@@ -30,7 +29,7 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   // Idempotent, and cheap after the first visit. Done here rather than in a migration or a startup
   // hook so an existing workspace gets its dictation container and report template the first time
   // somebody actually opens the page.
-  await Promise.all([
+  const [file] = await Promise.all([
     ensureDictationFile(workspaceId, user.id),
     ensureWorkspaceReportTemplates(workspaceId),
   ])
@@ -47,7 +46,17 @@ export default async function DictationPage({ params }: { params: Promise<{ work
     },
   })
 
-  const templates = dictationAdapters().map((adapter) => ({ code: adapter.code, name: adapter.name }))
+  // Every DocumentTemplate in the dictation file, not the fixed lib/domains code list: a workspace
+  // can grow its own templates ("Save as a template" on the verify screen), and those must be
+  // pickable here too. The single built-in row (general_report, isSystem, no fields) is relabeled
+  // "Agnostic" for the picker — it IS the blank-slate template agnostic mode discovers fields onto,
+  // just under a name that says what choosing it does rather than what it's called internally.
+  // getFileTemplates orders isSystem first, so this stays the first option.
+  const fileTemplates = await getFileTemplates(file.id)
+  const templates = fileTemplates.map((template) => ({
+    id: template.id,
+    name: template.code === "general_report" ? "Agnostic — figure it out" : template.name,
+  }))
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 p-6">

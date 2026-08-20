@@ -2,6 +2,8 @@ import { DictationWorkspace } from "@/components/dictation/dictation-workspace"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import { DICTATION_FORMATS } from "@/lib/dictation/formats"
+import { parseDictationRoutingRecord } from "@/lib/dictation/pipeline"
 import { parseTemplateFields } from "@/lib/document-templates"
 import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { AsrSegment } from "@/lib/asr/types"
@@ -77,6 +79,7 @@ export default async function DictationDetailPage({ params }: { params: Promise<
         segments,
         transcriptEditedAt: document.transcriptEditedAt?.toISOString() ?? null,
         transcriptEditedBy: document.transcriptEditedBy?.name || document.transcriptEditedBy?.email || null,
+        dictationRouting: parseDictationRoutingRecord(document.dictationRouting),
       }}
       fields={fields}
       values={values}
@@ -114,6 +117,7 @@ export default async function DictationDetailPage({ params }: { params: Promise<
         quote: suggestion.quote,
         confidence: suggestion.confidence,
       }))}
+      availableFormats={DICTATION_FORMATS.map((format) => ({ name: format.name, label: format.label }))}
     />
   )
 }

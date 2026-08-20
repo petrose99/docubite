@@ -1,17 +1,18 @@
 "use client"
 
-import { renameDictationAction } from "@/app/(app)/workspaces/[workspaceId]/dictation-actions"
+import { renameDictationAction, resolveDictationClarificationAction, saveDictationAsTemplateAction } from "@/app/(app)/workspaces/[workspaceId]/dictation-actions"
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import { ReportPane } from "@/components/dictation/report-pane"
 import { SuggestedFields, type PendingFieldSuggestion } from "@/components/dictation/suggested-fields"
 import { SynopticForm } from "@/components/dictation/synoptic-form"
 import { TranscriptPane } from "@/components/dictation/transcript-pane"
 import type { AsrSegment } from "@/lib/asr/types"
+import type { PersistedDictationRouting } from "@/lib/dictation/pipeline"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { CompletenessReport } from "@/lib/report-completeness"
 import type { FUniver } from "@univerjs/presets"
-import { ArrowLeft, Check, FileSearch, Loader2, Pencil, Sparkles, TriangleAlert, X } from "lucide-react"
+import { ArrowLeft, BookmarkPlus, Check, FileSearch, Loader2, Pencil, Sparkles, TriangleAlert, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -31,6 +32,10 @@ export type DictationDocument = {
   segments: AsrSegment[]
   transcriptEditedAt: string | null
   transcriptEditedBy: string | null
+  /** Agnostic dictation's routing decision (lib/dictation/pipeline.ts), when the feature is on and
+   * this dictation went through it. Null for template-mode dictations recorded before the feature
+   * existed, or with DICTATION_ROUTER_ENABLED off. */
+  dictationRouting: PersistedDictationRouting | null
 }
 
 export type DictationDraft = {
@@ -53,6 +58,7 @@ export type DictationDraft = {
 export function DictationWorkspace({
   workspaceId, document, fields, values, fieldConfidence, missingRequiredFields, unsupportedFields,
   provenance, draft, draftHistory, sections, reportTemplateName, documentSearchEnabled, indexing, searchable, fieldSuggestions,
+  availableFormats,
 }: {
   workspaceId: string
   document: DictationDocument
@@ -70,6 +76,10 @@ export function DictationWorkspace({
   indexing: boolean
   searchable: boolean
   fieldSuggestions: PendingFieldSuggestion[]
+  /** The output-format registry (lib/dictation/formats.ts), for the Stage 4 clarification picker.
+   * Passed as data from the server page rather than imported here — lib/dictation/formats.ts pulls
+   * in the narrative renderer's requestLLM chain, which has no business in a client bundle. */
+  availableFormats: { name: string; label: string }[]
 }) {
   const router = useRouter()
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -111,7 +121,18 @@ export function DictationWorkspace({
         </Link>
         <div className="min-w-0">
           <DictationTitle workspaceId={workspaceId} documentId={document.id} filename={document.filename} suggestedTitle={document.suggestedTitle} />
-          <p className="truncate text-xs text-stone-500">{document.templateName} · {new Date(document.receivedAt).toLocaleString()}</p>
+          <p className="truncate text-xs text-stone-500">
+            {document.templateName} · {new Date(document.receivedAt).toLocaleString()}
+            {document.dictationRouting && (
+              <span
+                className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-600"
+                title={document.dictationRouting.commands.length ? `Spoken: ${document.dictationRouting.commands.join("; ")}` : undefined}>
+                {document.dictationRouting.intent !== "template" && document.dictationRouting.intent !== "general" && <>{document.dictationRouting.intent.replace(/_/g, " ")} · </>}
+                {document.dictationRouting.formatLabel}
+                {document.dictationRouting.formatSource === "explicit" && " (spoken)"}
+              </span>
+            )}
+          </p>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -124,6 +145,9 @@ export function DictationWorkspace({
                 : null
           )}
           {signed && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">Signed</span>}
+          {fields.length > 0 && (
+            <SaveAsTemplateButton workspaceId={workspaceId} documentId={document.id} />
+          )}
           {documentSearchEnabled && (
             <button
               type="button"
@@ -141,6 +165,15 @@ export function DictationWorkspace({
           <TriangleAlert className="h-4 w-4 shrink-0" />
           Transcription failed{document.errorCode ? `: ${document.errorCode.replaceAll("_", " ")}` : ""}. The audio is safe — play it below.
         </p>
+      )}
+
+      {document.dictationRouting?.needsClarification && !signed && (
+        <ClarificationBanner
+          workspaceId={workspaceId}
+          documentId={document.id}
+          reason={document.dictationRouting.clarificationReason}
+          availableFormats={availableFormats}
+          onResolved={() => router.refresh()} />
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -201,6 +234,120 @@ export function DictationWorkspace({
             onClose={() => setAssistantOpen(false)} />
         )}
       </div>
+    </div>
+  )
+}
+
+/** Turns this dictation's discovered fields into a reusable workspace template, so the next
+ * similar case can pick it from the template picker instead of starting agnostic again. Only
+ * rendered when the document has fields to save (dictation-actions.ts refuses an empty save
+ * anyway; this just avoids showing a control that would only ever error). */
+/** Stage 4's confidence gate, surfaced: the router (lib/dictation/pipeline.ts::checkDictationAmbiguity)
+ * was not confident enough to decide this dictation's intent or output format on its own, so this
+ * asks — ONE question, never a second guess layered on top of the first. Answering re-drafts the
+ * report against the chosen format and the banner does not reappear (needsClarification is cleared
+ * server-side by the same action). */
+function ClarificationBanner({ workspaceId, documentId, reason, availableFormats, onResolved }: {
+  workspaceId: string
+  documentId: string
+  reason: "intent" | "format" | null
+  availableFormats: { name: string; label: string }[]
+  onResolved: () => void
+}) {
+  const [formatName, setFormatName] = useState(availableFormats[0]?.name ?? "")
+  const [saving, setSaving] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  const resolve = async () => {
+    if (!formatName) return
+    setSaving(true)
+    try {
+      const result = await resolveDictationClarificationAction(workspaceId, documentId, formatName)
+      if (!result.success) { toast.error(result.error ?? "Could not save that choice"); return }
+      toast.success("Report drafted with that format.")
+      setDismissed(true)
+      onResolved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (dismissed) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+      <span>
+        {reason === "intent"
+          ? "Wasn't sure what kind of dictation this is — pick a format and I'll draft it."
+          : "Wasn't sure how to format this report — pick one and I'll draft it."}
+      </span>
+      <select
+        value={formatName}
+        disabled={saving}
+        onChange={(event) => setFormatName(event.target.value)}
+        className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs text-stone-900 focus:border-amber-500 focus:outline-none disabled:opacity-50">
+        {availableFormats.map((format) => <option key={format.name} value={format.name}>{format.label}</option>)}
+      </select>
+      <button
+        type="button"
+        disabled={saving || !formatName}
+        onClick={resolve}
+        className="flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Use this"}
+      </button>
+      <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="ml-auto rounded-md px-1.5 py-1 text-amber-700 hover:bg-amber-100">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function SaveAsTemplateButton({ workspaceId, documentId }: { workspaceId: string; documentId: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const result = await saveDictationAsTemplateAction(workspaceId, documentId, name.trim())
+      if (!result.success) { toast.error(result.error ?? "Could not save that template"); return }
+      toast.success(`Saved as a template. It will be offered in "Report type" next time.`)
+      setOpen(false)
+      setName("")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 rounded-md border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-50">
+        <BookmarkPlus className="h-3.5 w-3.5" />Save as template
+      </button>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        autoFocus
+        type="text"
+        value={name}
+        disabled={saving}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => { if (event.key === "Enter") void save(); if (event.key === "Escape") setOpen(false) }}
+        placeholder="Template name"
+        className="w-40 rounded-md border border-stone-200 px-2 py-1 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
+      <button type="button" disabled={saving || !name.trim()} onClick={save} className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+      </button>
+      <button type="button" disabled={saving} onClick={() => setOpen(false)} className="rounded-md px-1.5 py-1 text-xs text-stone-500 hover:bg-stone-100">
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }

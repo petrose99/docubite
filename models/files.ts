@@ -117,6 +117,49 @@ export async function ensureDictationFile(workspaceId: string, userId: string) {
   return file
 }
 
+/** Slugifies a name into a template code, appending -2, -3, … on collision within the file. Codes
+ * are the join key DocumentTemplate is @@unique on ([fileId, code]), so this has to actually avoid
+ * a collision rather than just look tidy. */
+async function uniqueTemplateCode(fileId: string, name: string): Promise<string> {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "template"
+  const existing = new Set((await prisma.documentTemplate.findMany({ where: { fileId }, select: { code: true } })).map((row) => row.code))
+  if (!existing.has(base)) return base
+  for (let suffix = 2; ; suffix++) {
+    const candidate = `${base}_${suffix}`
+    if (!existing.has(candidate)) return candidate
+  }
+}
+
+/** Turns one dictation's discovered fields into a reusable workspace template — the growth path
+ * for template mode: today a fresh workspace's dictation file has exactly one template (the blank
+ * general_report starting point), so this is what lets "agnostic once, template from then on"
+ * actually happen for a recurring case.
+ *
+ * A plain, non-ephemeral, non-system DocumentTemplate row: `findDomainAdapter(code)` will not
+ * recognise its code (it is not one of lib/domains' hard-coded packs), so `ephemeral` reads as
+ * false everywhere that checks it (models/field-suggestions.ts) — fields accepted against THIS
+ * template accumulate normally like any user-built worksheet, which is the correct behaviour for
+ * something a person deliberately chose to save and reuse. */
+export async function saveDocumentAsTemplate(input: { workspaceId: string; documentId: string; name: string }) {
+  const document = await prisma.document.findFirst({
+    where: { id: input.documentId, workspaceId: input.workspaceId },
+    select: { fileId: true, fieldSnapshot: true },
+  })
+  if (!document) throw new Error("document_not_found")
+  const fields = parseTemplateFields(document.fieldSnapshot)
+  if (!fields.length) throw new Error("no_fields_to_save")
+
+  const name = cleanName(input.name, "Untitled template")
+  const code = await uniqueTemplateCode(document.fileId, name)
+  return prisma.documentTemplate.create({
+    data: {
+      workspaceId: input.workspaceId, fileId: document.fileId, code, name, documentType: code,
+      isSystem: false, multiRow: false,
+      versions: { create: { version: 1, fields: fields as unknown as Prisma.InputJsonValue } },
+    },
+  })
+}
+
 export type FileListItem = Awaited<ReturnType<typeof listFiles>>[number]
 
 export async function listFiles(workspaceId: string, options: { folderId?: string | null; query?: string; sort?: FileSortField; dir?: "asc" | "desc" } = {}) {

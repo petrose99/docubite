@@ -1,10 +1,13 @@
 import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
 import { biasTermsForTemplate } from "@/lib/domains"
+import { parseDictationRoutingRecord } from "@/lib/dictation/pipeline"
+import { resolveFormat } from "@/lib/dictation/formats"
 import { buildCompletenessReport, type CompletenessReport } from "@/lib/report-completeness"
 import { NOT_DICTATED, parseNarrativeSections, renderNarrative } from "@/lib/report-render/narrative"
 import { parseSynopticFields, renderSynoptic, renderSynopticText, type SynopticLine } from "@/lib/report-render/synoptic"
 import { deriveSynopticFields } from "@/lib/report-templates"
+import { ensureFormatReportTemplate } from "@/models/report-templates"
 import type { Prisma } from "@/prisma/client"
 
 /** Report drafting and the sign-off boundary.
@@ -71,17 +74,21 @@ export function renderReportText(params: {
 export async function createReportDraft(input: { workspaceId: string; documentId: string }): Promise<ReportDraftResult | null> {
   const document = await prisma.document.findFirst({
     where: { id: input.documentId, workspaceId: input.workspaceId },
-    select: { id: true, filename: true, ocrText: true, reviewedData: true, rawExtraction: true, fieldSnapshot: true, template: { select: { code: true } } },
+    select: { id: true, filename: true, ocrText: true, reviewedData: true, rawExtraction: true, fieldSnapshot: true, dictationRouting: true, template: { select: { code: true } } },
   })
   if (!document) throw new Error("document_not_found")
 
   const values = ((document.reviewedData ?? document.rawExtraction) as Record<string, unknown> | null) ?? {}
-  // Only consulted when it happens to exist — a discover-mode dictation (lib/domains/blank.ts) has
-  // no fixed schema and therefore no specimen_type key at all, so this simply falls through to the
-  // workspace's null-specimenType template, same as findReportTemplate always did for an unmatched
-  // specimen.
-  const specimenType = typeof values.specimen_type === "string" ? values.specimen_type : null
-  const template = await findReportTemplate(input.workspaceId, specimenType)
+
+  // Agnostic dictation resolves a FORMAT (lib/dictation/pipeline.ts), which selects a template by
+  // name rather than by specimen type — see ensureFormatReportTemplate for why the two lookups
+  // cannot share the specimenType channel. Absent (the common case: DICTATION_ROUTER_ENABLED off,
+  // or a template-mode dictation with routing never run) falls through to the specimen-type lookup
+  // exactly as before this feature existed.
+  const routing = parseDictationRoutingRecord(document.dictationRouting)
+  const template = routing
+    ? await ensureFormatReportTemplate(input.workspaceId, resolveFormat(routing.format))
+    : await findReportTemplate(input.workspaceId, typeof values.specimen_type === "string" ? values.specimen_type : null)
   if (!template) return null
 
   // An empty synopticFields list means "derive from what this document actually has" rather than a
@@ -95,7 +102,16 @@ export async function createReportDraft(input: { workspaceId: string; documentId
   // entirely, the synoptic block — the part carrying the diagnosis — is still exactly the
   // dictated values with visible markers where there were none.
   const synoptic = renderSynoptic(synopticFields, values)
-  const narrative = await renderNarrative(sections, document.ocrText, values, biasTermsForTemplate(document.template?.code))
+  // Stage B (lib/dictation/extraction.ts) separates spoken META-COMMANDS ("make this a table")
+  // from the dictated CONTENT, but only for routing/format resolution — it was never wired into
+  // what the narrative half actually reads, so a command survived verbatim into a drafted report
+  // (caught live: "Make this a table." showed up under DETAILS). `commands` are the model's own
+  // verbatim quotes of what it excluded, so stripping those exact substrings out of the transcript
+  // here gets the same effect without needing to persist Stage B's full cleaned_content separately.
+  const narrativeSource = routing?.commands.length
+    ? routing.commands.reduce((text, command) => text.split(command).join(" "), document.ocrText).replace(/\s+/g, " ").trim()
+    : document.ocrText
+  const narrative = await renderNarrative(sections, narrativeSource, values, biasTermsForTemplate(document.template?.code))
   const completeness = buildCompletenessReport(synoptic, narrative, Object.fromEntries(sections.map((section) => [section.key, section.title])))
   const renderedText = renderReportText({ signed: false, title: document.filename, synopticText: synoptic.text, narrative, sections })
 
@@ -208,4 +224,32 @@ export async function getReportDraft(workspaceId: string, draftId: string) {
 
 export async function listDocumentReportDrafts(workspaceId: string, documentId: string) {
   return prisma.documentReportDraft.findMany({ where: { workspaceId, documentId }, orderBy: { version: "desc" } })
+}
+
+/** Answers Stage 4's clarifying question: a person picking the format directly, because the router
+ * (lib/dictation/pipeline.ts::checkDictationAmbiguity) was not confident enough to decide it alone.
+ * Records the choice as "explicit" — a human picking from a list IS the strongest signal there is,
+ * the same standing an explicitly spoken format already has — and clears `needsClarification` so
+ * the verify screen's prompt does not keep asking once it has been answered. Then drafts (or
+ * re-drafts, versioned) exactly as any other format resolution would. */
+export async function applyDictationFormatChoice(input: { workspaceId: string; documentId: string; formatName: string }) {
+  const document = await prisma.document.findFirst({ where: { id: input.documentId, workspaceId: input.workspaceId }, select: { dictationRouting: true } })
+  if (!document) throw new Error("document_not_found")
+
+  const format = resolveFormat(input.formatName)
+  const existing = parseDictationRoutingRecord(document.dictationRouting)
+  const persisted = {
+    intent: existing?.intent ?? "general",
+    format: format.name,
+    formatLabel: format.label,
+    formatSource: "explicit",
+    routeScore: existing?.routeScore ?? 0,
+    routeVia: existing?.routeVia ?? "clarified",
+    commands: existing?.commands ?? [],
+    needsClarification: false,
+    clarificationReason: null,
+  }
+  await prisma.document.update({ where: { id: input.documentId }, data: { dictationRouting: persisted as unknown as Prisma.InputJsonValue } })
+
+  return createReportDraft({ workspaceId: input.workspaceId, documentId: input.documentId })
 }

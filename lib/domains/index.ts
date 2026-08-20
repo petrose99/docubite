@@ -32,6 +32,10 @@ export type DomainAdapter = {
    * fieldSnapshot), never a shared DocumentTemplateVersion, so one dictation never inherits another
    * unrelated dictation's discovered fields. Undefined/false for every hard-coded industry pack. */
   ephemeral?: boolean
+  /** The output format (lib/dictation/formats.ts) a dictation against this template defaults to
+   * when the speaker names no explicit format — the field schema's usual shape. Undefined falls
+   * back to the format registry's own default ("narrative") in lib/dictation/pipeline.ts. */
+  defaultFormat?: string
 }
 
 /** The packs are `as const` for their literal types; parseTemplateFields is what turns their field
@@ -44,12 +48,13 @@ function pack(
   biasTerms: readonly string[],
   prompt: string | null = null,
   ephemeral = false,
+  defaultFormat?: string,
 ): DomainAdapter[] {
   return templates.map((template) => ({
     code: template.code, name: template.name, documentType: template.documentType, domain,
     isSystem: template.isSystem, multiRow: template.multiRow,
     fields: template.fields as DocumentFieldDefinition[],
-    prompt, biasTerms, ephemeral,
+    prompt, biasTerms, ephemeral, defaultFormat,
   }))
 }
 
@@ -60,10 +65,10 @@ const PATHOLOGY_PROMPT = [
 ].join(" ")
 
 export const DOMAIN_ADAPTERS: DomainAdapter[] = [
-  ...pack(FINANCE_TEMPLATES, "finance", FINANCE_BIAS_TERMS),
-  ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT),
-  ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS),
-  ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true),
+  ...pack(FINANCE_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
+  ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT, false, "soap_note"),
+  ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS, null, false, "table"),
+  ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true, "narrative"),
 ]
 
 export function findDomainAdapter(code: string | null | undefined): DomainAdapter | null {
