@@ -228,6 +228,11 @@ DB_RLS_ENABLED  = true|false       # requires a non-superuser role first
 3. **The router's value is unmeasured** — needs a corpus with several documents per vendor.
 4. **ASR quality is mic-bound.** Real recordings mis-heard "US dollars" as "US Donuts". The pipeline
    handled what it was given correctly; a closer mic or a dedicated endpoint is the fix.
+5. ~~**Dictation is pathology-only.**~~ **Closed** (`578769d`, after this doc was written): dictation
+   now starts with no fields and discovers them per-recording. See
+   `HANDOFF-DYNAMIC-DICTATION-AND-PROD-INFRA.md`, which also covers detached embedding and two
+   production infrastructure bugs (unapplied migrations, a `sharp` native-binary crash) found while
+   wiring up the embed drain cron.
 
 ### Bugs found by using it in the browser (all fixed)
 
