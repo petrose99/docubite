@@ -1,6 +1,7 @@
 "use server"
 
 import { ActionState } from "@/lib/actions"
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
@@ -92,13 +93,14 @@ export async function updateTranscriptAction(workspaceId: string, documentId: st
     if (!document) return { success: false, error: "Dictation not found" }
     if (document.source !== "dictation") return { success: false, error: "That document is not a dictation." }
 
+    const context = await getRequestAuditContext()
     await prisma.$transaction([
       prisma.document.update({
         where: { id: document.id },
         data: { ocrText: trimmed, transcriptEditedAt: new Date(), transcriptEditedById: user.id },
       }),
       prisma.documentAuditEvent.create({
-        data: { workspaceId, documentId: document.id, actorId: user.id, type: "transcript_edited" },
+        data: auditEventData({ workspaceId, documentId: document.id, actorId: user.id, type: "transcript_edited" }, context),
       }),
     ])
 

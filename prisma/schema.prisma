@@ -581,18 +581,45 @@ model DocumentReportDraft {
   @@map("document_report_drafts")
 }
 
+/** Who touched which document, from where, and whether it worked.
+ *
+ * HIPAA §164.312(b) wants an audit trail that can answer a disclosure question months later, which
+ * takes more than actor and timestamp: sourceIp and userAgent say FROM WHERE, outcome says WHETHER
+ * IT SUCCEEDED — a refused access is the more interesting record of the two — and detail carries
+ * whatever is action-specific (the field edited, the export format, the access level that was
+ * insufficient).
+ *
+ * Never write the document's contents, a search query, or an extracted value into `detail`. An
+ * audit trail that accumulates those becomes a second copy of the data it exists to protect, on a
+ * table that is deliberately never deleted. See recordSearch in lib/retrieval.ts for the same
+ * reasoning applied to query text. */
 model DocumentAuditEvent {
   id          String    @id @default(uuid()) @db.Uuid
   workspaceId String    @map("workspace_id") @db.Uuid
   documentId  String?   @map("document_id") @db.Uuid
   actorId     String?   @map("actor_id") @db.Uuid
   type        String
+  /// Client address from x-forwarded-for, and the raw user agent. Null for events raised by the
+  /// job worker, which has no request behind it.
+  sourceIp    String?   @map("source_ip")
+  userAgent   String?   @map("user_agent")
+  /// "success" | "failure" | "denied". Defaulted so the 18 pre-existing call sites keep their
+  /// meaning without each having to say so.
+  outcome     String    @default("success")
+  detail      Json?
   createdAt   DateTime  @default(now()) @map("created_at")
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  document    Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: §164.316(b) requires audit records to survive six years, and deleting a
+  /// workspace must not be a way to destroy the evidence of what happened inside it. Workspace
+  /// deletion now has to archive these first — see scripts/archive-audit-events.ts.
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  /// SetNull, not Cascade, for the same reason: purging a document must not erase the record that
+  /// someone downloaded it.
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([documentId, createdAt])
+  @@index([actorId, createdAt])
   @@map("document_audit_events")
 }
 

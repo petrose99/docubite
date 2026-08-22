@@ -18,7 +18,13 @@ export const auth = betterAuth({
   baseURL: config.app.baseURL,
   secret: config.auth.secret,
   email: { provider: "resend", from: config.email.from, resend },
-  session: { strategy: "jwt", expiresIn: 180 * 24 * 60 * 60, updateAge: 24 * 60 * 60, cookieCache: { enabled: true, maxAge: 180 * 24 * 60 * 60 } },
+  // A HIPAA deployment needs automatic logoff (§164.312(a)(2)(iii)): 180 days with no idle bound
+  // let a stolen or unattended browser stay signed in for half a year. expiresIn now doubles as
+  // the idle bound — updateAge slides it forward on activity, so an active user never sees it,
+  // but 12h of inactivity ends the session. cookieCache is shortened to the same end: a suspended
+  // or explicitly revoked session (the Session row deleted) now surfaces within minutes rather
+  // than staying valid for the old cache window.
+  session: { strategy: "jwt", expiresIn: 12 * 60 * 60, updateAge: 15 * 60, cookieCache: { enabled: true, maxAge: 5 * 60 } },
   // Keep in lockstep with the getSessionCookie prefix in proxy.ts — a mismatch makes the proxy
   // see no session and bounce /workspaces straight back to the login page in a loop.
   advanced: { cookiePrefix: "docubite", database: { generateId: "uuid" } },
@@ -68,8 +74,8 @@ export async function getCurrentUser(): Promise<User> {
  * null lets the route answer 401 JSON.
  *
  * The user is re-read from the database rather than trusted from the session: `role` is on the
- * User row, and the session cookie cache lives for 180 days, so a revoked admin would otherwise
- * keep their exemption for half a year. */
+ * User row, not the JWT, so a revoked admin loses the exemption on their very next request
+ * regardless of how long the session cookie itself remains valid. */
 export async function getApiUser(): Promise<User | null> {
   return getViewerUser()
 }

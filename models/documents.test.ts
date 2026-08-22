@@ -142,7 +142,9 @@ describe("deleteWorkspaceDocuments", () => {
 
     await expect(deleteWorkspaceDocuments("w", ["doc-1"], "user-1")).resolves.toEqual({ deleted: 1 })
     expect(deleteDocumentSource).toHaveBeenCalledWith("workspaces/w/documents/doc-1/source")
-    expect(db.documentAuditEvent.create).toHaveBeenCalledWith({ data: { workspaceId: "w", actorId: "user-1", type: "document_deleted" } })
+    expect(db.documentAuditEvent.create).toHaveBeenCalledWith({
+      data: { workspaceId: "w", actorId: "user-1", type: "document_deleted", documentId: null, outcome: "success", detail: undefined, sourceIp: null, userAgent: null },
+    })
   })
 
   it("still deletes the row when the stored file is already gone", async () => {

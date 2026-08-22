@@ -3,6 +3,7 @@
 // several take a workspaceId that is assumed to be already authorised). The directive would
 // publish every export as a callable endpoint. Server actions live in
 // app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { DEFAULT_DOCUMENT_TEMPLATES, parseTemplateFields } from "@/lib/document-templates"
 import { dictationAdapters } from "@/lib/domains"
 import { deleteDocumentSource, documentStorageKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
@@ -307,13 +308,14 @@ export async function duplicateFile(input: { workspaceId: string; userId: string
  * storage sweep has to happen here, before the row goes. */
 export async function deleteFiles(workspaceId: string, fileIds: string[], actorId: string) {
   const files = await prisma.documentFile.findMany({ where: { workspaceId, id: { in: fileIds.slice(0, 100) } }, select: { id: true } })
+  const context = await getRequestAuditContext()
   let deleted = 0
   for (const file of files) {
     const documents = await prisma.document.findMany({ where: { fileId: file.id }, select: { storageKey: true } })
     for (const document of documents) if (document.storageKey) await deleteDocumentSource(document.storageKey).catch(() => {})
     await prisma.$transaction([
       prisma.documentFile.delete({ where: { id: file.id } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId, actorId, type: "file_deleted" } }),
+      prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, actorId, type: "file_deleted" }, context) }),
     ])
     deleted++
   }

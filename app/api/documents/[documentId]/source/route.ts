@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import { getViewerUser } from "@/lib/auth"
 import { readDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
@@ -5,7 +6,11 @@ import { canOpen, getFileAccess } from "@/models/files"
 
 /** Serves a document's original source. Authorised through the file rather than the workspace,
  * because the shared-file grid's preview and download controls have to work for a link viewer
- * who is not a member — at exactly the level the file's sharing settings allow. */
+ * who is not a member — at exactly the level the file's sharing settings allow.
+ *
+ * This is the single highest-value disclosure point in the app: raw source bytes, reachable by an
+ * anonymous link holder whenever the file's linkAccess is "view" or stronger. Every outcome —
+ * granted or denied — is recorded; a denied attempt is the more interesting of the two. */
 export async function GET(_: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { documentId } = await params
   const document = await prisma.document.findUnique({ where: { id: documentId } })
@@ -13,9 +18,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ documentId
 
   const viewer = await getViewerUser()
   const access = await getFileAccess(document.fileId, viewer ? { id: viewer.id, email: viewer.email } : null)
-  if (!access || !canOpen(access.access)) return new Response("Not found", { status: 404 })
+  if (!access || !canOpen(access.access)) {
+    await recordDocumentAudit({
+      workspaceId: document.workspaceId, documentId: document.id, actorId: viewer?.id ?? null,
+      type: "document_viewed", outcome: "denied",
+    })
+    return new Response("Not found", { status: 404 })
+  }
 
   if (!document.storageKey) return new Response("Source not available", { status: 410 })
+  await recordDocumentAudit({
+    workspaceId: document.workspaceId, documentId: document.id, actorId: viewer?.id ?? null,
+    type: "document_viewed", detail: { access: access.access },
+  })
   const body = await readDocumentSource(document.storageKey)
   return new Response(new Uint8Array(body), { headers: { "content-type": document.mimeType, "content-disposition": contentDisposition(document.filename), "cache-control": "private, no-store" } })
 }

@@ -51,7 +51,7 @@ export default async function FilesPage({ params, searchParams }: {
     tab === "mine" ? listAllFolders(workspaceId) : Promise.resolve([]),
     folderTrail(workspaceId, folderId),
     tab === "shared" ? listFilesSharedWith(user.email) : Promise.resolve([]),
-    contentSearchOn ? searchDocumentsByContent(workspaceId, search, { limit: 12 }) : Promise.resolve([]),
+    contentSearchOn ? searchDocumentsByContent(workspaceId, search, { limit: 12, actorId: user.id }) : Promise.resolve([]),
   ])
 
   // Grouped results only exist when searching from inside a folder with the feature on. `inScope`

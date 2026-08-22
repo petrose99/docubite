@@ -105,5 +105,18 @@ export const options: NextAdminOptions = {
         defaultSort: { field: "createdAt", direction: "desc" },
       },
     },
+    DocumentAuditEvent: {
+      title: "Document audit log",
+      icon: "DocumentMagnifyingGlassIcon",
+      // Append-only, enforced twice over: the database trigger installed by
+      // 20260822000000_hipaa_audit_hardening refuses UPDATE/DELETE outright, and this is read-only
+      // on top of that. Was write-only before this entry existed — nothing in the product could
+      // answer "who accessed this document" without a direct database query.
+      permissions: [],
+      list: {
+        display: ["id", "type", "outcome", "workspaceId", "documentId", "actorId", "sourceIp", "createdAt"],
+        defaultSort: { field: "createdAt", direction: "desc" },
+      },
+    },
   },
 }

@@ -1,4 +1,5 @@
 import { SUPPORTED_AUDIO_TYPES, isSupportedAudioBuffer } from "@/lib/asr/types"
+import { auditEventData, getRequestAuditContext, recordDocumentAudit } from "@/lib/audit"
 import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
@@ -101,7 +102,7 @@ export async function createDocumentFromBuffer(input: {
       // Audio goes to the transcribe handler, everything else to MinerU extraction. This is the
       // only place the two ingestion paths diverge — from the job onwards they are the same code.
       const job = await tx.documentProcessingJob.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: SUPPORTED_AUDIO_TYPES.has(input.mimeType) ? "transcribe" : "extract" } })
-      await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: "document_received" } })
+      await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, type: "document_received" }, tx)
       return { document, job, duplicate: false }
     })
   } catch (error) {
@@ -131,7 +132,7 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   const rows = projectDocumentFields({ fields, values: reviewedData, confidence: priorConfidence, provenance: document.provenance as DocumentProvenance | null, source: "manual" })
   return prisma.$transaction(async (tx) => {
     const updated = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } })
-    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" }, tx)
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
     return updated
   }, { timeout: 20_000 })
@@ -179,7 +180,7 @@ export async function updateDocumentField(input: { workspaceId: string; document
   const rows = projectDocumentFields({ fields, values: reviewedData, confidence: nextFieldConfidence, provenance: nextProvenance, source: "manual" })
   const updated = await prisma.$transaction(async (tx) => {
     const document_ = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence, ...provenanceUpdate } })
-    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" }, tx)
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
     return document_
   }, { timeout: 20_000 })
@@ -240,9 +241,13 @@ export async function deleteWorkspaceDocuments(workspaceId: string, documentIds:
     // The blocks sidecar (if any) sits under the same document prefix; drop it too. Best effort —
     // an absent sidecar is the common case.
     await deleteDocumentSource(documentBlocksKey(workspaceId, document.id)).catch(() => {})
+    // Context fetched before the array is built: $transaction's array form requires every element
+    // to already be a lazy Prisma query, not an awaited value, so the async headers() read cannot
+    // happen inside it.
+    const context = await getRequestAuditContext()
     await prisma.$transaction([
       prisma.document.delete({ where: { id: document.id } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId, actorId, type: "document_deleted" } }),
+      prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, actorId, type: "document_deleted" }, context) }),
     ])
     deleted++
   }
@@ -257,10 +262,11 @@ export async function requeueDocumentExtraction(workspaceId: string, documentId:
   if (!document.storageKey) throw new Error("document_source_missing")
   const active = await prisma.documentProcessingJob.findFirst({ where: { documentId: document.id, status: { in: ["queued", "processing"] } }, select: { id: true } })
   if (active) throw new Error("document_already_processing")
+  const context = await getRequestAuditContext()
   const [, job] = await prisma.$transaction([
     prisma.document.update({ where: { id: document.id }, data: { status: "queued", errorCode: null } }),
     prisma.documentProcessingJob.create({ data: { workspaceId, documentId: document.id, type: "extract" } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId, documentId: document.id, type: "extraction_requeued" } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, documentId: document.id, type: "extraction_requeued" }, context) }),
   ])
   return job
 }

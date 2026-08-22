@@ -2,7 +2,9 @@
 // their caller-supplied arguments (acceptWorkspaceInvitation takes the user to attach). The
 // directive would publish every export as a callable endpoint, letting a client pass a forged
 // user. Server actions live in app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { getWorkspacePlan, isLimitReached, PLAN_LIMITS_ENFORCED, TRIAL_DAYS, UNLIMITED_LIMITS } from "@/lib/plans"
+import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
 import { createFile, deleteFiles } from "@/models/files"
@@ -138,11 +140,12 @@ export async function updateWorkspaceMemberRole(input: { workspaceId: string; me
  * had ever been added to a Share dialog would otherwise keep edit access to those files. */
 async function detachMember(workspaceId: string, memberId: string, email: string, actorId: string | null, type: string) {
   const normalized = email.toLowerCase()
+  const context = await getRequestAuditContext()
   await prisma.$transaction([
     prisma.workspaceMember.delete({ where: { id: memberId } }),
     prisma.documentFileShare.deleteMany({ where: { email: normalized, file: { workspaceId } } }),
     prisma.workspaceInvitation.deleteMany({ where: { workspaceId, email: normalized, acceptedAt: null } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId, actorId, type } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, actorId, type }, context) }),
   ])
 }
 
@@ -209,6 +212,12 @@ export async function deleteWorkspace(input: { workspaceId: string; actorId: str
   // it rather than trust it: a straggler here is a permanently orphaned object.
   const strays = await prisma.document.findMany({ where: { workspaceId: input.workspaceId }, select: { storageKey: true } })
   for (const stray of strays) if (stray.storageKey) await deleteDocumentSource(stray.storageKey).catch(() => {})
+
+  // The workspace -> DocumentAuditEvent relation is onDelete: Restrict (HIPAA §164.316(b) requires
+  // 6-year retention, so deleting a workspace must not be a way to destroy the evidence of what
+  // happened inside it). Archiving to cold storage first, then clearing the rows, is what makes
+  // the delete below succeed while keeping the record.
+  await archiveWorkspaceAuditEvents(input.workspaceId)
 
   await prisma.workspace.delete({ where: { id: input.workspaceId } })
 }

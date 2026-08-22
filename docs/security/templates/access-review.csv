@@ -1,0 +1,2 @@
+review_date,system,person_or_service_account,role_or_permissions,business_justification,mfa_confirmed,reviewer,decision_keep_change_remove,completion_date,evidence_link
+YYYY-MM-DD,AWS,[name],ReadOnlySecurityAudit,Quarterly security review,Yes,[reviewer],Keep,YYYY-MM-DD,[private link]

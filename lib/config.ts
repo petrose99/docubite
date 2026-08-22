@@ -98,11 +98,14 @@ const envSchema = z.object({
   // gate (also requires INTERNAL_WORKER_SECRET to be set for real).
   EMBED_DETACHED: z.enum(["true", "false"]).default("false"),
   // Workspace-scope guard (lib/workspace-scope.ts).
-  //   off   — no checking. The default in production, because a false positive here is an outage.
-  //   warn  — logs every unscoped query without changing behaviour. The default in development,
-  //           and the mode to run in production until the logs are clean.
-  //   throw — refuses them. The end state, adopted only once `warn` reports nothing.
+  //   off   — no checking. Opt-in only now, via an explicit env var — see below.
+  //   warn  — logs every unscoped query without changing behaviour. The default everywhere,
+  //           including production, until the logs are clean.
+  //   throw — refuses them. The end state, adopted once `warn` reports nothing in production.
   // Staged deliberately: this touches every query in a live app, so it earns its way to `throw`.
+  // `off` used to be production's default — a cross-tenant leak from a missing workspaceId filter
+  // is exactly the failure this guard exists to catch, and shipping with it disabled by default
+  // left every query author's memory as the only safeguard. `warn` costs nothing but a log line.
   DB_SCOPE_GUARD: z.enum(["off", "warn", "throw"]).optional(),
   // Postgres row-level security (lib/db-rls.ts). The deeper guarantee, and the riskier change;
   // gated so it can be rolled back without a redeploy, and only after DB_SCOPE_GUARD=throw holds.
@@ -200,7 +203,7 @@ const config = {
   // Tenant isolation. Both default to their safe-for-a-live-app setting; see the env comments for
   // the staged adoption path from `warn` to `throw` to RLS.
   isolation: {
-    scopeGuard: env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn"),
+    scopeGuard: env.DB_SCOPE_GUARD ?? "warn",
     rlsEnabled: env.DB_RLS_ENABLED === "true",
   },
   // Agnostic dictation (lib/dictation). Off by default and fail-safe by design: with it off, or on

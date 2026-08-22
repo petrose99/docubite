@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import type { ChunkProvenance } from "@/lib/chunking"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
@@ -35,23 +36,16 @@ export type DocumentSearchResult = {
 /** Records that a search happened. Retrieval returns document contents to whoever asked, which
  * makes it a disclosure event; without this, "who looked at what" is unanswerable.
  *
- * Best effort and never awaited into the critical path's failure modes: an audit write that fails
- * must not fail the search the user is waiting on. */
-async function recordSearch(workspaceId: string, actorId?: string | null) {
-  // try/catch, not .catch(): if prisma.documentAuditEvent were ever undefined the property access
-  // throws SYNCHRONOUSLY, before any promise exists for .catch() to attach to — and an audit write
-  // must not be able to break the search it is auditing, by any route.
-  try {
-    // The query text is deliberately NOT stored. It can contain the same sensitive content the
-    // documents do, and an audit trail that accumulates verbatim clinical queries becomes a second
-    // copy of the data it exists to protect. Who searched, in which workspace, and when is what
-    // makes disclosure answerable; what they typed is not needed for that.
-    await prisma.documentAuditEvent.create({
-      data: { workspaceId, actorId: actorId ?? null, type: "document_searched", documentId: null },
-    })
-  } catch {
-    /* auditing is best effort — never fail a search for it */
-  }
+ * Best effort and never awaited into the critical path's failure modes: recordDocumentAudit
+ * already swallows its own failures (see lib/audit.ts) so a broken write never fails the search
+ * the user is waiting on.
+ *
+ * The query text is deliberately NOT stored. It can contain the same sensitive content the
+ * documents do, and an audit trail that accumulates verbatim clinical queries becomes a second
+ * copy of the data it exists to protect. Who searched, in which workspace, and when is what makes
+ * disclosure answerable; what they typed is not needed for that. */
+async function recordSearch(workspaceId: string, type: string, actorId?: string | null) {
+  await recordDocumentAudit({ workspaceId, actorId: actorId ?? null, type, documentId: null })
 }
 
 /** Reciprocal Rank Fusion: combine several ranked lists into one, scoring each item by the sum of
@@ -110,7 +104,7 @@ export async function searchDocumentChunks(
   options: { limit?: number; filters?: FieldFilter[]; route?: boolean; actorId?: string | null } = {},
 ): Promise<DocumentSearchResult[]> {
   const limit = options.limit ?? DEFAULT_LIMIT
-  await recordSearch(workspaceId, options.actorId)
+  await recordSearch(workspaceId, "document_searched", options.actorId)
 
   // Caller-supplied filters always apply; routed ones are added to them. The router is only asked
   // when routing is on AND the caller did not already pin the query down itself.
@@ -192,7 +186,8 @@ const MATCH_SAMPLE = 50
  *
  * Returns `no_filters` rather than guessing when the query has no exactly checkable part — with no
  * filters this query matches the entire workspace, which is never a useful answer to a question. */
-export async function findMatchingDocuments(workspaceId: string, query: string, options: { now?: Date } = {}): Promise<CompletenessResult> {
+export async function findMatchingDocuments(workspaceId: string, query: string, options: { now?: Date; actorId?: string | null } = {}): Promise<CompletenessResult> {
+  await recordSearch(workspaceId, "document_completeness_searched", options.actorId)
   const routed = await routeQuery(workspaceId, query, { now: options.now, force: true })
   if (!routed.filters.length) {
     const keys = await listWorkspaceFieldKeys(workspaceId).catch(() => [])
@@ -230,9 +225,10 @@ export type ContentSearchResult = {
  * run vector and lexical halves in parallel, fuse with RRF, degrade to lexical-only if the
  * embedding endpoint is down), but collapsed to one hit per *document* — the Files list is a list
  * of documents, not passages. Empty when the query is blank or document search is off. */
-export async function searchDocumentsByContent(workspaceId: string, query: string, options: { limit?: number } = {}): Promise<ContentSearchResult[]> {
+export async function searchDocumentsByContent(workspaceId: string, query: string, options: { limit?: number; actorId?: string | null } = {}): Promise<ContentSearchResult[]> {
   if (!config.embeddings.enabled || !query.trim()) return []
   const limit = options.limit ?? DEFAULT_LIMIT
+  await recordSearch(workspaceId, "document_content_searched", options.actorId)
 
   const lexicalPromise = lexicalSearch(workspaceId, query, RETRIEVE_PER_HALF)
   const vectorPromise: Promise<ChunkSearchRow[]> = (async () => {
