@@ -7,6 +7,16 @@ const PLACEHOLDER_WORKER_SECRET = "replace-this-with-a-long-worker-secret"
 const envSchema = z.object({
   BASE_URL: z.string().url().default("http://localhost:7331"),
   PORT: z.string().default("7331"),
+  // Read directly off process.env by lib/db.ts (the Prisma adapter) and prisma.config.ts, both of
+  // which need it before this module can plausibly have run. Declared here anyway so it is
+  // validated and covered by the production placeholder/unset guard below — previously it bypassed
+  // both, so a production deploy with no DATABASE_URL at all would fail at first query with an
+  // adapter-level connection error rather than at boot with a clear message.
+  DATABASE_URL: z.string().optional(),
+  // Same story as DATABASE_URL: read directly off process.env by lib/malware-scan.ts. Declared
+  // here purely so an accidentally-empty value is validated rather than silently sending an
+  // unauthenticated scan request.
+  MALWARE_SCAN_TOKEN: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL_NAME: z.string().default("gpt-4o-mini"),
   GEMINI_API_KEY: z.string().optional(),
@@ -137,6 +147,7 @@ if (process.env.NODE_ENV === "production") {
   const unset = [
     env.BETTER_AUTH_SECRET === PLACEHOLDER_AUTH_SECRET && "BETTER_AUTH_SECRET",
     env.INTERNAL_WORKER_SECRET === PLACEHOLDER_WORKER_SECRET && "INTERNAL_WORKER_SECRET",
+    !env.DATABASE_URL && "DATABASE_URL",
   ].filter((name): name is string => Boolean(name))
   if (unset.length) throw new Error(`Refusing to start in production with default secrets — set ${unset.join(" and ")} to a unique random value.`)
 }

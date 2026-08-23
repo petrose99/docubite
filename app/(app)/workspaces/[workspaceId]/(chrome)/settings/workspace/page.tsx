@@ -1,5 +1,6 @@
 import { WorkspaceAiToggle } from "@/components/workspace/ai-toggle"
 import { WorkspaceDangerZone } from "@/components/workspace/danger-zone"
+import { WorkspaceHipaaModeToggle } from "@/components/workspace/hipaa-mode-toggle"
 import { InvitePanel } from "@/components/workspace/invite-panel"
 import { MembersTable } from "@/components/workspace/members-table"
 import { TeamWorkspaceForm } from "@/components/workspace/team-workspace-form"
@@ -33,8 +34,11 @@ export default async function WorkspaceSettingsPage({ params }: { params: Promis
         <CardTitle>Privacy</CardTitle>
         <CardDescription>Uploaded sources and reviewed data are stored for this workspace&apos;s members.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         {owner ? <WorkspaceAiToggle workspaceId={workspaceId} enabled={membership.workspace.aiEnabled} /> : <p className="text-sm">AI extraction is {membership.workspace.aiEnabled ? "enabled" : "disabled"} by the workspace owner.</p>}
+        {owner
+          ? <WorkspaceHipaaModeToggle workspaceId={workspaceId} enabled={membership.workspace.hipaaMode} />
+          : <p className="text-sm">HIPAA mode is {membership.workspace.hipaaMode ? "enabled" : "disabled"} by the workspace owner.</p>}
       </CardContent>
     </Card>
 

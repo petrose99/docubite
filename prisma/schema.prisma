@@ -53,6 +53,12 @@ model Workspace {
    * member limit is above one. */
   kind            String                 @default("personal")
   aiEnabled       Boolean                @default(true) @map("ai_enabled")
+  /// F15: when on, this workspace is presumed to handle ePHI. setLinkAccess refuses anything but
+  /// "none", getFileAccess ignores an existing linkAccess for a signed-out viewer, and the share
+  /// dialog hides the link tab — see models/files.ts. MFA enforcement is not implemented here: it
+  /// requires the AAL claim Cognito's session carries (Phase 2), so a hipaaMode workspace today
+  /// gets authenticated-only access but not yet a hard MFA requirement.
+  hipaaMode       Boolean                @default(false) @map("hipaa_mode")
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
   members         WorkspaceMember[]
@@ -610,7 +616,7 @@ model DocumentAuditEvent {
   createdAt   DateTime  @default(now()) @map("created_at")
   /// Restrict, not Cascade: §164.316(b) requires audit records to survive six years, and deleting a
   /// workspace must not be a way to destroy the evidence of what happened inside it. Workspace
-  /// deletion now has to archive these first — see scripts/archive-audit-events.ts.
+  /// deletion now has to archive these first — see lib/audit-archive.ts.
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   /// SetNull, not Cascade, for the same reason: purging a document must not erase the record that
   /// someone downloaded it.
@@ -751,4 +757,29 @@ model Verification {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("verification")
+}
+
+/** F16: the third parties that can receive customer document content or metadata, and whether a
+ * BAA is in place with each. HIPAA §164.308(b)(1) requires a signed BAA with every Business
+ * Associate that touches ePHI — this is the register that makes "who has a BAA" answerable
+ * without re-deriving it from the codebase every time. Browsable read-only in /admin-next; kept
+ * current by whoever runs the BAA process, not by code (see docs/security). */
+model Subprocessor {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  /// What the processor is used for, in plain language — "OCR of uploaded document images".
+  purpose       String
+  /// What of the customer's data it actually receives — "document text and page images", not
+  /// just "documents", so a reviewer can judge exposure without reading the code.
+  dataReceived  String   @map("data_received")
+  /// "not_started" | "in_progress" | "signed" | "not_applicable" (no PHI reaches this processor).
+  /// A String, not an enum, matching User.role and DocumentAuditEvent.type elsewhere in this
+  /// schema — the set of states is a data concern, not a migration concern.
+  baaStatus     String   @default("not_started") @map("baa_status")
+  region        String?
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("subprocessors")
 }

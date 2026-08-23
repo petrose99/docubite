@@ -2,6 +2,7 @@
 
 import type { SuggestResult } from "@/components/extract/types"
 import { ActionState } from "@/lib/actions"
+import { recordDocumentAudit } from "@/lib/audit"
 import config from "@/lib/config"
 import { processDocumentJob } from "@/lib/document-processing"
 import { sampleDocumentPages, suggestFieldsFromBuffer, suggestFieldsFromContents } from "@/lib/document-suggest"
@@ -272,6 +273,26 @@ export async function setWorkspaceAiAction(workspaceId: string, enabled: boolean
   } catch { return { success: false, error: "Could not change the AI setting" } }
 }
 
+/** F15: turning hipaaMode on immediately forces every file's linkAccess back to "none" — the
+ * whole point is that no file in a hipaaMode workspace should be openable by a bare URL, and
+ * leaving already-shared links live until someone happens to touch them would defeat that. This
+ * is itself a security-relevant setting change, so it gets its own audit event rather than
+ * inheriting the generic Workspace-edit path the admin console uses. */
+export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: boolean): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
+  try {
+    await prisma.$transaction([
+      prisma.workspace.update({ where: { id: workspaceId }, data: { hipaaMode: enabled } }),
+      ...(enabled ? [prisma.documentFile.updateMany({ where: { workspaceId, linkAccess: { not: "none" } }, data: { linkAccess: "none" } })] : []),
+    ])
+    await recordDocumentAudit({ workspaceId, actorId: user.id, type: enabled ? "hipaa_mode_enabled" : "hipaa_mode_disabled" })
+    revalidatePath(paths(workspaceId).workspace)
+    revalidatePath(paths(workspaceId).files)
+    return { success: true, data: null }
+  } catch { return { success: false, error: "Could not change the HIPAA mode setting" } }
+}
+
 /* ------------------------------------------------------------------ files and folders --- */
 
 /** Matches Lido's asymmetry: `New file` creates and navigates with no dialog, so this returns
@@ -363,13 +384,16 @@ export async function deleteFolderAction(workspaceId: string, folderId: string):
 
 /** Loaded when the Share dialog opens rather than shipped with every row of the Files list,
  * which would mean one extra query per file for a panel most rows never show. */
-export async function getFileSharingAction(workspaceId: string, fileId: string): Promise<ActionState<{ linkAccess: string; shareUrl: string; people: Array<{ email: string; access: string }> }>> {
+export async function getFileSharingAction(workspaceId: string, fileId: string): Promise<ActionState<{ linkAccess: string; shareUrl: string; people: Array<{ email: string; access: string }>; hipaaMode: boolean }>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
   const file = await getWorkspaceFile(workspaceId, fileId)
   if (!file) return { success: false, error: "File not found" }
-  const people = await listFileShares(file.id)
-  return { success: true, data: { linkAccess: file.linkAccess, shareUrl: `${config.app.baseURL}/shared/${file.id}`, people: people.map((share) => ({ email: share.email, access: share.access })) } }
+  const [people, workspace] = await Promise.all([
+    listFileShares(file.id),
+    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { hipaaMode: true } }),
+  ])
+  return { success: true, data: { linkAccess: file.linkAccess, shareUrl: `${config.app.baseURL}/shared/${file.id}`, people: people.map((share) => ({ email: share.email, access: share.access })), hipaaMode: workspace?.hipaaMode ?? false } }
 }
 
 export async function setFileLinkAccessAction(workspaceId: string, fileId: string, access: string): Promise<ActionState<{ linkAccess: string }>> {

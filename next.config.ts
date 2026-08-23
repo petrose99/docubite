@@ -3,9 +3,33 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   async headers() {
-    // Baseline browser protections. A restrictive CSP needs a staged rollout because customers may
-    // configure external model, support, and billing integrations; track its deployment in the
-    // security profile rather than shipping an untested policy that breaks the application.
+    // Baseline browser protections, plus a first-stage CSP.
+    //
+    // F8 (HIPAA audit): shipped Report-Only rather than enforced. Next's client bundle relies on
+    // inline hydration scripts and Tailwind's runtime style injection, so an enforced policy tight
+    // enough to matter (nonce-based script-src) needs the nonce plumbed through proxy.ts and every
+    // layout — a real change, not a header tweak, and one that risks breaking the app if shipped
+    // untested. Report-Only costs nothing: it logs violations to the browser console (and, once
+    // wired to a collector, to Sentry) without blocking anything, which is how the tightening work
+    // gets scoped before it is ever enforced. See docs/security for the tracked rollout.
+    //
+    // connect-src/img-src/etc are deliberately 'self'-only: nothing in the client bundle calls a
+    // third-party API directly — the AI providers, MinerU, embeddings, Stripe, and Sentry (via its
+    // same-origin /monitoring tunnel below) are all reached server-side. If a future integration
+    // needs the browser to talk to a new origin directly, add it here explicitly rather than
+    // widening the default.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join("; ")
     return [{
       source: "/:path*",
       headers: [
@@ -15,6 +39,7 @@ const nextConfig: NextConfig = {
         { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(), payment=(), usb=()" },
         { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        { key: "Content-Security-Policy-Report-Only", value: csp },
       ],
     }]
   },

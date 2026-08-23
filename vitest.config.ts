@@ -8,6 +8,17 @@ export default defineConfig({
     env: { BASE_URL: "http://localhost:7331" },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, ".") },
+    // Order matters: rollup's alias plugin tries entries in sequence, so the specific
+    // "@/prisma/client" entry has to come before the generic "@" prefix or it never gets a
+    // chance to match. Mirrors tsconfig.json's own "paths" override — the generated client has no
+    // index.ts, so the generic alias resolves it to a bare directory with nothing to import. That
+    // was invisible until now because every prior test importing it used Prisma only as a type
+    // (esbuild elides a type-only import, so the broken resolution path was never exercised) or
+    // mocked the whole module that contained it. models/files.ts uses Prisma.JsonNull as a real
+    // runtime value, so its import survives compilation and needs to actually resolve.
+    alias: [
+      { find: "@/prisma/client", replacement: path.resolve(__dirname, "prisma/client/client") },
+      { find: "@", replacement: path.resolve(__dirname, ".") },
+    ],
   },
 })
