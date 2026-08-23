@@ -36,6 +36,11 @@ const envSchema = z.object({
   // (Authentication → Hooks). Verifies the Standard Webhooks HMAC signature on incoming hook
   // requests — see app/api/internal/auth/signup-allowed/route.ts.
   SUPABASE_AUTH_HOOK_SECRET: z.string().optional(),
+  // §164.312(a)(2)(iii) automatic logoff. Supabase Auth has a native Inactivity Timeout setting
+  // (Authentication → Sessions), but it's gated to the Pro plan and above — a Free-plan project
+  // (like this one, as of the HIPAA migration) has no dashboard control for it at all. This is the
+  // app-level fallback enforced in lib/supabase/middleware.ts regardless of plan tier.
+  SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(15),
   DISABLE_SIGNUP: z.enum(["true", "false"]).default("false"),
   ENFORCE_PLAN_LIMITS: z.enum(["true", "false"]).default("false"),
   RESEND_API_KEY: z.string().default("please-set-your-resend-api-key-here"),
@@ -224,7 +229,7 @@ const config = {
     language: env.ASR_LANGUAGE.trim() || null,
   },
   aws: { region: env.AWS_REGION, documentsBucket: env.AWS_S3_DOCUMENTS_BUCKET, kmsKeyId: env.AWS_S3_KMS_KEY_ID, internalWorkerSecret: env.INTERNAL_WORKER_SECRET, malwareScanUrl: env.MALWARE_SCAN_URL },
-  auth: { loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
+  auth: { loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", idleTimeoutMinutes: env.SESSION_IDLE_TIMEOUT_MINUTES, google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
   // The project itself, plus the two keys: anonKey is safe in the browser (Postgres RLS is what
   // actually protects data reached through it — irrelevant here since this project is Auth-only
   // and holds no application tables), serviceRoleKey bypasses RLS entirely and is used only from

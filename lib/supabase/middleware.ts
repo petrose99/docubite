@@ -2,6 +2,33 @@ import config from "@/lib/config"
 import { createServerClient } from "@supabase/ssr"
 import { NextRequest, NextResponse } from "next/server"
 
+/** F2/§164.312(a)(2)(iii) automatic logoff, enforced here rather than left to Supabase's own
+ * Inactivity Timeout setting — that setting exists, but is gated to the Pro plan and above, and a
+ * Free-plan project (the one this migration was verified against) has no dashboard control for it
+ * at all. This cookie is the app-level equivalent: unencrypted since it holds nothing but a
+ * timestamp, and readable only from this middleware and never from client JS (httpOnly).
+ *
+ * If the Supabase project is later upgraded to Pro and its own Inactivity Timeout is configured,
+ * the two enforce the same policy redundantly — harmless, and worth keeping this one regardless
+ * so the control does not silently depend on plan tier. */
+const LAST_SEEN_COOKIE = "docubite-last-seen"
+
+export function isIdle(request: NextRequest): boolean {
+  const lastSeen = request.cookies.get(LAST_SEEN_COOKIE)?.value
+  if (!lastSeen) return false // first request on a fresh session — nothing to compare against yet
+  const idleMs = Date.now() - Number(lastSeen)
+  return Number.isFinite(idleMs) && idleMs > config.auth.idleTimeoutMinutes * 60_000
+}
+
+function touchLastSeen(response: NextResponse) {
+  response.cookies.set(LAST_SEEN_COOKIE, String(Date.now()), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  })
+}
+
 /** Refreshes the Supabase session for one request and returns both the (possibly-rewritten)
  * response carrying the refreshed cookies and the authenticated user, if any.
  *
@@ -10,7 +37,11 @@ import { NextRequest, NextResponse } from "next/server"
  * hard-to-debug random logouts, because it is the getUser() call itself that triggers the token
  * refresh whose result setAll below needs to persist. Every caller MUST return the `response` this
  * returns (or a NextResponse built from it), never a bare NextResponse.next() — that would drop
- * the refreshed cookies and the browser would keep sending an expired token. */
+ * the refreshed cookies and the browser would keep sending an expired token.
+ *
+ * The idle check runs AFTER getUser() specifically so a session that has already gone idle is
+ * signed out (revoking the refresh token server-side, not just dropping the cookie locally) rather
+ * than quietly left valid for whoever holds the browser. */
 export async function updateSession(request: NextRequest): Promise<{ response: NextResponse; userId: string | null }> {
   let response = NextResponse.next({ request })
 
@@ -26,5 +57,14 @@ export async function updateSession(request: NextRequest): Promise<{ response: N
   })
 
   const { data: { user } } = await supabase.auth.getUser()
-  return { response, userId: user?.id ?? null }
+  if (!user) return { response, userId: null }
+
+  if (isIdle(request)) {
+    await supabase.auth.signOut()
+    response.cookies.delete(LAST_SEEN_COOKIE)
+    return { response, userId: null }
+  }
+
+  touchLastSeen(response)
+  return { response, userId: user.id }
 }
