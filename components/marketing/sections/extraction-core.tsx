@@ -1,27 +1,33 @@
 import { Check } from "lucide-react"
 
 const points = [
-  "Image-only PDFs, faxes and third-generation photocopies — read, not refused",
+  "Image-only PDFs, faxes and photocopies — read, not refused",
   "Angled, low-light phone photos and faded thermal receipts",
-  "Handwriting and margin annotations captured as real values",
-  "Long, multi-page bundles batched and stitched back into one document",
-  "Whole folders at a drop — up to 100 files a batch, page ranges like 1-3,5, duplicates caught on the way in",
+  "Handwriting and margin notes captured as real values",
+  "Long, multi-page bundles batched and stitched into one document",
+  "Whole folders at a drop — up to 100 files a batch, duplicates caught on the way in",
 ]
 
-/** Sits right under the hero to make the repositioning's central claim before anything else:
- * the messy document is the input DocuBite is built for, not a fallback path. The before/after
- * mock is CSS-only, matching ExtractionDemo's reasoning — no JS for something decorative above
- * the fold. */
+/** Deliberately not fake customer logos: the product has no named references to show yet, and
+ * inventing six greyed-out wordmarks is the one thing on a marketing page a finance buyer will
+ * check. These are the document kinds and formats it handles, which is a claim we can stand on. */
+const chips = ["Invoices", "Receipts", "Bank statements", "Handwritten notes", "Scanned PDFs", "Photos", "Multi-page bundles", "Whole folders"]
+
+/** Sits right under the hero, merged with the old TrustStrip chip row: the same claim (messy
+ * inputs are the normal case, not a fallback path) made once instead of twice in a row. The
+ * before/after mock is CSS-only, matching ExtractionDemo's reasoning — no JS for something
+ * decorative above the fold. */
 export function ExtractionCore() {
   return (
-    <section id="extract" className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.02fr_0.98fr]">
+    <section id="extract" className="mx-auto max-w-6xl px-5 py-20">
+      <div className="grid items-center gap-14 lg:grid-cols-[1.02fr_0.98fr]">
       <div>
         <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Any document in, structured data out</p>
         <h2 className="mt-3 font-display text-3xl font-bold leading-[1.08] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-          The messy document is the normal case. We built for it.
+          Reads the documents other tools reject.
         </h2>
         <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-          A scanned PDF is just a picture of a page; a phone photo is worse. DocuBite parses every page to text first — print, scan, photo or handwriting alike — then structures it into the exact fields your template asks for. Nothing is skipped for being low quality.
+          A scanned PDF is a picture of a page; a phone photo is worse. DocuBite parses every page to text first, whether it&apos;s print, a scan, a photo or handwriting, then structures it into the fields you asked for. Nothing is skipped for being low quality.
         </p>
         <ul className="mt-6 space-y-3">
           {points.map((point) => (
@@ -64,6 +70,13 @@ export function ExtractionCore() {
           </table>
         </div>
       </div>
+      </div>
+
+      <ul className="mt-14 flex flex-wrap items-center gap-2.5 border-t border-stone-200 pt-8">
+        {chips.map((chip) => (
+          <li key={chip} className="rounded-full border border-stone-200 bg-stone-50 px-3.5 py-1.5 text-sm font-medium text-stone-600">{chip}</li>
+        ))}
+      </ul>
     </section>
   )
 }

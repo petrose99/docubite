@@ -3,35 +3,34 @@ import { GitCompareArrows, Layers, Sparkles } from "lucide-react"
 const cards = [
   {
     icon: Sparkles,
-    title: "The first document builds the sheet",
-    text: "Upload it and DocuBite proposes the columns — 3 to 12 typed fields read off the document itself, line-item tables included. Want one more? Describe it in plain English and it appears.",
-    chips: ["Typed columns", "Line-item tables", "Custom fields", "Describe a column"],
+    title: "The first one proposes the columns",
+    text: "Upload it and DocuBite reads off 3 to 12 typed fields, line-item tables included. Want one more? Describe it in plain English and it appears.",
+    chips: ["Typed columns", "Line-item tables", "Custom fields"],
   },
   {
     icon: Layers,
-    title: "The second one is recognised on sight",
-    text: "Every extraction saves the document's shape — what it means, not where it sits, so a new supplier's layout isn't new setup. When the next one arrives, DocuBite matches it before any AI runs: “Looks like a phone bill — same columns as march.pdf. Use the same setup?” One click, and it costs nothing.",
-    chips: ["Shape memory", "Matched before AI", "Use same setup", "Start fresh"],
+    title: "The next one is recognised on sight",
+    text: "A new supplier's layout isn't new setup. DocuBite matches the shape before any AI runs — one click to reuse it, and it costs nothing.",
+    chips: ["Matched before AI", "Use same setup"],
   },
   {
     icon: GitCompareArrows,
-    title: "Every one after gets compared to last time",
-    text: "This month's statement against last month's: fields that appeared, fields that went missing, values that moved, line items that changed. The diff is waiting when extraction finishes — you read it instead of hunting for it.",
-    chips: ["Fields added / missing", "Changed values", "Line-item deltas"],
+    title: "Every one after gets diffed",
+    text: "This month's statement against last month's: fields added, fields missing, values that moved. The diff is waiting when extraction finishes.",
+    chips: ["Fields added / missing", "Changed values"],
   },
 ]
 
-/** Answers the "does this scale past one document?" objection as an arc across repeat documents:
- * the first one proposes the columns, the second is recognised by shape before any AI runs, and
- * every one after is diffed against the last of its kind. Setup is a one-time cost that pays
- * itself back on every document that follows. */
+/** Answers the "does this scale past one document?" objection: the first one proposes the
+ * columns, the next is recognised by shape before any AI runs, and every one after is diffed
+ * against the last of its kind. Setup is a one-time cost that pays itself back. */
 export function RepeatingDocs() {
   return (
     <section className="border-t border-stone-200 bg-stone-50">
       <div className="mx-auto max-w-6xl px-5 py-20">
-        <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Because the same documents keep coming</p>
+        <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Recurring documents</p>
         <h2 className="mt-3 max-w-xl font-display text-3xl font-bold leading-[1.08] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-          The first one takes a minute. The rest take nothing.
+          Set up once. Repeats read themselves.
         </h2>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">

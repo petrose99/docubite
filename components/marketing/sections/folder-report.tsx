@@ -16,12 +16,12 @@ export function FolderReport() {
     <section className="border-t border-stone-200 bg-white">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">The folder report</p>
+          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Whole folders at once</p>
           <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-            Nobody reads a pile of forty documents. So the folder does it.
+            Drop in 100 files. Get back what&apos;s missing, duplicated, and off.
           </h2>
           <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-            Drop three or more files in and DocuBite reports on the batch before you&apos;ve opened a single one: what&apos;s in the pile, what&apos;s missing from it, and what&apos;s in it twice. It&apos;s arithmetic, not AI — free, deterministic, and there every time.
+            Before you open a single document, DocuBite reports on the batch: what&apos;s in the pile, which months are missing, what&apos;s uploaded twice. No AI involved — it&apos;s deterministic, free, and runs every time.
           </p>
           <ul className="mt-6 space-y-3">
             {points.map((point) => (

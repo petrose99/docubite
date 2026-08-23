@@ -2,9 +2,9 @@ import { CheckCheck, Download, Sparkles, Upload } from "lucide-react"
 
 const steps = [
   { n: "01", icon: Upload, title: "Ingest", text: "Drop files or a whole folder into a workspace — up to 100 a batch, page ranges if you only need some of a PDF. Duplicates are caught before they cost anything." },
-  { n: "02", icon: Sparkles, title: "Extract", text: "Every page is parsed to text — print, scan or handwriting alike — and a template says which fields matter." },
+  { n: "02", icon: Sparkles, title: "Extract", text: "Every page is parsed to text, whether it's print, a scan or handwriting, and a template says which fields matter." },
   { n: "03", icon: CheckCheck, title: "Validate", text: "Low-confidence values arrive tinted amber; missing required fields show red. Review keeps your corrections separate from the raw extraction, with an audit trail per document." },
-  { n: "04", icon: Download, title: "Automate", text: "Reuse the setup on every repeat document, share by link — view, sandbox or edit — and export to XLSX or CSV for the workflow you already run." },
+  { n: "04", icon: Download, title: "Automate", text: "Reuse the setup on every repeat document, share by link as a view, a sandbox or an edit, and export to XLSX or CSV for the workflow you already run." },
 ]
 
 export function Workflow() {

@@ -6,7 +6,7 @@ import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "Solutions",
-  description: "Pick the document, or the mess it arrived in, then see the before/after for your industry.",
+  description: "One tool for every document your team retypes by hand — see the before/after for your industry.",
 }
 
 const byType: DocCard[] = [
@@ -51,7 +51,7 @@ const industries: Industry[] = [
       "Hunt for the source PDF when a figure looks wrong",
     ],
     after: [
-      "Drop the whole folder — invoices, receipts, statements — and get back the missing months and duplicates first",
+      "Drop the whole folder of invoices, receipts and statements, and get back the missing months and duplicates first",
       "Fields land as rows; low-confidence ones flag themselves",
       "Total per supplier with the assistant, click any figure to its line",
     ],
@@ -95,10 +95,10 @@ export default function SolutionsPage() {
     <section className="mx-auto max-w-6xl px-5 pt-16 pb-2 lg:pt-20">
       <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
       <h1 className="mt-3.5 max-w-3xl font-display text-4xl font-bold leading-[1.04] tracking-[-0.04em] text-stone-950 sm:text-5xl">
-        Point DocuBite at whatever your team keys in by hand.
+        One tool for every document your team retypes.
       </h1>
       <p className="mt-4 max-w-xl text-lg leading-8 text-stone-600">
-        Pick the document, or the mess it arrived in — then see the before/after for your industry. The parser is general and the templates are yours.
+        Invoices, receipts, statements, forms — clean or crumpled. Pick your document type or your industry below.
       </p>
     </section>
 
@@ -114,7 +114,7 @@ export default function SolutionsPage() {
     <section id="industries" className="mx-auto max-w-6xl px-5 pt-20">
       <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Industries</p>
       <h2 className="mt-3 max-w-2xl font-display text-3xl font-bold tracking-[-0.03em] text-stone-950 sm:text-4xl">
-        If it&apos;s a document your team keys in by hand, it&apos;s a template in DocuBite.
+        Where teams use it.
       </h2>
       <p className="mt-4 max-w-xl text-[16.5px] leading-8 text-stone-600">
         Here&apos;s the paperwork each team drowns in — and the day it stops being manual.

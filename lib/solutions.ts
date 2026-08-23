@@ -35,7 +35,7 @@ export const SOLUTIONS: Solution[] = [
     tagline: "Supplier, number, dates, line items, tax",
     icon: FileText,
     title: "Invoice data extraction that survives real supplier PDFs",
-    description: "Pull supplier, invoice number, dates, totals, tax and line items out of every supplier invoice — whatever layout it arrives in — and review the result before it reaches your ledger.",
+    description: "Pull supplier, invoice number, dates, totals, tax and line items out of every supplier invoice, whatever layout it arrives in, and review the result before it reaches your ledger.",
     fields: ["Supplier name", "Invoice number", "Issue date", "Due date", "Net total", "Tax amount", "Gross total", "Currency", "Line items"],
     points: [
       { title: "Every supplier has a different layout", text: "Templates key on what a field means, not where it sits on the page, so a new supplier does not need a new template — the same invoice template reads all of them. Repeat suppliers are recognised by shape before any AI runs — the same setup applies itself." },
@@ -65,7 +65,7 @@ export const SOLUTIONS: Solution[] = [
     tagline: "Multi-page transaction tables into rows",
     icon: Landmark,
     title: "Bank statement PDFs, read as transaction tables",
-    description: "Multi-page statements come back as structured transaction rows — date, description, money in, money out, running balance — with the account header captured alongside them.",
+    description: "Multi-page statements come back as structured transaction rows (date, description, money in, money out, running balance) with the account header captured alongside them.",
     fields: ["Account holder", "Account number", "Sort code / IBAN", "Statement period", "Opening balance", "Closing balance", "Transaction rows"],
     points: [
       { title: "Tables that run across pages stay one table", text: "Statements are processed in page batches and the transaction rows are stitched back together, so a table broken by a page header does not become two half-tables." },

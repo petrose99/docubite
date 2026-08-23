@@ -10,34 +10,34 @@ export function AiBand() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-400">AI in the sheet</p>
           <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] sm:text-4xl">
-            Three ways to put AI to work — without leaving the cell.
+            AI that works inside the sheet.
           </h2>
 
           <div className="mt-8 space-y-6">
             <div className="flex gap-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><MessageCircle className="h-5 w-5" /></span>
               <div>
-                <h3 className="font-display text-lg font-bold text-white">The assistant, for &ldquo;do it for me&rdquo;</h3>
+                <h3 className="font-display text-lg font-bold text-white">Ask the assistant</h3>
                 <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  &ldquo;Total each numeric column.&rdquo; &ldquo;Which rows are missing a VAT number?&rdquo; &ldquo;Add a column for line total.&rdquo; It reads, it writes, and it hands back a summary where every reference is clickable — with an Undo / Accept bar before anything sticks.
+                  &ldquo;Total each numeric column.&rdquo; &ldquo;Which rows are missing a VAT number?&rdquo; It reads and writes the sheet, then hands back a summary with an Undo / Accept bar before anything sticks.
                 </p>
               </div>
             </div>
             <div className="flex gap-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><Table2 className="h-5 w-5" /></span>
               <div>
-                <h3 className="font-display text-lg font-bold text-white"><span className="font-mono">=AI()</span> formulas, for &ldquo;what&apos;s the formula?&rdquo;</h3>
+                <h3 className="font-display text-lg font-bold text-white"><span className="font-mono">=AI()</span> formulas</h3>
                 <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  Type <span className="font-mono text-emerald-300">=AI(&quot;classify this supplier&quot;, B2)</span> like any other function and it fills down the column. Answers are cached, so recalculating on every reload costs nothing.
+                  Type <span className="font-mono text-emerald-300">=AI(&quot;classify this supplier&quot;, B2)</span> like any other function and it fills down the column. Answers are cached, so recalculating costs nothing.
                 </p>
               </div>
             </div>
             <div className="flex gap-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><PencilRuler className="h-5 w-5" /></span>
               <div>
-                <h3 className="font-display text-lg font-bold text-white">The formula builder, for &ldquo;write it for me&rdquo;</h3>
+                <h3 className="font-display text-lg font-bold text-white">Formula builder</h3>
                 <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  Describe the calculation in English — &ldquo;net plus tax, minus the deposit&rdquo; — and get back the formula with a one-sentence explanation of what it does. Nothing lands in the sheet until you hit Insert.
+                  Describe the calculation in English, like &ldquo;net plus tax, minus the deposit,&rdquo; and get back the formula. Nothing lands in the sheet until you hit Insert.
                 </p>
               </div>
             </div>

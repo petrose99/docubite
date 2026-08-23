@@ -18,7 +18,7 @@ export function Pricing({ eyebrow = true }: { eyebrow?: boolean } = {}) {
       <div className="mx-auto max-w-6xl px-5 py-20">
         {eyebrow && <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Pricing</p>}
         <h2 className="mt-3 max-w-xl font-display text-3xl font-bold leading-[1.06] tracking-[-0.035em] text-stone-950 sm:text-4xl">
-          One price per workspace. {TRIAL_DAYS} days to make up your mind.
+          One price per workspace. Free for {TRIAL_DAYS} days.
         </h2>
         <p className="mt-4 max-w-lg text-lg leading-7 text-stone-600">
           Every plan starts as a free trial with no credit card. Add a payment method whenever you&apos;re ready.

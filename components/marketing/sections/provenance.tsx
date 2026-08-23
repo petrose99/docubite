@@ -1,26 +1,26 @@
 import { Check, FileText } from "lucide-react"
 
 const points = [
-  "Low-confidence values tinted amber in the sheet; missing required fields red",
-  "Reviewed data kept separate from the raw extraction — corrections never overwrite the evidence",
-  "A full audit trail per document: received, extracted, reviewed, edited — who and when",
+  "Real spreadsheet — sort, filter, total and formula over the extracted data",
+  "Click any cell and the original document opens to the exact line it came from",
+  "Low-confidence values tinted amber; missing required fields red — never quietly filled in",
   "Line-item tables come out as rows, not a blob",
 ]
 
-/** The trust-building close before pricing: a sheet of numbers with no working shown is a claim
- * nobody checks. This is where "click a cell, see the source" gets its own moment rather than
- * staying a bullet inside the triptych above. */
+/** Merged with the old Repositioning section (deleted): both made the same point from different
+ * angles — "it's a real spreadsheet, not a one-way export" and "every value traces to its source"
+ * are one claim, not two, so they get one section instead of being 6 slots apart on the page. */
 export function Provenance() {
   return (
     <section className="border-t border-stone-200 bg-stone-50">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Persistent provenance</p>
+          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Check it, don&apos;t trust it</p>
           <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-            A sheet of extracted numbers is a claim about a source nobody is looking at.
+            Every number links back to its source document.
           </h2>
           <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-            So DocuBite keeps the thread. Click any cell and the original document opens to the exact line the value came from — the page, the box on the scan, highlighted. Hand-edit a value and its stale source pin drops, because a highlight over the old figure would be worse than none. And when the pages of a document disagree with each other, DocuBite says so, page by page, instead of picking one quietly.
+            Extraction lands in a real spreadsheet, not a one-way export — the data is yours to work with the moment it arrives. Click any cell and the original document opens with that value highlighted on the page, so you can check a number instead of taking it on faith.
           </p>
           <ul className="mt-6 space-y-3">
             {points.map((point) => (
