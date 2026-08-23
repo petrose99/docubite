@@ -1,5 +1,4 @@
 import { DocTypeGrid, type DocCard } from "@/components/marketing/sections/doc-type-grid"
-import { TRIAL_DAYS } from "@/lib/plans"
 import { Check, Clock, FlaskConical, Landmark, Truck, type LucideIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
@@ -172,11 +171,10 @@ export default function SolutionsPage() {
             Put your worst-looking document through it first.
           </h2>
           <p className="relative mx-auto mt-4 max-w-lg leading-7 text-emerald-100/75">
-            Start a {TRIAL_DAYS}-day free trial, no credit card — or bring a sample and we&apos;ll build the template with you.
+            Book a demo and bring a sample — we&apos;ll build the template with you, live.
           </p>
           <div className="relative mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup" className="inline-flex h-[50px] items-center justify-center rounded-xl bg-white px-6 text-[15px] font-semibold text-emerald-800">Start free trial</Link>
-            <Link href="/demo" className="inline-flex h-[50px] items-center justify-center rounded-xl border border-white/25 px-6 text-[15px] font-semibold text-white">Book a demo</Link>
+            <Link href="/demo" className="inline-flex h-[50px] items-center justify-center rounded-xl bg-white px-6 text-[15px] font-semibold text-emerald-800">Book a demo</Link>
           </div>
         </div>
       </div>

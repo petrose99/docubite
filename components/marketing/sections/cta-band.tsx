@@ -1,5 +1,4 @@
-import { EmailCapture } from "@/components/marketing/email-capture"
-import { TRIAL_DAYS } from "@/lib/plans"
+import { ArrowRight } from "lucide-react"
 import Link from "next/link"
 
 export function CtaBand() {
@@ -11,13 +10,15 @@ export function CtaBand() {
             Your inbox is full of documents. Let something else read them.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-7 text-emerald-100/75">
-            Start a {TRIAL_DAYS}-day free trial and put your worst-looking folder through it first.
+            Book a demo and put your worst-looking folder — or a free-form recording — through it first.
           </p>
-          <EmailCapture size="lg" tone="inverse" className="mx-auto mt-8 max-w-lg" />
-          <p className="mt-4 text-sm text-emerald-100/60">
-            No credit card required ·{" "}
-            <Link href="/demo" className="font-medium text-emerald-300 underline underline-offset-4">Book a demo instead</Link>
-          </p>
+          <Link
+            href="/demo"
+            className="mx-auto mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-white px-6 text-base font-semibold text-emerald-900 shadow-sm transition-colors hover:bg-emerald-50"
+          >
+            Book a demo<ArrowRight className="h-4 w-4" />
+          </Link>
+          <p className="mt-4 text-sm text-emerald-100/60">No credit card required</p>
         </div>
       </div>
     </section>

@@ -1,9 +1,7 @@
 import { DemoForm } from "@/components/marketing/demo-form"
 import { Toaster } from "@/components/ui/sonner"
-import { TRIAL_DAYS } from "@/lib/plans"
 import { CalendarClock, MessagesSquare, Sparkles } from "lucide-react"
 import type { Metadata } from "next"
-import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "Book a demo",
@@ -25,9 +23,7 @@ export default function DemoPage() {
           Bring your worst document. We will read it live.
         </h1>
         <p className="mt-6 max-w-lg text-lg leading-8 text-stone-600">
-          Or skip the call entirely — the {TRIAL_DAYS}-day{" "}
-          <Link href="/signup" className="font-medium text-emerald-800 underline underline-offset-4">free trial</Link>{" "}
-          needs no credit card and takes about a minute to start.
+          Twenty minutes on a call, no forms to fill in first — bring a real document or just tell us what you dictate.
         </p>
 
         <div className="mt-10 space-y-7">

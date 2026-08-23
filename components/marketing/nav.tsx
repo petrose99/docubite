@@ -1,6 +1,5 @@
 "use client"
 
-import { EmailCapture } from "@/components/marketing/email-capture"
 import { Logo } from "@/components/marketing/logo"
 import { SOLUTION_GROUPS, SOLUTIONS, solutionsByGroup } from "@/lib/solutions"
 import { ChevronDown, Menu, X } from "lucide-react"
@@ -57,7 +56,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${solutionsOpen ? "rotate-180" : ""}`} />
           </button>
           <Link href={"/solutions#industries" as Route} className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950">Industries</Link>
-          <Link href="/pricing" className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950">Pricing</Link>
+          <Link href={"/#dictation" as Route} className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950">Dictation</Link>
         </nav>
 
         <div className="ml-auto hidden items-center gap-3 lg:flex">
@@ -66,8 +65,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
           ) : (
             <>
               <Link href="/login" className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-950">Sign in</Link>
-              <Link href="/demo" className="inline-flex h-9 items-center rounded-lg border border-stone-300 px-3.5 text-sm font-medium text-stone-800 transition-colors hover:bg-stone-100">Book a demo</Link>
-              <EmailCapture className="w-[22rem]" />
+              <Link href="/demo" className="inline-flex h-9 items-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800">Book a demo</Link>
             </>
           )}
         </div>
@@ -135,17 +133,14 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
               </ul>
             </div>
             <Link href={"/solutions#industries" as Route} className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">Industries</Link>
-            <Link href="/pricing" className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">Pricing</Link>
+            <Link href={"/#dictation" as Route} className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">Dictation</Link>
             {workspaceHref ? (
               <Link href={workspaceHref as Route} className="flex h-11 items-center justify-center rounded-lg bg-emerald-700 text-sm font-semibold text-white">Open workspace</Link>
             ) : (
-              <>
-                <div className="flex gap-3">
-                  <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-lg border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
-                  <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-lg border border-stone-300 text-sm font-medium text-stone-800">Book a demo</Link>
-                </div>
-                <EmailCapture size="lg" />
-              </>
+              <div className="flex gap-3">
+                <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-lg border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
+                <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-lg bg-emerald-700 text-sm font-semibold text-white">Book a demo</Link>
+              </div>
             )}
           </div>
         </div>

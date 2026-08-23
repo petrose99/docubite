@@ -1,7 +1,5 @@
-import { EmailCapture } from "@/components/marketing/email-capture"
 import { CtaBand } from "@/components/marketing/sections/cta-band"
 import { Workflow } from "@/components/marketing/sections/workflow"
-import { TRIAL_DAYS } from "@/lib/plans"
 import { getSolution, SOLUTIONS } from "@/lib/solutions"
 import { ArrowRight } from "lucide-react"
 import type { Metadata, Route } from "next"
@@ -34,8 +32,13 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
       <h1 className="mt-5 max-w-3xl font-display text-[2.4rem] font-bold leading-[1.05] tracking-[-0.04em] text-stone-950 sm:text-5xl">{solution.title}</h1>
       <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">{solution.description}</p>
 
-      <EmailCapture size="lg" className="mt-8 max-w-lg" />
-      <p className="mt-3 text-sm text-stone-500">No credit card required · {TRIAL_DAYS}-day free trial</p>
+      <Link
+        href="/demo"
+        className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-6 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
+      >
+        Book a demo<ArrowRight className="h-4 w-4" />
+      </Link>
+      <p className="mt-3 text-sm text-stone-500">No credit card required</p>
 
       <div className="mt-12 rounded-[2rem] rounded-tr-md border border-stone-200 bg-stone-50 p-6 sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Fields captured out of the box</p>
