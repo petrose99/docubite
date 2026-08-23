@@ -1,7 +1,6 @@
 import { z } from "zod"
 import packageJson from "../package.json"
 
-const PLACEHOLDER_AUTH_SECRET = "please-set-a-production-auth-secret"
 const PLACEHOLDER_WORKER_SECRET = "replace-this-with-a-long-worker-secret"
 
 const envSchema = z.object({
@@ -22,13 +21,27 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL_NAME: z.string().default("gemini-2.5-flash"),
   AI_PROVIDER: z.enum(["openai", "gemini"]).default("openai"),
-  BETTER_AUTH_SECRET: z.string().min(16).default(PLACEHOLDER_AUTH_SECRET),
+  // NEXT_PUBLIC_-prefixed because lib/supabase/client.ts (a "use client" module) reads these two
+  // directly off process.env — Next.js only inlines that prefix into the browser bundle at build
+  // time, and only for a literal `process.env.NEXT_PUBLIC_X` reference, so client.ts cannot get
+  // them by importing this file's `config` object instead. Declared here too so both are validated
+  // and so server code (getAdminClient, etc.) can read them through `config` like everything else.
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  // Server-only, admin-privileged — must never carry the NEXT_PUBLIC_ prefix or it would ship to
+  // the browser. Covered by the production unset guard below, the same way BETTER_AUTH_SECRET
+  // (removed along with better-auth) used to be.
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // The "v1,whsec_..." secret from the Supabase dashboard's Before User Created Auth Hook config
+  // (Authentication → Hooks). Verifies the Standard Webhooks HMAC signature on incoming hook
+  // requests — see app/api/internal/auth/signup-allowed/route.ts.
+  SUPABASE_AUTH_HOOK_SECRET: z.string().optional(),
   DISABLE_SIGNUP: z.enum(["true", "false"]).default("false"),
   ENFORCE_PLAN_LIMITS: z.enum(["true", "false"]).default("false"),
   RESEND_API_KEY: z.string().default("please-set-your-resend-api-key-here"),
   RESEND_FROM_EMAIL: z.string().default("DocuBite <user@localhost>"),
-  // Both halves or nothing: better-auth registers the provider from the pair, and a half-set
-  // pair would advertise a Google button that fails at the redirect. See isGoogleAuthEnabled.
+  // Both halves or nothing — a UI-only flag now (see isGoogleAuthEnabled); a half-set pair would
+  // advertise a Google button whose provider isn't actually registered on the Supabase side.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().default(""),
@@ -145,15 +158,21 @@ const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filte
 // known bearer token for the internal job endpoint.
 if (process.env.NODE_ENV === "production") {
   const unset = [
-    env.BETTER_AUTH_SECRET === PLACEHOLDER_AUTH_SECRET && "BETTER_AUTH_SECRET",
     env.INTERNAL_WORKER_SECRET === PLACEHOLDER_WORKER_SECRET && "INTERNAL_WORKER_SECRET",
     !env.DATABASE_URL && "DATABASE_URL",
+    !env.NEXT_PUBLIC_SUPABASE_URL && "NEXT_PUBLIC_SUPABASE_URL",
+    !env.NEXT_PUBLIC_SUPABASE_ANON_KEY && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    !env.SUPABASE_SERVICE_ROLE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
   ].filter((name): name is string => Boolean(name))
-  if (unset.length) throw new Error(`Refusing to start in production with default secrets — set ${unset.join(" and ")} to a unique random value.`)
+  if (unset.length) throw new Error(`Refusing to start in production with default or missing secrets — set ${unset.join(", ")}.`)
 }
 
-/** The Google sign-in button is rendered from this, not from the presence of the plugin: an
- * install without credentials has to boot and simply not offer the option. */
+/** The Google sign-in button is rendered from this env-var pair, not from whether Google is
+ * actually configured as a provider on the Supabase project — that's set separately in the
+ * Supabase dashboard, and this app has no way to read it back. An install without these two set
+ * still boots and simply omits the button; one with them set but Google not configured on the
+ * Supabase side will show the button and fail at the OAuth redirect, so keep the two in lockstep
+ * by hand. */
 export const isGoogleAuthEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 
 const config = {
@@ -205,7 +224,13 @@ const config = {
     language: env.ASR_LANGUAGE.trim() || null,
   },
   aws: { region: env.AWS_REGION, documentsBucket: env.AWS_S3_DOCUMENTS_BUCKET, kmsKeyId: env.AWS_S3_KMS_KEY_ID, internalWorkerSecret: env.INTERNAL_WORKER_SECRET, malwareScanUrl: env.MALWARE_SCAN_URL },
-  auth: { secret: env.BETTER_AUTH_SECRET, loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
+  auth: { loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
+  // The project itself, plus the two keys: anonKey is safe in the browser (Postgres RLS is what
+  // actually protects data reached through it — irrelevant here since this project is Auth-only
+  // and holds no application tables), serviceRoleKey bypasses RLS entirely and is used only from
+  // the two server-only paths that need admin privileges: the bulk user-migration script and
+  // prisma/seed.ts. Never construct a client with serviceRoleKey outside those.
+  supabase: { url: env.NEXT_PUBLIC_SUPABASE_URL || "", anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "", serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || "", authHookSecret: env.SUPABASE_AUTH_HOOK_SECRET || "" },
   stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, starterPriceId: env.STRIPE_STARTER_PRICE_ID, growthPriceId: env.STRIPE_GROWTH_PRICE_ID },
   // Seats, monthly documents and monthly AI extractions are only actually refused when this is
   // on. lib/plans.ts reads it through here so there is exactly one place that decides.

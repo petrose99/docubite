@@ -12,7 +12,8 @@
 /** Models whose rows belong to exactly one workspace. A query against any of these without a
  * workspace filter is a bug unless it is explicitly marked unscoped.
  *
- * NOT listed, deliberately: User, Session, Account, Verification (identity, pre-workspace);
+ * NOT listed, deliberately: User (identity, pre-workspace — session/credential state itself lives
+ * in Supabase Auth's own project, not this database, since the auth migration);
  * Workspace itself (the scoping root — filtering it by workspaceId is meaningless); WorkspaceMember
  * and WorkspaceInvitation (membership is how workspace access is *decided*, so it must be readable
  * before a workspace is known); StripeWebhookEvent and AdminAuditEvent (system-level); and the

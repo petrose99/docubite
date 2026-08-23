@@ -1,6 +1,6 @@
 "use client"
 
-import { authClient } from "@/lib/auth-client"
+import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
 
 function GoogleGlyph() {
@@ -15,8 +15,11 @@ function GoogleGlyph() {
 }
 
 /** Rendered only where the server has told the page that Google is configured — see
- * isGoogleAuthEnabled in lib/config.ts. Without both credentials better-auth never registers the
- * provider, and this button would send people to a 404. */
+ * isGoogleAuthEnabled in lib/config.ts. That flag tracks GOOGLE_CLIENT_ID/SECRET being set in this
+ * app's own env, which is a UI-only signal now — the actual Google provider registration lives on
+ * the Supabase project's dashboard, not in this codebase, so the two have to be kept in sync by
+ * hand (see the comment on isGoogleAuthEnabled). If they drift, this button sends someone to a
+ * Supabase-side error page rather than a 404, but it still fails visibly either way. */
 export function GoogleButton({ callbackURL = "/workspaces", label = "Continue with Google", onError }: {
   callbackURL?: string
   label?: string
@@ -29,8 +32,13 @@ export function GoogleButton({ callbackURL = "/workspaces", label = "Continue wi
     onError?.("")
     try {
       // Resolves into a redirect to Google, so there is no success path to handle here — only
-      // the failure to start it, in which case the button has to become usable again.
-      await authClient.signIn.social({ provider: "google", callbackURL })
+      // the failure to start it, in which case the button has to become usable again. The
+      // destination after Google redirects back is always /auth/callback, which exchanges the
+      // code for a session and then forwards to callbackURL — see that route for why.
+      const supabase = createClient()
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(callbackURL)}`
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } })
+      if (error) throw error
     } catch {
       onError?.("Could not reach Google just now. Please try again.")
       setBusy(false)

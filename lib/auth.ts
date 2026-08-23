@@ -1,66 +1,36 @@
-import config, { isGoogleAuthEnabled } from "@/lib/config"
-import { assertSignupAllowed } from "@/lib/signup-gate"
-import { getUserById } from "@/models/users"
+import config from "@/lib/config"
+import { createClient } from "@/lib/supabase/server"
+import { resolveOrProvisionUser } from "@/models/users"
 import { User } from "@/prisma/client"
-import { betterAuth } from "better-auth"
-import { prismaAdapter } from "better-auth/adapters/prisma"
-import { nextCookies } from "better-auth/next-js"
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { prisma } from "./db"
-import { isEmailConfigured, resend, sendPasswordResetEmail } from "./email"
+import { cache } from "react"
 
 export type UserProfile = Pick<User, "id" | "name" | "email" | "avatar">
 
-export const auth = betterAuth({
-  database: prismaAdapter(prisma, { provider: "postgresql" }),
-  appName: config.app.title,
-  baseURL: config.app.baseURL,
-  secret: config.auth.secret,
-  email: { provider: "resend", from: config.email.from, resend },
-  // A HIPAA deployment needs automatic logoff (§164.312(a)(2)(iii)): 180 days with no idle bound
-  // let a stolen or unattended browser stay signed in for half a year. expiresIn now doubles as
-  // the idle bound — updateAge slides it forward on activity, so an active user never sees it,
-  // but 12h of inactivity ends the session. cookieCache is shortened to the same end: a suspended
-  // or explicitly revoked session (the Session row deleted) now surfaces within minutes rather
-  // than staying valid for the old cache window.
-  session: { strategy: "jwt", expiresIn: 12 * 60 * 60, updateAge: 15 * 60, cookieCache: { enabled: true, maxAge: 5 * 60 } },
-  // Keep in lockstep with the getSessionCookie prefix in proxy.ts — a mismatch makes the proxy
-  // see no session and bounce /workspaces straight back to the login page in a loop.
-  advanced: { cookiePrefix: "docubite", database: { generateId: "uuid" } },
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 8,
-    // better-auth's own default is to not verify; the app has never gated on a verified address
-    // and turning it on here would lock every existing account out at the next sign-in.
-    requireEmailVerification: false,
-    sendResetPassword: async ({ user, url }) => {
-      // Without a Resend key there is no way to deliver the link, and a silently dropped mail
-      // makes the flow untestable. Log it instead so a dev install can complete the round trip.
-      if (!isEmailConfigured()) {
-        console.log(`[DEV] Password reset link for ${user.email}: ${url}`)
-        return
-      }
-      await sendPasswordResetEmail({ email: user.email, resetUrl: url })
-    },
-  },
-  // Registered only when both halves of the credential pair are set. An install without them
-  // still boots; the login and signup pages read isGoogleAuthEnabled and omit the button.
-  ...(isGoogleAuthEnabled && {
-    socialProviders: {
-      google: { clientId: config.auth.google.clientId, clientSecret: config.auth.google.clientSecret },
-    },
-  }),
-  // The real sign-up gate. It runs on every path that creates a user — password sign-up and the
-  // Google callback alike — rather than at any one endpoint, which is what lets an invited
-  // stranger sign up while DISABLE_SIGNUP is on. See lib/signup-gate.ts for why it throws.
-  databaseHooks: { user: { create: { before: async (user) => { await assertSignupAllowed(user.email) } } } },
-  plugins: [nextCookies()],
+/** The verified Supabase identity for this request, or null — cheap to call repeatedly within one
+ * request because React's cache() memoizes it, the same pattern models/users.ts uses for its DB
+ * lookups.
+ *
+ * getClaims(), not getUser(): for a project using the default asymmetric signing keys, claims are
+ * verified locally against the cached JWKS with no round trip to Supabase, where getUser() always
+ * makes one. proxy.ts's updateSession() already made that one round-trip per request (it's what
+ * refreshes the token), so a second one here would just double the latency for no extra safety —
+ * the claims are still cryptographically verified, not trusted off the cookie unchecked.
+ *
+ * Returns the Supabase user id (`sub`) as `user.id` — this is NOT the local `users.id` from
+ * Postgres. Every caller that needs the local row goes through getViewerUser() (or
+ * getUserBySupabaseUserId directly), never getUserById(session.user.id) as it would have been
+ * under better-auth, where the two ids were the same value. */
+export const getSession = cache(async () => {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getClaims()
+  if (error || !data) return null
+  const claims = data.claims
+  return {
+    user: { id: claims.sub, email: (claims.email as string) ?? "", name: (claims.user_metadata as Record<string, unknown> | undefined)?.name as string | undefined },
+    aal: (claims.aal as string | undefined) ?? "aal1",
+  }
 })
-
-export async function getSession() {
-  return auth.api.getSession({ headers: await headers() })
-}
 
 export async function getCurrentUser(): Promise<User> {
   const user = await getApiUser()
@@ -85,9 +55,11 @@ export async function getApiUser(): Promise<User | null> {
  *
  * One check in one place is the whole point: every page, layout, server action and route handler
  * reaches the current user through this (via getApiUser or getCurrentUser), so a suspended
- * account loses all of them at once rather than one gate at a time. Sessions are JWTs here, so
- * deleting the Session rows on suspend does *not* invalidate the cookie the browser is holding —
- * this check is the real gate, and the row deletion is only hygiene.
+ * account loses all of them at once rather than one gate at a time.
+ *
+ * Also where a Supabase identity is first linked to (or provisioned as) a local User row — see
+ * models/users.ts's resolveOrProvisionUser for the three cases that covers: already linked,
+ * migrated-account-first-sign-in, and genuinely new.
  *
  * Exported for the handful of callers that resolve a viewer without requiring one: the shared
  * link routes and the invitation page, which have to work for signed-out visitors and so cannot
@@ -96,7 +68,7 @@ export async function getApiUser(): Promise<User | null> {
 export async function getViewerUser(): Promise<User | null> {
   const session = await getSession()
   if (!session?.user) return null
-  const user = await getUserById(session.user.id)
+  const user = await resolveOrProvisionUser({ supabaseUserId: session.user.id, email: session.user.email, name: session.user.name })
   if (!user || user.suspendedAt) return null
   return user
 }

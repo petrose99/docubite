@@ -1,18 +1,18 @@
 import config from "@/lib/config"
 import { getPendingInvitationForEmail } from "@/models/workspaces"
-import { APIError } from "better-auth/api"
 
 /** The DISABLE_SIGNUP gate, with a hole punched in it for invited people.
  *
- * Lives in its own module rather than inline in lib/auth.ts because that file calls betterAuth()
- * at module scope — importing it from a test would build a real auth instance and a Prisma
- * adapter. This is the same rule, callable on its own.
- *
- * Throws rather than returning false: better-auth's user.create.before hook treats a `false`
- * return as "skip the create", which yields a null user and then crashes deeper in at
- * createSession. An APIError is the documented way to refuse. */
+ * Called from two places, both needed: the "Before User Created" Supabase Auth Hook
+ * (app/api/internal/auth/signup-allowed/route.ts), which is the primary control — it runs before
+ * Supabase ever creates the auth.users row, so a rejection there means no identity exists at all —
+ * and models/users.ts's resolveOrProvisionUser, as a second check on the same rule when a local
+ * User row is first created. The second check exists because Supabase's hook-rejection response
+ * shape has open reports of not always being honored (see the HIPAA migration plan's Verification
+ * section) — if the hook fails to block a signup it should have, resolveOrProvisionUser still
+ * catches it and suspends the row on creation rather than leaving the gate single-point-of-failure. */
 export async function assertSignupAllowed(email: string) {
   if (!config.auth.disableSignup) return
   if (await getPendingInvitationForEmail(email)) return
-  throw new APIError("FORBIDDEN", { message: "Sign-up is disabled" })
+  throw new Error("signup_disabled")
 }

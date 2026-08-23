@@ -1,12 +1,15 @@
 "use client"
 
+import { requestPasswordResetAction } from "@/app/(auth)/auth-actions"
 import { AuthField, PasswordField, SubmitButton } from "@/components/auth/fields"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { createClient } from "@/lib/supabase/client"
 import { MailCheck } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+
+const MIN_PASSWORD_LENGTH = 12
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("")
@@ -19,9 +22,15 @@ export function ForgotPasswordForm() {
     setBusy(true)
     setError(null)
     try {
-      await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" })
+      // Routed through a server action, not the browser client directly, so the F14 rate-limit
+      // backstop (lib/rate-limit.ts) can run first. /auth/callback exchanges the code the email
+      // link carries for a recovery session, then forwards here — see that route and
+      // ResetPasswordForm below, which expects that session to already exist rather than taking a
+      // bare token the way better-auth's reset did.
+      await requestPasswordResetAction(email)
       // Shown whatever came back. A distinct "no such account" response would let anyone test
-      // which addresses are registered, and better-auth already answers uniformly for that reason.
+      // which addresses are registered, and requestPasswordResetAction already answers uniformly
+      // for that reason — success regardless of whether the account exists or the limit was hit.
       setSent(true)
     } catch {
       setError("Could not send the reset link. Please try again.")
@@ -57,32 +66,28 @@ export function ForgotPasswordForm() {
   )
 }
 
-export function ResetPasswordForm({ token }: { token: string | null }) {
+/** No `token` prop, unlike the better-auth version: this page only ever renders after
+ * /auth/callback has already exchanged the email link's code for a recovery session (cookies are
+ * already set by the time this component mounts), so there is nothing left to pass in — the
+ * updateUser call below reads that session the same way any other authenticated request would. */
+export function ResetPasswordForm() {
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (!token) {
-    return (
-      <div className="text-center">
-        <p className="text-sm leading-6 text-stone-600">This reset link is missing its token, which usually means it was truncated by an email client.</p>
-        <Link href="/forgot-password" className="mt-6 inline-block text-sm font-semibold text-emerald-800 hover:underline">Request a new link</Link>
-      </div>
-    )
-  }
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      const result = await authClient.resetPassword({ newPassword: password, token })
-      if (result.error) {
+      const supabase = createClient()
+      const { error: updateError } = await supabase.auth.updateUser({ password })
+      if (updateError) {
         setError("This link has expired or has already been used. Request a new one.")
         return
       }
-      // Straight to sign-in: resetPassword does not mint a session, so there is nothing to
-      // preserve by staying on the client here.
+      // Straight to sign-in, not the workspace: updateUser leaves the recovery-scoped session in
+      // place, which is narrower than a normal sign-in — going through /login mints an ordinary one.
       window.location.href = "/login"
     } catch {
       setError("Could not set that password. Please try again.")
@@ -93,8 +98,8 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <PasswordField label="New password" name="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={8} />
-      <p className="-mt-2 text-xs text-stone-500">At least 8 characters.</p>
+      <PasswordField label="New password" name="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} />
+      <p className="-mt-2 text-xs text-stone-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
       <SubmitButton busy={busy}>{busy ? "Saving…" : "Set new password"}</SubmitButton>
       {error && <FormError>{error}</FormError>}
     </form>

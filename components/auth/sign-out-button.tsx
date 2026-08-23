@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { authClient } from "@/lib/auth-client"
+import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -13,7 +13,7 @@ export function SignOutButton({ label = "Sign out", redirectTo = "/login" }: { l
   return <Button type="button" variant="outline" disabled={busy} onClick={async () => {
     setBusy(true)
     try {
-      await authClient.signOut()
+      await createClient().auth.signOut()
       window.location.href = redirectTo
     } catch {
       toast.error("Could not sign out — please try again")

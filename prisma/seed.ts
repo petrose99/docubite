@@ -2,10 +2,11 @@
  *
  * Deliberately talks to Prisma directly instead of going through lib/auth.ts. That module pulls
  * in next/headers, which throws the moment it is imported outside a request — so the "correct"
- * route of calling better-auth's sign-up API cannot run under tsx at all. What it does instead is
- * write exactly what better-auth writes: a User row, and an Account row with providerId
- * "credential" and the scrypt hash from better-auth's own hashPassword, which is the same
- * function the configured instance verifies against at sign-in.
+ * route of calling getViewerUser cannot run under tsx at all. What it does instead is provision
+ * both halves by hand: a Supabase identity via the admin API (real password, email pre-confirmed
+ * — these are synthetic accounts, not migrated ones, so there is no reset flow to route them
+ * through) and the matching local User row, linked by supabaseUserId exactly the way
+ * resolveOrProvisionUser links a real sign-up.
  *
  * Every account is seeded with a plan but NO Stripe customer or subscription id. That is what
  * keeps them useful: deleteWorkspace refuses to delete a workspace with a live Stripe
@@ -14,8 +15,8 @@
  *
  * Run with: npm run db:seed  (dev server stopped — the local PGlite database takes one connection)
  */
+import { createAdminClient } from "@/lib/supabase/server"
 import { createWorkspaceForUser } from "@/models/workspaces"
-import { hashPassword } from "better-auth/crypto"
 import { prisma } from "@/lib/db"
 
 type DemoAccount = { email: string; name: string; role: string; planCode: string; password: string }
@@ -40,23 +41,30 @@ function currentPeriod(now = new Date()) {
   }
 }
 
-/** Account has no compound unique on (providerId, userId), so this is find-then-write rather than
- * an upsert. Re-running the seed re-hashes and overwrites the password, which is what makes it
- * safe to run after someone has changed one by hand and forgotten. */
-async function upsertCredentialAccount(userId: string, password: string) {
-  const hash = await hashPassword(password)
-  const existing = await prisma.account.findFirst({ where: { userId, providerId: "credential" } })
-  if (existing) return prisma.account.update({ where: { id: existing.id }, data: { password: hash } })
-  return prisma.account.create({ data: { providerId: "credential", accountId: userId, userId, password: hash } })
+/** Provisions (or updates) the Supabase Auth identity for one demo account, returning its
+ * supabaseUserId. Looked up by the LOCAL row's already-linked id first, not by asking Supabase to
+ * search by email — that keeps this idempotent without needing a second Supabase API round trip
+ * on every re-run, and re-running re-syncs the password so a changed ACCOUNTS entry (or a demo
+ * password fiddled with by hand) never goes stale. */
+async function upsertSupabaseIdentity(email: string, password: string, name: string): Promise<string> {
+  const admin = createAdminClient()
+  const existing = await prisma.user.findUnique({ where: { email }, select: { supabaseUserId: true } })
+  if (existing?.supabaseUserId) {
+    await admin.auth.admin.updateUserById(existing.supabaseUserId, { password })
+    return existing.supabaseUserId
+  }
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } })
+  if (error || !data.user) throw new Error(`Could not create Supabase user for ${email}: ${error?.message}`)
+  return data.user.id
 }
 
 async function seedAccount(account: DemoAccount) {
+  const supabaseUserId = await upsertSupabaseIdentity(account.email, account.password, account.name)
   const user = await prisma.user.upsert({
     where: { email: account.email },
-    create: { email: account.email, name: account.name, role: account.role, emailVerified: true },
-    update: { name: account.name, role: account.role },
+    create: { email: account.email, name: account.name, role: account.role, emailVerified: true, supabaseUserId },
+    update: { name: account.name, role: account.role, supabaseUserId },
   })
-  await upsertCredentialAccount(user.id, account.password)
 
   // createWorkspaceForUser also seeds the starter file and worksheets a real sign-up gets, so a
   // demo account opens on a working sheet rather than an empty shell. Only on the first run:

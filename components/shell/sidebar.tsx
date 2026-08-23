@@ -3,7 +3,7 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { CreditCard, Files, Mic, Settings, Users } from "lucide-react"
+import { CreditCard, Files, Mic, Settings, ShieldCheck, Users } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -30,6 +30,7 @@ export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = fals
     { href: `${base}/files`, label: "Files", icon: Files },
     ...(dictationEnabled ? [{ href: `${base}/dictation`, label: "Dictation", icon: Mic }] : []),
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
+    { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
     { href: `${base}/settings/templates`, label: "Settings", icon: Settings },
   ]
