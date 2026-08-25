@@ -9,7 +9,7 @@ vi.mock("@/lib/config", () => ({ default: { get dictation() { return dictationCo
 const { resolveDictationRouting, checkDictationAmbiguity, AMBIGUITY_MARGIN } = await import("@/lib/dictation/pipeline")
 
 const extraction = (over: Partial<DictationExtraction> = {}): DictationExtraction => ({
-  requested_format: null, format_source: "inferred", commands: [], cleaned_content: "content", ...over,
+  requested_format: null, format_source: "inferred", commands: [], ...over,
 })
 
 const routedTemplate: RoutedIntent = { intent: "template", route: null, score: 0, via: "template" }
