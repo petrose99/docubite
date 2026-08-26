@@ -41,6 +41,7 @@ model User {
   signedReports         DocumentReportDraft[]
   editedTranscripts     Document[]            @relation("TranscriptEditor")
   decidedFieldSuggestions FieldSuggestion[]   @relation("FieldSuggestionDecider")
+  createdApiKeys        WorkspaceApiKey[]     @relation("ApiKeyCreator")
 
   @@map("users")
 }
@@ -74,6 +75,9 @@ model Workspace {
   reportTemplates ReportTemplate[]
   reportDrafts    DocumentReportDraft[]
   fieldSuggestions FieldSuggestion[]
+  apiKeys         WorkspaceApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  webhookDeliveries WebhookDelivery[]
 
   @@map("workspaces")
 }
@@ -407,6 +411,7 @@ model Document {
   fieldValues       DocumentFieldValue[]
   reportDrafts      DocumentReportDraft[]
   fieldSuggestions  FieldSuggestion[]
+  webhookDeliveries WebhookDelivery[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -675,6 +680,86 @@ model StripeWebhookEvent {
   @@index([workspaceId])
   @@index([status, leaseUntil])
   @@map("stripe_webhook_events")
+}
+
+/// A workspace-scoped API key for the public /api/v1 surface. Only the sha256 of the secret is
+/// stored (keyHash), exactly like WorkspaceInvitation.tokenHash: the plaintext is shown once at
+/// creation and never again. keyPrefix is a short non-secret label ("dbk_live_a1b2c3d4") so the
+/// UI can identify a key without revealing it. Authenticated unscoped by keyHash (lib/api-auth.ts).
+model WorkspaceApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  name        String
+  createdById String?   @map("created_by_id") @db.Uuid
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?     @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("workspace_api_keys")
+}
+
+/// A registered receiver for workspace lifecycle events. `secretEnc` is the HMAC signing secret,
+/// AES-GCM-sealed (lib/secret-crypto.ts) and shown in plaintext only once at creation. `events`
+/// empty means "all events". An endpoint is auto-disabled after `failureCount` reaches the cap
+/// (see lib/webhook-delivery.ts) so a permanently-broken URL stops consuming delivery attempts.
+model WebhookEndpoint {
+  id           String            @id @default(uuid()) @db.Uuid
+  workspaceId  String            @map("workspace_id") @db.Uuid
+  url          String
+  secretEnc    String            @map("secret_enc")
+  events       String[]          @default([])
+  status       String            @default("active")
+  failureCount Int               @default(0) @map("failure_count")
+  createdById  String?           @map("created_by_id") @db.Uuid
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhook_endpoints")
+}
+
+/// One attempt-tracked delivery of one event to one endpoint. This row IS the queue row, following
+/// the StripeWebhookEvent precedent rather than reusing DocumentProcessingJob (whose 14-minute lease
+/// and documentId-shaped drain are wrong here). Claimed with a short lease and drained by the shared
+/// driver (after() kick, the internal jobs route, and the worker loop) — see lib/webhook-delivery.ts.
+///
+/// `eventId` is stable across retries of the same event and is the receiver's idempotency key.
+/// `payload` is snapshotted at emission and re-sent verbatim on every retry; receivers re-fetch
+/// fresh state via the API link in the payload. workspaceId is carried directly (not only via the
+/// endpoint) so the row is scopeable for the settings list and for the RLS policy.
+model WebhookDelivery {
+  id             String          @id @default(uuid()) @db.Uuid
+  workspaceId    String          @map("workspace_id") @db.Uuid
+  endpointId     String          @map("endpoint_id") @db.Uuid
+  eventId        String          @map("event_id")
+  eventType      String          @map("event_type")
+  documentId     String?         @map("document_id") @db.Uuid
+  payload        Json
+  status         String          @default("pending")
+  attempts       Int             @default(0)
+  nextAttemptAt  DateTime        @default(now()) @map("next_attempt_at")
+  leaseUntil     DateTime?       @map("lease_until")
+  responseStatus Int?            @map("response_status")
+  errorCode      String?         @map("error_code")
+  deliveredAt    DateTime?       @map("delivered_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  document       Document?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([workspaceId, createdAt])
+  @@index([endpointId])
+  @@map("webhook_deliveries")
 }
 
 model Session {

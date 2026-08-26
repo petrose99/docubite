@@ -3,7 +3,7 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { CreditCard, Files, Mic, Settings, Users } from "lucide-react"
+import { CreditCard, Files, Mic, Settings, Users, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation"
  * It steps aside for the spreadsheet. Lido gives an open file the whole window and navigates
  * back out through the file bar's "← Files" rather than a persistent rail, and a grid is the
  * one screen where 224px of chrome costs real columns. */
-export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = false }: {
+export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = false, integrationsEnabled = false }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
@@ -21,6 +21,9 @@ export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = fals
    * actually transcribe — a front door onto a page that answers "not configured" is worse than
    * no door. */
   dictationEnabled?: boolean
+  /** The server's config.integrations.enabled. Same omit-if-unconfigured rule as dictation: no
+   * Integrations entry unless the deployment has an encryption key to run webhooks/API keys. */
+  integrationsEnabled?: boolean
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
@@ -31,6 +34,7 @@ export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = fals
     ...(dictationEnabled ? [{ href: `${base}/dictation`, label: "Dictation", icon: Mic }] : []),
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
+    ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook }] : []),
     { href: `${base}/settings/templates`, label: "Settings", icon: Settings },
   ]
 

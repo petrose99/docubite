@@ -21,7 +21,8 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
       user={{ name: user.name, email: user.email }}
-      dictationEnabled={config.asr.enabled} />
+      dictationEnabled={config.asr.enabled}
+      integrationsEnabled={config.integrations.enabled} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

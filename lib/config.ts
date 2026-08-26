@@ -123,6 +123,14 @@ const envSchema = z.object({
   // Small/fast model for the command/content-separation call (Stage B). Falls back to the main
   // structuring model when unset — see lib/dictation/extraction.ts.
   DICTATION_FAST_MODEL_NAME: z.string().optional(),
+  // Outbound integrations (webhooks, API keys, accounting connectors). The single master gate:
+  // with no encryption key set the whole surface is dark — the sidebar entry is omitted, webhook
+  // secrets and connector OAuth tokens have nowhere safe to live, so none of it is offered. The
+  // key is 32 random bytes, base64-encoded (AES-256-GCM); see lib/secret-crypto.ts. The optional
+  // _PREVIOUS key is accepted for DECRYPT ONLY during a rotation — new writes always use the
+  // current key, and a value sealed under the old key is re-encrypted lazily on its next write.
+  SECRETS_ENCRYPTION_KEY: z.string().optional(),
+  SECRETS_ENCRYPTION_KEY_PREVIOUS: z.string().optional(),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -210,6 +218,14 @@ const config = {
     routerEnabled: env.DICTATION_ROUTER_ENABLED === "true",
     routeThreshold: env.DICTATION_ROUTE_THRESHOLD,
     fastModelName: env.DICTATION_FAST_MODEL_NAME || "",
+  },
+  // Outbound integrations. `enabled` is the one gate the sidebar, settings page and every emitter
+  // read — off when no encryption key is configured, exactly as `embeddings.enabled` gates RAG.
+  // The two keys are handed to lib/secret-crypto.ts; `encryptionKeyPrevious` is decrypt-only.
+  integrations: {
+    enabled: Boolean(env.SECRETS_ENCRYPTION_KEY),
+    encryptionKey: env.SECRETS_ENCRYPTION_KEY || "",
+    encryptionKeyPrevious: env.SECRETS_ENCRYPTION_KEY_PREVIOUS || "",
   },
 } as const
 

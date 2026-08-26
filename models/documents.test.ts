@@ -96,6 +96,9 @@ describe("createDocumentFromBuffer deduplication", () => {
       document: { findUnique, create: vi.fn(async ({ data }: { data: unknown }) => data) },
       documentProcessingJob: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: "job-1" }) },
       documentAuditEvent: { create: vi.fn() },
+      // No subscribed endpoints → emitWorkspaceEvent queues nothing and never kicks the drain.
+      webhookEndpoint: { findMany: vi.fn().mockResolvedValue([]) },
+      webhookDelivery: { createMany: vi.fn() },
       $transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db)),
     })
   })
@@ -133,7 +136,11 @@ describe("deleteWorkspaceDocuments", () => {
     Object.assign(db, {
       document: { findMany, delete: vi.fn() },
       documentAuditEvent: { create: vi.fn() },
-      $transaction: vi.fn(async (operations: unknown[]) => operations),
+      // No subscribed endpoints → emitWorkspaceEvent queues nothing and never kicks the drain.
+      webhookEndpoint: { findMany: vi.fn().mockResolvedValue([]) },
+      webhookDelivery: { createMany: vi.fn() },
+      // Interactive form now (deleteWorkspaceDocuments fans out document.deleted in the delete tx).
+      $transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db)),
     })
   })
 

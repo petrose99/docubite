@@ -14,6 +14,8 @@ import { parseDocumentWithMineru } from "@/lib/mineru"
 import { parsePageRange } from "@/lib/page-range"
 import { prisma } from "@/lib/db"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
+import { emitWorkspaceEvent } from "@/lib/webhooks"
+import { kickWebhookDrain } from "@/lib/webhook-delivery"
 import { Prisma } from "@/prisma/client"
 import sharp from "sharp"
 
@@ -185,11 +187,24 @@ async function failDocumentJob(
   const errorCode = safeErrorCode(error)
   const permanent = job.attempts >= 5 || PERMANENT_ERROR_CODES.includes(errorCode) || PERMANENT_ASR_ERROR_CODES.includes(errorCode)
   const retryAt = new Date(Date.now() + Math.min(15 * 60_000, 30_000 * 2 ** Math.max(0, job.attempts - 1)))
-  await prisma.$transaction([
-    prisma.document.update({ where: { id: job.documentId }, data: { status: permanent ? "failed" : "queued", errorCode } }),
-    prisma.documentProcessingJob.update({ where: { id: job.jobId }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId: job.workspaceId, documentId: job.documentId, type: permanent ? "extraction_failed" : "extraction_retrying" } }),
-  ])
+  // Interactive (not array) form so a permanent failure can fan out document.failed inside the same
+  // tx — a transient retry emits nothing, since the document is not in a terminal state yet.
+  let webhookQueued = false
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.document.update({ where: { id: job.documentId }, data: { status: permanent ? "failed" : "queued", errorCode } })
+    await tx.documentProcessingJob.update({ where: { id: job.jobId }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } })
+    await tx.documentAuditEvent.create({ data: { workspaceId: job.workspaceId, documentId: job.documentId, type: permanent ? "extraction_failed" : "extraction_retrying" } })
+    if (permanent) {
+      const emitted = await emitWorkspaceEvent(tx, {
+        workspaceId: job.workspaceId,
+        type: "document.failed",
+        createdAt: new Date(),
+        document: { id: updated.id, filename: updated.filename, status: "failed", receivedAt: updated.receivedAt, reviewedData: updated.reviewedData, templateCode: null, confidence: updated.confidence },
+      })
+      webhookQueued = emitted.queued > 0
+    }
+  })
+  if (webhookQueued) await kickWebhookDrain()
 }
 
 export async function processDocumentJob(jobId: string) {
@@ -236,6 +251,9 @@ export async function processDocumentJob(jobId: string) {
   // picks it up.
   let embedJobId: string | null = null
   let extractError: unknown = null
+  // Set inside the completion tx when a lifecycle event was queued to at least one endpoint; drives
+  // the post-commit drain kick, mirroring embedJobId's kick pattern.
+  let webhookQueued = false
   try {
     if (!document.storageKey) throw new Error("document_source_missing")
     if (!PROCESSABLE_TYPES.has(document.mimeType)) throw new Error("unsupported_document_type")
@@ -357,11 +375,21 @@ export async function processDocumentJob(jobId: string) {
     // Interactive form (not the array form) because the projection is raw SQL and has to run on the
     // same tx client. Timeout raised over the 5s default: a long line-item table projects to a few
     // hundred rows, which is still only a handful of batched statements but not instant.
+    const confidence = { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields }
     await prisma.$transaction(async (tx) => {
-      await tx.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields } as Prisma.InputJsonValue } })
+      await tx.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: confidence as Prisma.InputJsonValue } })
       await tx.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } })
       await tx.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } })
       await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows: fieldValues }, tx)
+      // Fan the lifecycle event out to subscribed endpoints in the SAME tx, so an event is never
+      // queued for a completion that then rolls back. The drain is kicked after commit (below).
+      const emitted = await emitWorkspaceEvent(tx, {
+        workspaceId: document.workspaceId,
+        type: status === "needs_review" ? "document.needs_review" : "document.ready_for_review",
+        createdAt: new Date(),
+        document: { id: document.id, filename: document.filename, status, receivedAt: document.receivedAt, reviewedData: extraction as Prisma.JsonValue, templateCode: document.template?.code ?? null, confidence },
+      })
+      webhookQueued = emitted.queued > 0
     }, { timeout: 20_000 })
   } catch (error) {
     await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: document.id, workspaceId: document.workspaceId }, error)
@@ -375,6 +403,8 @@ export async function processDocumentJob(jobId: string) {
   // finishing, so this producing job returns as soon as ITS OWN work is done. The embed job's
   // atomic claim makes this a no-op if a worker or the drain cron already picked it up.
   if (embedJobId) await kickEmbedJob(embedJobId)
+  // Nudge the webhook drain post-commit (best-effort; the cron/worker are the guarantee).
+  if (webhookQueued) await kickWebhookDrain()
   if (extractError) throw extractError
 }
 

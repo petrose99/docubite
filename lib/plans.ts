@@ -10,6 +10,12 @@ export type WorkspacePlan = {
   /** -1 is unlimited. `members` is the one that gates team workspaces: at 1 seat, the Workspace
    * page shows the upgrade prompt instead of the members UI. */
   limits: { members: number; documents: number; ai: number }
+  /** Feature flags, distinct from `limits`: on/off capabilities a plan includes rather than a
+   * countable allowance. `integrations` is the outbound API-keys + webhooks surface (P1) — on for
+   * every paid plan; a future free plan (P7) would set it false. Unlike limits, these are NOT
+   * neutralised by ENFORCE_PLAN_LIMITS: turning off enforcement lifts usage ceilings, it does not
+   * silently grant a capability the workspace is not on. */
+  integrations: boolean
 }
 
 /** Length of the free trial every new workspace starts on. Read by createWorkspaceForUser to
@@ -25,6 +31,7 @@ export const WORKSPACE_PLANS: Record<string, WorkspacePlan> = {
     price: 29,
     features: ["1 user", "200 documents per month", "500 AI extractions per month", "Unlimited files and folders", "Share by link — view, sandbox or edit"],
     limits: { members: 1, documents: 200, ai: 500 },
+    integrations: true,
   },
   growth: {
     code: "growth",
@@ -33,6 +40,7 @@ export const WORKSPACE_PLANS: Record<string, WorkspacePlan> = {
     price: 99,
     features: ["Up to 10 users", "2,000 documents per month", "5,000 AI extractions per month", "Team workspaces", "Priority support"],
     limits: { members: 10, documents: 2_000, ai: 5_000 },
+    integrations: true,
   },
   enterprise: {
     code: "enterprise",
@@ -41,6 +49,7 @@ export const WORKSPACE_PLANS: Record<string, WorkspacePlan> = {
     price: -1,
     features: ["Unlimited users", "Unlimited documents", "Unlimited AI extractions", "Team workspaces", "Custom terms"],
     limits: { members: -1, documents: -1, ai: -1 },
+    integrations: true,
   },
 }
 

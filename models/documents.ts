@@ -6,6 +6,8 @@ import { projectDocumentFields } from "@/lib/field-projection"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
+import { emitWorkspaceEvent } from "@/lib/webhooks"
+import { kickWebhookDrain } from "@/lib/webhook-delivery"
 import { prisma } from "@/lib/db"
 import { Document, Prisma } from "@/prisma/client"
 import crypto from "crypto"
@@ -90,7 +92,8 @@ export async function createDocumentFromBuffer(input: {
   const receivedAt = input.receivedAt || new Date()
   await putDocumentSource(storageKey, input.buffer, input.mimeType)
   try {
-    return await prisma.$transaction(async (tx) => {
+    let webhookQueued = false
+    const result = await prisma.$transaction(async (tx) => {
       const document = await tx.document.create({ data: {
         id, workspaceId: input.workspaceId, fileId: input.fileId, templateId: template.id, templateVersionId: version.id,
         source: documentSourceFor(input.mimeType, input.source),
@@ -102,8 +105,15 @@ export async function createDocumentFromBuffer(input: {
       // only place the two ingestion paths diverge — from the job onwards they are the same code.
       const job = await tx.documentProcessingJob.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: SUPPORTED_AUDIO_TYPES.has(input.mimeType) ? "transcribe" : "extract" } })
       await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: "document_received" } })
+      const emitted = await emitWorkspaceEvent(tx, {
+        workspaceId: input.workspaceId, type: "document.received", createdAt: new Date(),
+        document: { id: document.id, filename: document.filename, status: document.status, receivedAt: document.receivedAt, reviewedData: document.reviewedData, templateCode: template.code, confidence: document.confidence },
+      })
+      webhookQueued = emitted.queued > 0
       return { document, job, duplicate: false }
     })
+    if (webhookQueued) await kickWebhookDrain()
+    return result
   } catch (error) {
     await deleteDocumentSource(storageKey)
     throw error
@@ -129,12 +139,21 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   // every field, and claiming certainty nobody asserted would make the confidence signal useless.
   const priorConfidence = ((document.confidence as Record<string, unknown> | null)?.fieldConfidence as Record<string, number> | null) ?? null
   const rows = projectDocumentFields({ fields, values: reviewedData, confidence: priorConfidence, provenance: document.provenance as DocumentProvenance | null, source: "manual" })
-  return prisma.$transaction(async (tx) => {
+  let webhookQueued = false
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } })
     await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } })
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
+    const emitted = await emitWorkspaceEvent(tx, {
+      workspaceId: input.workspaceId, type: missing.length ? "document.needs_review" : "document.reviewed", createdAt: new Date(),
+      document: { id: updated.id, filename: updated.filename, status: updated.status, receivedAt: updated.receivedAt, reviewedData: updated.reviewedData, templateCode: document.template?.code ?? null, confidence: updated.confidence },
+    })
+    webhookQueued = emitted.queued > 0
     return updated
   }, { timeout: 20_000 })
+  // Human review is the key integration trigger — a reviewed document is what a connector pushes.
+  if (webhookQueued) await kickWebhookDrain()
+  return result
 }
 
 /** Removes one field's source pin from a document's provenance record, returning the partial
@@ -233,19 +252,28 @@ export async function getDocumentsStatus(workspaceId: string, documentIds: strin
 /** Deletes documents with their stored sources. Quota is deliberately not refunded: the
  * upload consumed processing work, and refunds would let one slot be recycled all month. */
 export async function deleteWorkspaceDocuments(workspaceId: string, documentIds: string[], actorId: string) {
-  const documents = await prisma.document.findMany({ where: { workspaceId, id: { in: documentIds.slice(0, 100) } }, select: { id: true, storageKey: true } })
+  const documents = await prisma.document.findMany({ where: { workspaceId, id: { in: documentIds.slice(0, 100) } }, select: { id: true, storageKey: true, filename: true } })
   let deleted = 0
+  let anyQueued = false
   for (const document of documents) {
     if (document.storageKey) await deleteDocumentSource(document.storageKey).catch(() => {})
     // The blocks sidecar (if any) sits under the same document prefix; drop it too. Best effort —
     // an absent sidecar is the common case.
     await deleteDocumentSource(documentBlocksKey(workspaceId, document.id)).catch(() => {})
-    await prisma.$transaction([
-      prisma.document.delete({ where: { id: document.id } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId, actorId, type: "document_deleted" } }),
-    ])
+    // Interactive form so document.deleted fans out in the same tx as the delete. The event carries
+    // only id + filename (the row is gone), and its delivery row's documentId is null — no dangling FK.
+    await prisma.$transaction(async (tx) => {
+      await tx.document.delete({ where: { id: document.id } })
+      await tx.documentAuditEvent.create({ data: { workspaceId, actorId, type: "document_deleted" } })
+      const emitted = await emitWorkspaceEvent(tx, {
+        workspaceId, type: "document.deleted", createdAt: new Date(),
+        document: { id: document.id, filename: document.filename, deleted: true },
+      })
+      if (emitted.queued > 0) anyQueued = true
+    })
     deleted++
   }
+  if (anyQueued) await kickWebhookDrain()
   return { deleted }
 }
 

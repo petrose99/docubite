@@ -33,6 +33,13 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "AiFormulaCache",
   "WorkspaceUsagePeriod",
   "WorkspaceSubscription",
+  // Outbound integrations (P1). WorkspaceApiKey is authenticated unscoped by keyHash (a UNIQUE
+  // operation, so permitted), but every list/manage query is workspace-scoped. WebhookDelivery is
+  // the queue row: like DocumentProcessingJob it is drained across all workspaces, and that global
+  // drain wraps its claim in unscoped() (see lib/webhook-delivery.ts) exactly as the job worker does.
+  "WorkspaceApiKey",
+  "WebhookEndpoint",
+  "WebhookDelivery",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.
