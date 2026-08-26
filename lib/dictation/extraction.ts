@@ -30,37 +30,31 @@ export const dictationExtractionSchema = z.object({
   requested_format: requestedFormatField,
   format_source: z.enum(["explicit", "inferred"]),
   commands: z.array(z.string().max(300)).max(20),
-  cleaned_content: z.string().max(100_000),
 })
 
 export type DictationExtraction = z.infer<typeof dictationExtractionSchema>
 
-/** What every caller gets on any failure: no commands stripped, the full transcript as content,
- * and nothing claimed about format — the resolver (lib/dictation/pipeline.ts) then falls back to
- * the route's or template's default exactly as if this call had never run. */
-function passthrough(transcript: string): DictationExtraction {
-  return { requested_format: null, format_source: "inferred", commands: [], cleaned_content: transcript }
+/** What every caller gets on any failure: no commands stripped, and nothing claimed about format —
+ * the resolver (lib/dictation/pipeline.ts) then falls back to the route's or template's default
+ * exactly as if this call had never run. */
+function passthrough(): DictationExtraction {
+  return { requested_format: null, format_source: "inferred", commands: [] }
 }
 
 export function buildExtractionPrompt(transcript: string): string {
   return [
-    "The text below is an automatic transcript of a spoken dictation. Separate two things:",
-    "",
-    "1. COMMANDS — meta-instructions the speaker gave about what to DO with the dictation or how to",
-    "   present it, e.g. \"make this a table\", \"draft this as an email\", \"just bullet points\",",
-    "   \"structure it as a SOAP note\". Return each such instruction verbatim in `commands`.",
-    "2. CONTENT — everything else: the actual substance being dictated. Return it in",
-    "   `cleaned_content`, with the commands themselves and filler/false-starts removed, but",
-    "   otherwise UNCHANGED — do not summarise, rephrase, or add anything.",
+    "The text below is an automatic transcript of a spoken dictation. Find any COMMANDS in it —",
+    "meta-instructions the speaker gave about what to DO with the dictation or how to present it,",
+    "e.g. \"make this a table\", \"draft this as an email\", \"just bullet points\", \"structure it as a",
+    "SOAP note\". Return each such instruction verbatim in `commands`.",
     "",
     "If a command names a specific output format, set `requested_format` to whichever of these it",
     `matches most closely: ${DICTATION_FORMAT_NAMES.join(", ")}. Set \`format_source\` to "explicit"`,
     "in that case. If no command named a format, set `requested_format` to an empty string and",
-    "`format_source` to \"inferred\". Never guess a format from the CONTENT alone — only from an",
-    "explicit spoken instruction.",
+    "`format_source` to \"inferred\". Never guess a format from the rest of the dictation — only from",
+    "an explicit spoken instruction.",
     "",
-    "If the speaker gave no commands at all, return an empty `commands` array and `cleaned_content`",
-    "equal to the transcript with only filler and false starts removed.",
+    "If the speaker gave no commands at all, return an empty `commands` array.",
     "",
     "Transcript:",
     transcript,
@@ -73,9 +67,8 @@ const EXTRACTION_JSON_SCHEMA = {
     requested_format: { type: "string", enum: [...DICTATION_FORMAT_NAMES, ""], description: "The explicitly spoken output format, or an empty string if none was spoken" },
     format_source: { type: "string", enum: ["explicit", "inferred"] },
     commands: { type: "array", items: { type: "string" }, description: "Verbatim spoken meta-instructions" },
-    cleaned_content: { type: "string", description: "The dictated content with commands and filler removed" },
   },
-  required: ["requested_format", "format_source", "commands", "cleaned_content"],
+  required: ["requested_format", "format_source", "commands"],
   additionalProperties: false,
 } as const
 
@@ -84,7 +77,7 @@ const EXTRACTION_JSON_SCHEMA = {
  * dictation degrades to "no commands found, use the route/template default" rather than blocking. */
 export async function extractDictationCommands(transcript: string): Promise<DictationExtraction> {
   const trimmed = transcript.trim()
-  if (!trimmed) return passthrough(transcript)
+  if (!trimmed) return passthrough()
 
   // The fast/small model, falling back to the main structuring model when unset — see
   // DICTATION_FAST_MODEL_NAME in lib/config.ts. Same provider/key resolution as every other LLM
@@ -92,19 +85,16 @@ export async function extractDictationCommands(transcript: string): Promise<Dict
   const provider = config.ai.provider
   const apiKey = provider === "gemini" ? config.ai.geminiApiKey : config.ai.openaiApiKey
   const model = config.dictation.fastModelName || (provider === "gemini" ? config.ai.geminiModelName : config.ai.openaiModelName)
-  if (!apiKey) return passthrough(transcript)
+  if (!apiKey) return passthrough()
 
   try {
     const response = await requestLLM({ providers: [{ provider, apiKey, model }] }, { prompt: buildExtractionPrompt(trimmed), schema: EXTRACTION_JSON_SCHEMA })
-    if (response.error) return passthrough(transcript)
+    if (response.error) return passthrough()
     const parsed = dictationExtractionSchema.safeParse(response.output)
-    if (!parsed.success) return passthrough(transcript)
-    // An empty cleaned_content (the model stripped everything) would silently drop the whole
-    // dictation from every downstream step — degrade to the full transcript instead.
-    if (!parsed.data.cleaned_content.trim()) return { ...parsed.data, cleaned_content: transcript }
+    if (!parsed.success) return passthrough()
     return parsed.data
   } catch (error) {
     console.error("dictation extraction: falling back to passthrough:", error instanceof Error ? error.message : error)
-    return passthrough(transcript)
+    return passthrough()
   }
 }

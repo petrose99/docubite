@@ -9,6 +9,11 @@ import { toast } from "sonner"
 
 /** Must stay in sync with SUPPORTED_AUDIO_TYPES (lib/asr/types.ts). */
 const AUDIO_TYPES = "audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/flac"
+const AUDIO_TYPE_LIST = AUDIO_TYPES.split(",")
+
+/** Must match MAX_AUDIO_BYTES in dictation-actions.ts — checked here too so an oversized file gets
+ * an immediate toast instead of uploading fully only to be rejected server-side. */
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 /** Start a dictation: pick what you are dictating, then talk.
  *
@@ -118,7 +123,10 @@ export function NewDictation({ workspaceId, templates }: {
                   onChange={(event) => {
                     const file = event.target.files?.[0]
                     event.target.value = ""
-                    if (file) void upload(file, `${file.name} uploaded.`)
+                    if (!file) return
+                    if (file.size > MAX_AUDIO_BYTES) { toast.error("That recording is too long to transcribe in one pass."); return }
+                    if (!AUDIO_TYPE_LIST.includes(file.type)) { toast.error("That file type isn't a supported audio format."); return }
+                    void upload(file, `${file.name} uploaded.`)
                   }} />
               </div>
             </>}
