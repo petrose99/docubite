@@ -3,6 +3,7 @@
 // several take a workspaceId that is assumed to be already authorised). The directive would
 // publish every export as a callable endpoint. Server actions live in
 // app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { DEFAULT_DOCUMENT_TEMPLATES, parseTemplateFields } from "@/lib/document-templates"
 import { dictationAdapters, findExtractionDomainPack } from "@/lib/domains"
 import { deleteDocumentSource, documentStorageKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
@@ -328,13 +329,14 @@ export async function duplicateFile(input: { workspaceId: string; userId: string
  * storage sweep has to happen here, before the row goes. */
 export async function deleteFiles(workspaceId: string, fileIds: string[], actorId: string) {
   const files = await prisma.documentFile.findMany({ where: { workspaceId, id: { in: fileIds.slice(0, 100) } }, select: { id: true } })
+  const context = await getRequestAuditContext()
   let deleted = 0
   for (const file of files) {
     const documents = await prisma.document.findMany({ where: { fileId: file.id }, select: { storageKey: true } })
     for (const document of documents) if (document.storageKey) await deleteDocumentSource(document.storageKey).catch(() => {})
     await prisma.$transaction([
       prisma.documentFile.delete({ where: { id: file.id } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId, actorId, type: "file_deleted" } }),
+      prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, actorId, type: "file_deleted" }, context) }),
     ])
     deleted++
   }
@@ -367,10 +369,17 @@ export async function deleteFolder(workspaceId: string, folderId: string, actorI
   return { deletedFiles: files.length }
 }
 
+/** F15: refuses to turn on link sharing for a workspace flagged as handling ePHI. "none" always
+ * passes — a workspace can always narrow its own sharing back down even under hipaaMode. */
 export async function setLinkAccess(workspaceId: string, fileId: string, access: string) {
   const file = await getWorkspaceFile(workspaceId, fileId)
   if (!file) throw new Error("file_not_found")
-  return prisma.documentFile.update({ where: { id: file.id }, data: { linkAccess: parseLinkAccess(access) } })
+  const parsed = parseLinkAccess(access)
+  if (parsed !== "none") {
+    const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { hipaaMode: true } })
+    if (workspace?.hipaaMode) throw new Error("link_sharing_disabled_hipaa_mode")
+  }
+  return prisma.documentFile.update({ where: { id: file.id }, data: { linkAccess: parsed } })
 }
 
 export const listFileShares = cache(async (fileId: string) => prisma.documentFileShare.findMany({ where: { fileId }, orderBy: { createdAt: "asc" } }))
@@ -409,7 +418,7 @@ export async function listFilesSharedWith(email: string) {
 
 export type ResolvedFileAccess = {
   access: FileAccess
-  file: NonNullable<Awaited<ReturnType<typeof prisma.documentFile.findUnique>>>
+  file: Prisma.DocumentFileGetPayload<{ include: { workspace: { select: { hipaaMode: true } } } }>
 }
 
 /** The single place that answers "what may this viewer do with this file?".
@@ -418,13 +427,17 @@ export type ResolvedFileAccess = {
  * and any per-email share, so revoking one route does not silently leave the other open —
  * and a signed-out viewer only ever gets the link. */
 export async function getFileAccess(fileId: string, viewer: { id: string; email: string } | null): Promise<ResolvedFileAccess | null> {
-  const file = await prisma.documentFile.findUnique({ where: { id: fileId } })
+  const file = await prisma.documentFile.findUnique({ where: { id: fileId }, include: { workspace: { select: { hipaaMode: true } } } })
   if (!file) return null
   if (viewer) {
     const membership = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: file.workspaceId, userId: viewer.id } }, select: { id: true } })
     if (membership) return { access: "owner", file }
   }
-  let access: FileAccess = parseLinkAccess(file.linkAccess)
+  // F15: a hipaaMode workspace never grants access through the bare link — member or stranger,
+  // signed in or not, linkAccess is ignored outright. Only membership (above) or an explicit
+  // per-email share (below) may open the file; "anyone who has the URL" is not an acceptable
+  // access control for ePHI, however the file's own sharing setting is configured.
+  let access: FileAccess = file.workspace.hipaaMode ? "none" : parseLinkAccess(file.linkAccess)
   if (viewer) {
     const share = await prisma.documentFileShare.findUnique({ where: { fileId_email: { fileId: file.id, email: viewer.email.toLowerCase() } } })
     if (share && accessRank(share.access) > accessRank(access)) access = parseShareAccess(share.access)

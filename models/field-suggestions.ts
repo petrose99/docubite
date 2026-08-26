@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import type { ParsedFieldSuggestion } from "@/lib/field-suggestions"
 import { prisma } from "@/lib/db"
 import type { AsrSegment } from "@/lib/asr/types"
@@ -192,7 +193,7 @@ export async function acceptFieldSuggestions(input: {
       where: { id: { in: accepted.map(({ suggestion }) => suggestion.id) } },
       data: { status: "approved", decidedAt: new Date(), decidedById: input.actorId },
     })
-    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "field_suggestion_approved" } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "field_suggestion_approved" }, tx)
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
   }, { timeout: 20_000 })
 }

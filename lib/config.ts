@@ -1,24 +1,52 @@
 import { z } from "zod"
 import packageJson from "../package.json"
 
-const PLACEHOLDER_AUTH_SECRET = "please-set-a-production-auth-secret"
 const PLACEHOLDER_WORKER_SECRET = "replace-this-with-a-long-worker-secret"
 
 const envSchema = z.object({
   BASE_URL: z.string().url().default("http://localhost:7331"),
   PORT: z.string().default("7331"),
+  // Read directly off process.env by lib/db.ts (the Prisma adapter) and prisma.config.ts, both of
+  // which need it before this module can plausibly have run. Declared here anyway so it is
+  // validated and covered by the production placeholder/unset guard below — previously it bypassed
+  // both, so a production deploy with no DATABASE_URL at all would fail at first query with an
+  // adapter-level connection error rather than at boot with a clear message.
+  DATABASE_URL: z.string().optional(),
+  // Same story as DATABASE_URL: read directly off process.env by lib/malware-scan.ts. Declared
+  // here purely so an accidentally-empty value is validated rather than silently sending an
+  // unauthenticated scan request.
+  MALWARE_SCAN_TOKEN: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL_NAME: z.string().default("gpt-4o-mini"),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL_NAME: z.string().default("gemini-2.5-flash"),
   AI_PROVIDER: z.enum(["openai", "gemini"]).default("openai"),
-  BETTER_AUTH_SECRET: z.string().min(16).default(PLACEHOLDER_AUTH_SECRET),
+  // NEXT_PUBLIC_-prefixed because lib/supabase/client.ts (a "use client" module) reads these two
+  // directly off process.env — Next.js only inlines that prefix into the browser bundle at build
+  // time, and only for a literal `process.env.NEXT_PUBLIC_X` reference, so client.ts cannot get
+  // them by importing this file's `config` object instead. Declared here too so both are validated
+  // and so server code (getAdminClient, etc.) can read them through `config` like everything else.
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  // Server-only, admin-privileged — must never carry the NEXT_PUBLIC_ prefix or it would ship to
+  // the browser. Covered by the production unset guard below, the same way BETTER_AUTH_SECRET
+  // (removed along with better-auth) used to be.
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // The "v1,whsec_..." secret from the Supabase dashboard's Before User Created Auth Hook config
+  // (Authentication → Hooks). Verifies the Standard Webhooks HMAC signature on incoming hook
+  // requests — see app/api/internal/auth/signup-allowed/route.ts.
+  SUPABASE_AUTH_HOOK_SECRET: z.string().optional(),
+  // §164.312(a)(2)(iii) automatic logoff. Supabase Auth has a native Inactivity Timeout setting
+  // (Authentication → Sessions), but it's gated to the Pro plan and above — a Free-plan project
+  // (like this one, as of the HIPAA migration) has no dashboard control for it at all. This is the
+  // app-level fallback enforced in lib/supabase/middleware.ts regardless of plan tier.
+  SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(15),
   DISABLE_SIGNUP: z.enum(["true", "false"]).default("false"),
   ENFORCE_PLAN_LIMITS: z.enum(["true", "false"]).default("false"),
   RESEND_API_KEY: z.string().default("please-set-your-resend-api-key-here"),
   RESEND_FROM_EMAIL: z.string().default("DocuBite <user@localhost>"),
-  // Both halves or nothing: better-auth registers the provider from the pair, and a half-set
-  // pair would advertise a Google button that fails at the redirect. See isGoogleAuthEnabled.
+  // Both halves or nothing — a UI-only flag now (see isGoogleAuthEnabled); a half-set pair would
+  // advertise a Google button whose provider isn't actually registered on the Supabase side.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().default(""),
@@ -98,11 +126,14 @@ const envSchema = z.object({
   // gate (also requires INTERNAL_WORKER_SECRET to be set for real).
   EMBED_DETACHED: z.enum(["true", "false"]).default("false"),
   // Workspace-scope guard (lib/workspace-scope.ts).
-  //   off   — no checking. The default in production, because a false positive here is an outage.
-  //   warn  — logs every unscoped query without changing behaviour. The default in development,
-  //           and the mode to run in production until the logs are clean.
-  //   throw — refuses them. The end state, adopted only once `warn` reports nothing.
+  //   off   — no checking. Opt-in only now, via an explicit env var — see below.
+  //   warn  — logs every unscoped query without changing behaviour. The default everywhere,
+  //           including production, until the logs are clean.
+  //   throw — refuses them. The end state, adopted once `warn` reports nothing in production.
   // Staged deliberately: this touches every query in a live app, so it earns its way to `throw`.
+  // `off` used to be production's default — a cross-tenant leak from a missing workspaceId filter
+  // is exactly the failure this guard exists to catch, and shipping with it disabled by default
+  // left every query author's memory as the only safeguard. `warn` costs nothing but a log line.
   DB_SCOPE_GUARD: z.enum(["off", "warn", "throw"]).optional(),
   // Postgres row-level security (lib/db-rls.ts). The deeper guarantee, and the riskier change;
   // gated so it can be rolled back without a redeploy, and only after DB_SCOPE_GUARD=throw holds.
@@ -150,14 +181,21 @@ const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filte
 // known bearer token for the internal job endpoint.
 if (process.env.NODE_ENV === "production") {
   const unset = [
-    env.BETTER_AUTH_SECRET === PLACEHOLDER_AUTH_SECRET && "BETTER_AUTH_SECRET",
     env.INTERNAL_WORKER_SECRET === PLACEHOLDER_WORKER_SECRET && "INTERNAL_WORKER_SECRET",
+    !env.DATABASE_URL && "DATABASE_URL",
+    !env.NEXT_PUBLIC_SUPABASE_URL && "NEXT_PUBLIC_SUPABASE_URL",
+    !env.NEXT_PUBLIC_SUPABASE_ANON_KEY && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    !env.SUPABASE_SERVICE_ROLE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
   ].filter((name): name is string => Boolean(name))
-  if (unset.length) throw new Error(`Refusing to start in production with default secrets — set ${unset.join(" and ")} to a unique random value.`)
+  if (unset.length) throw new Error(`Refusing to start in production with default or missing secrets — set ${unset.join(", ")}.`)
 }
 
-/** The Google sign-in button is rendered from this, not from the presence of the plugin: an
- * install without credentials has to boot and simply not offer the option. */
+/** The Google sign-in button is rendered from this env-var pair, not from whether Google is
+ * actually configured as a provider on the Supabase project — that's set separately in the
+ * Supabase dashboard, and this app has no way to read it back. An install without these two set
+ * still boots and simply omits the button; one with them set but Google not configured on the
+ * Supabase side will show the button and fail at the OAuth redirect, so keep the two in lockstep
+ * by hand. */
 export const isGoogleAuthEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 
 const config = {
@@ -209,7 +247,13 @@ const config = {
     language: env.ASR_LANGUAGE.trim() || null,
   },
   aws: { region: env.AWS_REGION, documentsBucket: env.AWS_S3_DOCUMENTS_BUCKET, kmsKeyId: env.AWS_S3_KMS_KEY_ID, internalWorkerSecret: env.INTERNAL_WORKER_SECRET, malwareScanUrl: env.MALWARE_SCAN_URL },
-  auth: { secret: env.BETTER_AUTH_SECRET, loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
+  auth: { loginUrl: "/login", disableSignup: env.DISABLE_SIGNUP === "true", idleTimeoutMinutes: env.SESSION_IDLE_TIMEOUT_MINUTES, google: { clientId: env.GOOGLE_CLIENT_ID || "", clientSecret: env.GOOGLE_CLIENT_SECRET || "" } },
+  // The project itself, plus the two keys: anonKey is safe in the browser (Postgres RLS is what
+  // actually protects data reached through it — irrelevant here since this project is Auth-only
+  // and holds no application tables), serviceRoleKey bypasses RLS entirely and is used only from
+  // the two server-only paths that need admin privileges: the bulk user-migration script and
+  // prisma/seed.ts. Never construct a client with serviceRoleKey outside those.
+  supabase: { url: env.NEXT_PUBLIC_SUPABASE_URL || "", anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "", serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || "", authHookSecret: env.SUPABASE_AUTH_HOOK_SECRET || "" },
   stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, starterPriceId: env.STRIPE_STARTER_PRICE_ID, growthPriceId: env.STRIPE_GROWTH_PRICE_ID },
   // Seats, monthly documents and monthly AI extractions are only actually refused when this is
   // on. lib/plans.ts reads it through here so there is exactly one place that decides.
@@ -218,7 +262,7 @@ const config = {
   // Tenant isolation. Both default to their safe-for-a-live-app setting; see the env comments for
   // the staged adoption path from `warn` to `throw` to RLS.
   isolation: {
-    scopeGuard: env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn"),
+    scopeGuard: env.DB_SCOPE_GUARD ?? "warn",
     rlsEnabled: env.DB_RLS_ENABLED === "true",
   },
   // Agnostic dictation (lib/dictation). Off by default and fail-safe by design: with it off, or on

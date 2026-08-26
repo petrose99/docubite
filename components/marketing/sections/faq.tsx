@@ -41,6 +41,9 @@ export function Faq() {
           <AccordionItem question="What files can I upload?">
             PDF, JPEG, PNG, WebP and HEIC, up to 50&nbsp;MB each, up to 100 files in a batch — including a whole folder dragged in at once. Email-in and cloud-drive imports aren&apos;t available yet.
           </AccordionItem>
+          <AccordionItem question="What can I dictate?">
+            Anything free-form — a finance note, a pathology read, a delivery update, a to-do, a quick email draft. There&apos;s no format to pick first: the recording is routed to the right report automatically, with a synoptic block of extracted fields alongside it.
+          </AccordionItem>
         </Accordion>
       </div>
     </section>

@@ -1,24 +1,24 @@
 "use client"
 
+import { signUpAction } from "@/app/(auth)/auth-actions"
 import { AuthDivider, AuthField, PasswordField, SubmitButton } from "@/components/auth/fields"
 import { GoogleButton } from "@/components/auth/google-button"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { MailCheck } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
 import { useState } from "react"
 
-const MIN_PASSWORD_LENGTH = 8
+const MIN_PASSWORD_LENGTH = 12
 
-/** Surfaces the DISABLE_SIGNUP gate as something a person can act on. assertSignupAllowed throws
- * an APIError with this message from inside the user.create hook, so it arrives here as an
- * ordinary failed response rather than as anything the form can predict in advance. */
-const friendlyError = (message?: string) => {
-  if (!message) return "Could not create your account. Please try again."
-  if (/sign-?up is disabled/i.test(message)) return "Sign-up is closed right now. Ask for an invitation, or contact us for access."
-  if (/already exists|existing user|already registered/i.test(message)) return "An account with that email already exists — sign in instead."
-  return message
+/** Surfaces signUpAction's typed error codes as something a person can act on — a stable mapping,
+ * unlike the regex this replaced, which string-matched better-auth's raw message text and could
+ * not survive a provider swap. */
+const friendlyError = (code?: string) => {
+  if (code === "signup_disabled") return "Sign-up is closed right now. Ask for an invitation, or contact us for access."
+  if (code === "account_exists") return "An account with that email already exists — sign in instead."
+  return "Could not create your account. Please try again."
 }
 
 export function SignupForm({ defaultEmail, redirectTo = "/workspaces", googleEnabled, loginHref = "/login" }: {
@@ -32,25 +32,40 @@ export function SignupForm({ defaultEmail, redirectTo = "/workspaces", googleEna
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      const result = await authClient.signUp.email({ name, email, password })
-      if (result.error) {
-        setError(friendlyError(result.error.message))
+      const result = await signUpAction({ name, email, password })
+      if (!result.success) {
+        setError(friendlyError(result.error))
         return
       }
-      // Hard navigation for the same reason as the login form: the workspace is created lazily on
-      // the first /workspaces visit, and that has to run against the new session cookie.
-      window.location.href = redirectTo
-    } catch (err) {
-      setError(friendlyError(err instanceof Error ? err.message : undefined))
+      // Supabase requires a confirmed email before it issues a session (F4) — there is no session
+      // cookie yet to navigate against, unlike the sign-in and reset flows. Once they click the
+      // confirmation link, /auth/callback exchanges it for a session and lands them on redirectTo.
+      setSent(true)
+    } catch {
+      setError(friendlyError())
     } finally {
       setBusy(false)
     }
+  }
+
+  if (sent) {
+    return (
+      <div className="text-center">
+        <MailCheck className="mx-auto h-9 w-9 text-emerald-700" strokeWidth={1.6} />
+        <h2 className="mt-4 font-display text-xl font-bold tracking-[-0.02em] text-stone-900">Check your email</h2>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-stone-600">
+          We sent a confirmation link to <strong className="font-medium text-stone-800">{email}</strong>. Click it to finish setting up your account.
+        </p>
+        <Link href={loginHref as Route} className="mt-6 inline-block text-sm font-semibold text-emerald-800 hover:underline">Back to sign in</Link>
+      </div>
+    )
   }
 
   return (

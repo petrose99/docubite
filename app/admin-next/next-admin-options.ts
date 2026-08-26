@@ -55,10 +55,14 @@ export const options: NextAdminOptions = {
       // No "delete": a cascade here orphans every stored document. See the header.
       permissions: ["edit"],
       list: {
-        display: ["id", "name", "kind", "aiEnabled", "createdAt"],
+        display: ["id", "name", "kind", "aiEnabled", "hipaaMode", "createdAt"],
         search: ["name"],
         defaultSort: { field: "createdAt", direction: "desc" },
       },
+      // hipaaMode is deliberately absent from edit: setWorkspaceHipaaModeAction force-revokes
+      // every file's linkAccess back to "none" in the same transaction as the flag flip — a raw
+      // field edit here would turn the flag on while leaving existing share links live, which is
+      // exactly the invariant this header warns about.
       edit: { display: ["name", "kind", "aiEnabled"] },
     },
     WorkspaceSubscription: {
@@ -102,6 +106,31 @@ export const options: NextAdminOptions = {
       permissions: [],
       list: {
         display: ["id", "type", "targetUserId", "targetWorkspaceId", "createdAt"],
+        defaultSort: { field: "createdAt", direction: "desc" },
+      },
+    },
+    Subprocessor: {
+      title: "Subprocessors (BAA tracking)",
+      icon: "BuildingLibraryIcon",
+      // Fully editable: unlike DocumentAuditEvent this is a compliance worksheet, not an audit
+      // trail — someone needs to update baaStatus and notes as BAAs actually get executed.
+      permissions: ["edit"],
+      list: {
+        display: ["name", "purpose", "baaStatus", "region", "updatedAt"],
+        defaultSort: { field: "name", direction: "asc" },
+      },
+      edit: { display: ["name", "purpose", "dataReceived", "baaStatus", "region", "notes"] },
+    },
+    DocumentAuditEvent: {
+      title: "Document audit log",
+      icon: "DocumentMagnifyingGlassIcon",
+      // Append-only, enforced twice over: the database trigger installed by
+      // 20260822000000_hipaa_audit_hardening refuses UPDATE/DELETE outright, and this is read-only
+      // on top of that. Was write-only before this entry existed — nothing in the product could
+      // answer "who accessed this document" without a direct database query.
+      permissions: [],
+      list: {
+        display: ["id", "type", "outcome", "workspaceId", "documentId", "actorId", "sourceIp", "createdAt"],
         defaultSort: { field: "createdAt", direction: "desc" },
       },
     },

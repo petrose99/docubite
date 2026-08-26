@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import { getViewerUser } from "@/lib/auth"
 import { canEdit, getFileAccess, touchFile } from "@/models/files"
 import { MAX_SNAPSHOT_BYTES, saveWorkbook, StaleRevisionError, type WorkbookSnapshot } from "@/models/spreadsheets"
@@ -13,7 +14,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ fil
   const viewer = await getViewerUser()
   const access = await getFileAccess(fileId, viewer ? { id: viewer.id, email: viewer.email } : null)
   if (!access) return Response.json({ error: "not_found" }, { status: 404 })
-  if (!canEdit(access.access)) return Response.json({ error: "forbidden" }, { status: 403 })
+  if (!canEdit(access.access)) {
+    await recordDocumentAudit({ workspaceId: access.file.workspaceId, actorId: viewer?.id ?? null, type: "workbook_saved", outcome: "denied", detail: { fileId } })
+    return Response.json({ error: "forbidden" }, { status: 403 })
+  }
 
   const raw = await request.text()
   if (raw.length > MAX_SNAPSHOT_BYTES) return Response.json({ error: "snapshot_too_large" }, { status: 413 })
@@ -31,6 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fil
   try {
     const saved = await saveWorkbook({ workspaceId: access.file.workspaceId, fileId, rev, snapshot: snapshot as WorkbookSnapshot })
     await touchFile(fileId)
+    await recordDocumentAudit({ workspaceId: access.file.workspaceId, actorId: viewer?.id ?? null, type: "workbook_saved", detail: { fileId, rev: saved.rev } })
     return Response.json({ rev: saved.rev, updatedAt: saved.updatedAt })
   } catch (error) {
     // The client reloads on 409 — its in-memory workbook is now a fork of what is stored.

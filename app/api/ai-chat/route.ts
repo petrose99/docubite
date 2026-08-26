@@ -171,7 +171,7 @@ export async function POST(request: Request) {
           inputSchema: z.object({ query: z.string().min(2).describe("What to look for, in a few words or a short phrase") }),
           execute: async ({ query }) => {
             try {
-              const results = await searchDocumentChunks(workspaceId, query, { limit: 8 })
+              const results = await searchDocumentChunks(workspaceId, query, { limit: 8, actorId: user.id })
               // Nothing found could mean nothing matches, or the just-uploaded documents are still
               // being embedded. One cheap count tells the two apart, so the model can say "still
               // indexing, ask again in a minute" rather than a flat "nothing found".
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
           inputSchema: z.object({ query: z.string().min(2).describe("The condition to match, in plain language, including any names, amounts or dates it mentions") }),
           execute: async ({ query }) => {
             try {
-              const result = await findMatchingDocuments(workspaceId, query)
+              const result = await findMatchingDocuments(workspaceId, query, { actorId: user.id })
               return result
             } catch {
               return { error: "document_lookup_unavailable" }

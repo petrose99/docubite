@@ -3,7 +3,7 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { CreditCard, Files, History, Mic, Settings, Users, Webhook } from "lucide-react"
+import { CreditCard, Files, History, Mic, Settings, ShieldCheck, Users, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -34,6 +34,7 @@ export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = fals
     ...(dictationEnabled ? [{ href: `${base}/dictation`, label: "Dictation", icon: Mic }] : []),
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
     { href: `${base}/settings/activity`, label: "Activity", icon: History },
+    { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
     ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook }] : []),
     { href: `${base}/settings/templates`, label: "Settings", icon: Settings },

@@ -4,7 +4,7 @@ updates:
   # npm dependencies — group by domain so each PR touches one concern
   - package-ecosystem: npm
     directory: "/"
-    target-branch: main
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
@@ -76,7 +76,7 @@ updates:
   # GitHub Actions used in workflows
   - package-ecosystem: github-actions
     directory: "/"
-    target-branch: main
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
@@ -95,7 +95,7 @@ updates:
   # Dockerfile base image
   - package-ecosystem: docker
     directory: "/"
-    target-branch: main
+    target-branch: master
     schedule:
       interval: weekly
       day: monday

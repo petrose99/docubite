@@ -1,12 +1,13 @@
 "use client"
 
-import { authClient } from "@/lib/auth-client"
+import { createClient } from "@/lib/supabase/client"
 import { ChevronsUpDown, LogOut } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-/** The sidebar's account chip. Until now the app had no way out at all — there is no other
- * signOut call anywhere in the codebase — so this is the only sign-out. */
+/** The sidebar's account chip and its sign-out control — the everyday one, scoped to this
+ * session only. "Sign out everywhere" (F13, terminates every session on the account) lives on
+ * /settings/security instead, since it's a rarer, more consequential action. */
 export function AccountMenu({ name, email, collapsed = false }: { name: string; email: string; collapsed?: boolean }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -24,7 +25,7 @@ export function AccountMenu({ name, email, collapsed = false }: { name: string; 
   const signOut = async () => {
     setBusy(true)
     try {
-      await authClient.signOut()
+      await createClient().auth.signOut()
       // A full navigation rather than router.push: the session cookie is gone, so every
       // cached server component for this user has to be dropped too.
       window.location.href = "/login"

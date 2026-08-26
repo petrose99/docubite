@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import { SharedSheet } from "@/components/files/shared-sheet"
 import { getViewerUser } from "@/lib/auth"
 import config from "@/lib/config"
@@ -15,9 +16,23 @@ import { notFound } from "next/navigation"
 export default async function SharedFilePage({ params }: { params: Promise<{ fileId: string }> }) {
   const [{ fileId }, viewer] = await Promise.all([params, getViewerUser()])
   const resolved = await getFileAccess(fileId, viewer ? { id: viewer.id, email: viewer.email } : null)
-  if (!resolved || !canOpen(resolved.access)) notFound()
+  if (!resolved || !canOpen(resolved.access)) {
+    // Only recorded when the file exists and access was actually denied — a bare 404 for an
+    // unrecognised id has no workspace to attribute the attempt to, honestly recorded as nothing.
+    if (resolved) {
+      await recordDocumentAudit({
+        workspaceId: resolved.file.workspaceId, actorId: viewer?.id ?? null,
+        type: "shared_link_opened", outcome: "denied",
+      })
+    }
+    notFound()
+  }
 
   const { file, access } = resolved
+  // actorId is honestly null for the common case here: an anonymous link holder. That null is the
+  // finding worth recording — see F15/hipaaMode, which is what eventually forces this route to
+  // require an authenticated viewer for workspaces that opt in.
+  await recordDocumentAudit({ workspaceId: file.workspaceId, actorId: viewer?.id ?? null, type: "shared_link_opened", detail: { fileId: file.id, access } })
   const workbook = await ensureFileWorkbook(file.workspaceId, file.id)
 
   // "interact" lets a guest try changes on their own copy — the grid stays live but nothing is

@@ -23,7 +23,7 @@ export type OAuthStatePayload = {
 type SignedOAuthState = OAuthStatePayload & { exp: number }
 
 function secret(): string {
-  return config.auth.secret
+  return config.aws.internalWorkerSecret
 }
 
 function base64UrlEncode(value: string): string {

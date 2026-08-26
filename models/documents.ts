@@ -1,4 +1,5 @@
 import { SUPPORTED_AUDIO_TYPES, isSupportedAudioBuffer } from "@/lib/asr/types"
+import { auditEventData, getRequestAuditContext, recordDocumentAudit } from "@/lib/audit"
 import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
@@ -105,7 +106,7 @@ export async function createDocumentFromBuffer(input: {
       // Audio goes to the transcribe handler, everything else to MinerU extraction. This is the
       // only place the two ingestion paths diverge — from the job onwards they are the same code.
       const job = await tx.documentProcessingJob.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: SUPPORTED_AUDIO_TYPES.has(input.mimeType) ? "transcribe" : "extract" } })
-      await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, type: "document_received" } })
+      await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, type: "document_received" }, tx)
       const emitted = await emitWorkspaceEvent(tx, {
         workspaceId: input.workspaceId, type: "document.received", createdAt: new Date(),
         document: { id: document.id, filename: document.filename, status: document.status, receivedAt: document.receivedAt, reviewedData: document.reviewedData, templateCode: template.code, confidence: document.confidence },
@@ -143,7 +144,7 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   let webhookQueued = false
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence: { missingRequiredFields: missing, manuallyReviewed: true } as Prisma.InputJsonValue, reviewedAt: new Date(), status: missing.length ? "needs_review" : "reviewed" } })
-    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_reviewed" }, tx)
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
     const emitted = await emitWorkspaceEvent(tx, {
       workspaceId: input.workspaceId, type: missing.length ? "document.needs_review" : "document.reviewed", createdAt: new Date(),
@@ -199,7 +200,7 @@ export async function updateDocumentField(input: { workspaceId: string; document
   const rows = projectDocumentFields({ fields, values: reviewedData, confidence: nextFieldConfidence, provenance: nextProvenance, source: "manual" })
   const updated = await prisma.$transaction(async (tx) => {
     const document_ = await tx.document.update({ where: { id: document.id }, data: { reviewedData: reviewedData as Prisma.InputJsonValue, searchText: searchableText(reviewedData, document.filename), confidence, ...provenanceUpdate } })
-    await tx.documentAuditEvent.create({ data: { workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_field_edited" }, tx)
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
     return document_
   }, { timeout: 20_000 })
@@ -274,9 +275,12 @@ export async function deleteWorkspaceDocuments(workspaceId: string, documentIds:
     await deleteDocumentSource(documentBlocksKey(workspaceId, document.id)).catch(() => {})
     // Interactive form so document.deleted fans out in the same tx as the delete. The event carries
     // only id + filename (the row is gone), and its delivery row's documentId is null — no dangling FK.
+    // Context fetched before the tx: recordDocumentAudit's getRequestAuditContext() reads next/headers(),
+    // which only works outside a transaction callback (it is not a lazy Prisma query).
+    const context = await getRequestAuditContext()
     await prisma.$transaction(async (tx) => {
       await tx.document.delete({ where: { id: document.id } })
-      await tx.documentAuditEvent.create({ data: { workspaceId, actorId, type: "document_deleted" } })
+      await tx.documentAuditEvent.create({ data: auditEventData({ workspaceId, actorId, type: "document_deleted" }, context) })
       const emitted = await emitWorkspaceEvent(tx, {
         workspaceId, type: "document.deleted", createdAt: new Date(),
         document: { id: document.id, filename: document.filename, deleted: true },
@@ -297,10 +301,11 @@ export async function requeueDocumentExtraction(workspaceId: string, documentId:
   if (!document.storageKey) throw new Error("document_source_missing")
   const active = await prisma.documentProcessingJob.findFirst({ where: { documentId: document.id, status: { in: ["queued", "processing"] } }, select: { id: true } })
   if (active) throw new Error("document_already_processing")
+  const context = await getRequestAuditContext()
   const [, job] = await prisma.$transaction([
     prisma.document.update({ where: { id: document.id }, data: { status: "queued", errorCode: null } }),
     prisma.documentProcessingJob.create({ data: { workspaceId, documentId: document.id, type: "extract" } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId, documentId: document.id, type: "extraction_requeued" } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, documentId: document.id, type: "extraction_requeued" }, context) }),
   ])
   return job
 }

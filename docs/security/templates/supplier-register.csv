@@ -1,0 +1,2 @@
+supplier,service,data_sent_or_access,classification,hosting_regions,contract_dpa_complete,ai_training_or_retention_confirmed,breach_notice_term,owner,risk_tier,last_reviewed,next_review,evidence_link
+AWS,Storage/database/compute,Customer documents and metadata,Restricted,[region],No,N/A,[complete],[name],Critical,YYYY-MM-DD,YYYY-MM-DD,[private link]

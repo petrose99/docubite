@@ -15,6 +15,13 @@ datasource db {
 // accounting, transaction, currency, file, project, or import tables.
 model User {
   id                    String                @id @default(uuid()) @db.Uuid
+  /// The Supabase Auth user id (`auth.users.id` / the JWT's `sub` claim) in the Supabase project
+  /// this app authenticates against — a different Postgres instance/schema than this database.
+  /// Nullable so a pre-Supabase row (migrated from better-auth) can exist before its first
+  /// post-migration sign-in links it — see resolveOrProvisionUser in models/users.ts. `id` itself
+  /// deliberately does NOT become this value: keeping it stable means the 11 FK relations to User
+  /// elsewhere in this schema needed no changes for the auth migration.
+  supabaseUserId        String?               @unique @map("supabase_user_id") @db.Uuid
   email                 String                @unique
   name                  String
   avatar                String?
@@ -30,8 +37,6 @@ model User {
   emailVerified         Boolean               @default(false) @map("is_email_verified")
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
-  accounts              Account[]
-  sessions              Session[]
   workspaceMemberships  WorkspaceMember[]
   sentInvitations       WorkspaceInvitation[] @relation("InvitationSender")
   documentAuditEvents   DocumentAuditEvent[]  @relation("AuditActor")
@@ -56,6 +61,11 @@ model Workspace {
    * member limit is above one. */
   kind            String                 @default("personal")
   aiEnabled       Boolean                @default(true) @map("ai_enabled")
+  /// F15: when on, this workspace is presumed to handle ePHI. setLinkAccess refuses anything but
+  /// "none", getFileAccess ignores an existing linkAccess for a signed-out viewer, and the share
+  /// dialog hides the link tab — see models/files.ts. MFA enforcement reads the `aal` claim off
+  /// the Supabase session (aal2 required once a factor is enrolled) — see the workspace layout.
+  hipaaMode       Boolean                @default(false) @map("hipaa_mode")
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
   members         WorkspaceMember[]
@@ -591,18 +601,45 @@ model DocumentReportDraft {
   @@map("document_report_drafts")
 }
 
+/** Who touched which document, from where, and whether it worked.
+ *
+ * HIPAA §164.312(b) wants an audit trail that can answer a disclosure question months later, which
+ * takes more than actor and timestamp: sourceIp and userAgent say FROM WHERE, outcome says WHETHER
+ * IT SUCCEEDED — a refused access is the more interesting record of the two — and detail carries
+ * whatever is action-specific (the field edited, the export format, the access level that was
+ * insufficient).
+ *
+ * Never write the document's contents, a search query, or an extracted value into `detail`. An
+ * audit trail that accumulates those becomes a second copy of the data it exists to protect, on a
+ * table that is deliberately never deleted. See recordSearch in lib/retrieval.ts for the same
+ * reasoning applied to query text. */
 model DocumentAuditEvent {
   id          String    @id @default(uuid()) @db.Uuid
   workspaceId String    @map("workspace_id") @db.Uuid
   documentId  String?   @map("document_id") @db.Uuid
   actorId     String?   @map("actor_id") @db.Uuid
   type        String
+  /// Client address from x-forwarded-for, and the raw user agent. Null for events raised by the
+  /// job worker, which has no request behind it.
+  sourceIp    String?   @map("source_ip")
+  userAgent   String?   @map("user_agent")
+  /// "success" | "failure" | "denied". Defaulted so the 18 pre-existing call sites keep their
+  /// meaning without each having to say so.
+  outcome     String    @default("success")
+  detail      Json?
   createdAt   DateTime  @default(now()) @map("created_at")
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  document    Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: §164.316(b) requires audit records to survive six years, and deleting a
+  /// workspace must not be a way to destroy the evidence of what happened inside it. Workspace
+  /// deletion now has to archive these first — see lib/audit-archive.ts.
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  /// SetNull, not Cascade, for the same reason: purging a document must not erase the record that
+  /// someone downloaded it.
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([documentId, createdAt])
+  @@index([actorId, createdAt])
   @@map("document_audit_events")
 }
 
@@ -834,51 +871,49 @@ model IntegrationPush {
   @@map("integration_pushes")
 }
 
-model Session {
-  id        String   @id @default(uuid()) @db.Uuid
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  ipAddress String?  @map("ip_address")
-  userAgent String?  @map("user_agent")
-  userId    String   @map("user_id") @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/** F16: the third parties that can receive customer document content or metadata, and whether a
+ * BAA is in place with each. HIPAA S164.308(b)(1) requires a signed BAA with every Business
+ * Associate that touches ePHI -- this is the register that makes "who has a BAA" answerable
+ * without re-deriving it from the codebase every time. Browsable read-only in /admin-next; kept
+ * current by whoever runs the BAA process, not by code (see docs/security). */
+model Subprocessor {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  /// What the processor is used for, in plain language -- "OCR of uploaded document images".
+  purpose       String
+  /// What of the customer's data it actually receives -- "document text and page images", not
+  /// just "documents", so a reviewer can judge exposure without reading the code.
+  dataReceived  String   @map("data_received")
+  /// "not_started" | "in_progress" | "signed" | "not_applicable" (no PHI reaches this processor).
+  /// A String, not an enum, matching User.role and DocumentAuditEvent.type elsewhere in this
+  /// schema -- the set of states is a data concern, not a migration concern.
+  baaStatus     String   @default("not_started") @map("baa_status")
+  region        String?
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  @@map("sessions")
+  @@map("subprocessors")
 }
 
-model Account {
-  /// Session and Verification both carry @default(uuid()); this one did not, and nothing noticed
-  /// because the email-OTP flow never wrote an Account row. The first password sign-up did, and
-  /// Prisma rejected it with "Argument `id` is missing". Generated by Prisma rather than by the
-  /// database: the column is TEXT (not UUID like its siblings), so a gen_random_uuid() default
-  /// would mean retyping a live column for no gain — every write goes through Prisma anyway.
-  id                   String   @id @default(uuid())
-  accountId            String   @map("account_id")
-  providerId           String   @map("provider_id")
-  userId               String   @map("user_id") @db.Uuid
-  accessToken          String?  @map("access_token")
-  refreshToken         String?  @map("refresh_token")
-  idToken              String?  @map("id_token")
-  accessTokenExpiresAt DateTime? @map("access_token_expires_at")
-  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
-  scope                String?
-  password             String?
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/** F14: a fixed-window rate-limit counter, in this app's own database rather than Supabase's.
+ * Backstops Supabase Auth's built-in rate limiter, which has an open report of not always being
+ * enforced (supabase/auth#2333) — see lib/rate-limit.ts and the HIPAA migration plan's
+ * Verification section. Scoped to password-reset and signup, the two paths that run through a
+ * server action of ours and so can be checked before ever calling Supabase.
+ *
+ * One row per (key, windowStart) rather than a single mutable counter reset on read: this way a
+ * concurrent burst of requests all landing in the same window race on the same unique constraint
+ * and Postgres itself serializes the increments — no read-modify-write gap to exploit. */
+model AuthRateLimit {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// "<action>:<identifier>" — e.g. "password_reset:203.0.113.4" or "signup:203.0.113.4".
+  key         String
+  windowStart DateTime @map("window_start")
+  count       Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  @@map("account")
-}
-
-model Verification {
-  id         String   @id @default(uuid()) @db.Uuid
-  identifier String
-  value      String
-  expiresAt  DateTime @map("expires_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  @@map("verification")
+  @@unique([key, windowStart])
+  @@index([windowStart])
+  @@map("auth_rate_limits")
 }

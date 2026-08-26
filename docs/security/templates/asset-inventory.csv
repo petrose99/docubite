@@ -1,0 +1,4 @@
+asset_id,asset_name,asset_type,environment,owner,data_classification,location_or_account,criticality,backup_or_recovery,access_review_date,last_reviewed,notes
+A-001,DocuBite web application,Application,Production,[name],Confidential,Vercel project [name],High,[describe],YYYY-MM-DD,YYYY-MM-DD,[complete]
+A-002,Customer document storage,Data store,Production,[name],Restricted,AWS S3 bucket [name],Critical,[describe],YYYY-MM-DD,YYYY-MM-DD,[complete]
+A-003,Production database,Data store,Production,[name],Restricted,AWS RDS [identifier],Critical,[describe],YYYY-MM-DD,YYYY-MM-DD,[complete]

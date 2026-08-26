@@ -12,6 +12,7 @@ import { upsertExtractionShape } from "@/models/extraction-shapes"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parseDocumentWithMineru } from "@/lib/mineru"
 import { parsePageRange } from "@/lib/page-range"
+import { auditEventData, recordSystemAudit } from "@/lib/audit"
 import { prisma } from "@/lib/db"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { emitWorkspaceEvent } from "@/lib/webhooks"
@@ -193,7 +194,7 @@ async function failDocumentJob(
   await prisma.$transaction(async (tx) => {
     const updated = await tx.document.update({ where: { id: job.documentId }, data: { status: permanent ? "failed" : "queued", errorCode } })
     await tx.documentProcessingJob.update({ where: { id: job.jobId }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } })
-    await tx.documentAuditEvent.create({ data: { workspaceId: job.workspaceId, documentId: job.documentId, type: permanent ? "extraction_failed" : "extraction_retrying" } })
+    await tx.documentAuditEvent.create({ data: auditEventData({ workspaceId: job.workspaceId, documentId: job.documentId, type: permanent ? "extraction_failed" : "extraction_retrying", outcome: permanent ? "failure" : "success" }) })
     if (permanent) {
       const emitted = await emitWorkspaceEvent(tx, {
         workspaceId: job.workspaceId,
@@ -379,7 +380,7 @@ export async function processDocumentJob(jobId: string) {
     await prisma.$transaction(async (tx) => {
       await tx.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: confidence as Prisma.InputJsonValue } })
       await tx.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } })
-      await tx.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } })
+      await recordSystemAudit({ workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" }, tx)
       await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows: fieldValues }, tx)
       // Fan the lifecycle event out to subscribed endpoints in the SAME tx, so an event is never
       // queued for a completion that then rolls back. The drain is kicked after commit (below).

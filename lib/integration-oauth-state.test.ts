@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/config", () => ({ default: { auth: { secret: "test-secret-value" } } }))
+vi.mock("@/lib/config", () => ({ default: { aws: { internalWorkerSecret: "test-secret-value" } } }))
 
 const { signOAuthState, verifyOAuthState } = await import("./integration-oauth-state")
 
@@ -36,7 +36,7 @@ describe("signOAuthState / verifyOAuthState", () => {
   it("rejects a token signed under a different secret", async () => {
     const token = signOAuthState(payload, 600, now)
     vi.resetModules()
-    vi.doMock("@/lib/config", () => ({ default: { auth: { secret: "a-different-secret" } } }))
+    vi.doMock("@/lib/config", () => ({ default: { aws: { internalWorkerSecret: "a-different-secret" } } }))
     const { verifyOAuthState: verifyWithOtherSecret } = await import("./integration-oauth-state")
     expect(verifyWithOtherSecret(token, now)).toBeNull()
   })

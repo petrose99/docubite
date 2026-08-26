@@ -1,0 +1,2 @@
+risk_id,date_identified,description,assets_or_data_affected,likelihood_1_to_5,impact_1_to_5,risk_score,owner,treatment,actions_due_date,status,residual_risk,accepted_by,acceptance_expiry,evidence_link
+R-001,YYYY-MM-DD,Example: customer account takeover,Customer documents and exports,3,5,15,[name],Mitigate,Require MFA and login rate limiting,YYYY-MM-DD,Open,[complete],[name if accepted],YYYY-MM-DD,[private link]

@@ -2,6 +2,47 @@ import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  async headers() {
+    // Baseline browser protections, plus a first-stage CSP.
+    //
+    // F8 (HIPAA audit): shipped Report-Only rather than enforced. Next's client bundle relies on
+    // inline hydration scripts and Tailwind's runtime style injection, so an enforced policy tight
+    // enough to matter (nonce-based script-src) needs the nonce plumbed through proxy.ts and every
+    // layout — a real change, not a header tweak, and one that risks breaking the app if shipped
+    // untested. Report-Only costs nothing: it logs violations to the browser console (and, once
+    // wired to a collector, to Sentry) without blocking anything, which is how the tightening work
+    // gets scoped before it is ever enforced. See docs/security for the tracked rollout.
+    //
+    // connect-src/img-src/etc are deliberately 'self'-only: nothing in the client bundle calls a
+    // third-party API directly — the AI providers, MinerU, embeddings, Stripe, and Sentry (via its
+    // same-origin /monitoring tunnel below) are all reached server-side. If a future integration
+    // needs the browser to talk to a new origin directly, add it here explicitly rather than
+    // widening the default.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join("; ")
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(), payment=(), usb=()" },
+        { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+        { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        { key: "Content-Security-Policy-Report-Only", value: csp },
+      ],
+    }]
+  },
   images: {
     unoptimized: true, // FIXME: bug on prod, images always empty, investigate later
   },
@@ -23,7 +64,12 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: "256mb",
+      // Matches config.documents.maxFileSizeBytes (50MB) plus overhead for multipart framing —
+      // not the 256mb this used to be. Uploads go through uploadDocumentsAction one file per
+      // request (see extract-panel.tsx's uploadRows), so this never needs to cover a batch.
+      // A limit far past the app's own file-size ceiling was needless DoS and exfiltration
+      // surface on every server action, not just uploads.
+      bodySizeLimit: "52mb",
     },
   },
 }

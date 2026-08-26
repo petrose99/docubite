@@ -1,6 +1,5 @@
-import { getSession } from "@/lib/auth"
 import config from "@/lib/config"
-import { getUserById } from "@/models/users"
+import { getViewerUser } from "@/lib/auth"
 import { getOrCreateWorkspaceForUser } from "@/models/workspaces"
 import { redirect } from "next/navigation"
 
@@ -8,14 +7,13 @@ import { redirect } from "next/navigation"
  * Files list, creating the first one on demand. `/` is the home page and no longer forwards, so
  * this is the entry point used after login and by the Stripe return URLs (lib/config.ts).
  *
- * Left reading the session directly rather than going through getViewerUser, so it is the one
- * path that does not itself refuse a suspended account. Harmless, and not worth changing: it
- * only ever redirects, and every destination sits under a layout whose getCurrentUser() does
- * apply the check — so a suspended user lands back on the login page a hop later either way. */
+ * Now goes through getViewerUser rather than a bare session read: this is the very first page a
+ * brand-new sign-up or a just-migrated user's first post-reset login lands on, and provisioning
+ * the local User row only happens inside getViewerUser's resolveOrProvisionUser call — reading
+ * the session directly here, as under better-auth (which auto-created the row on sign-in itself),
+ * would find no row yet and bounce straight back to login. */
 export default async function WorkspacesPage() {
-  const session = await getSession()
-  if (!session) redirect(config.auth.loginUrl)
-  const user = await getUserById(session.user.id)
+  const user = await getViewerUser()
   if (!user) redirect(config.auth.loginUrl)
   const workspace = await getOrCreateWorkspaceForUser(user)
   redirect(`/workspaces/${workspace.id}/files`)

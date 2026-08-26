@@ -1,6 +1,7 @@
 import { requestLLM } from "@/ai/providers/llmProvider"
 import { getAsrBackend } from "@/lib/asr"
 import type { AsrResult } from "@/lib/asr/types"
+import { auditEventData } from "@/lib/audit"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { biasTermsForTemplate, findDomainAdapter } from "@/lib/domains"
@@ -372,6 +373,6 @@ export async function processTranscribeJob(job: { id: string; attempts: number; 
   await structureTranscript(routedDocument, transcript)
   await prisma.$transaction([
     prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
-    prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" }) }),
   ])
 }

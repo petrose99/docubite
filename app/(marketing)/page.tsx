@@ -1,10 +1,11 @@
 import { AiBand } from "@/components/marketing/sections/ai-band"
 import { CtaBand } from "@/components/marketing/sections/cta-band"
+import { DictationPitch } from "@/components/marketing/sections/dictation-pitch"
 import { ExtractionCore } from "@/components/marketing/sections/extraction-core"
 import { Faq } from "@/components/marketing/sections/faq"
 import { FolderReport } from "@/components/marketing/sections/folder-report"
 import { Hero } from "@/components/marketing/sections/hero"
-import { Pricing } from "@/components/marketing/sections/pricing"
+import { DemoCta } from "@/components/marketing/sections/pricing"
 import { Provenance } from "@/components/marketing/sections/provenance"
 import { RepeatingDocs } from "@/components/marketing/sections/repeating-docs"
 import { Repositioning } from "@/components/marketing/sections/repositioning"
@@ -16,8 +17,8 @@ import { Workflow } from "@/components/marketing/sections/workflow"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: { absolute: "DocuBite — Turn any document into data you can trust" },
-  description: "DocuBite reads invoices, receipts and bank statements — scans, photos and handwriting included — into a live sheet where every value traces to its source. Drop in a whole folder and get back the gaps, the duplicates, and what needs attention.",
+  title: { absolute: "DocuBite — Turn documents and dictation into data you can trust" },
+  description: "DocuBite reads invoices, receipts and bank statements — scans, photos and handwriting included — into a live sheet where every value traces to its source. No document to scan? Dictate it instead and get back a proper report, not just a transcript. Drop in a whole folder and get back the gaps, the duplicates, and what needs attention.",
 }
 
 export default function Home() {
@@ -26,6 +27,7 @@ export default function Home() {
     <TrustStrip />
     <ExtractionCore />
     <Repositioning />
+    <DictationPitch />
     <AiBand />
     <RepeatingDocs />
     <FolderReport />
@@ -34,7 +36,7 @@ export default function Home() {
     <Sharing />
     <SolutionsTeaser />
     <Security />
-    <Pricing />
+    <DemoCta />
     <Faq />
     <CtaBand />
   </>

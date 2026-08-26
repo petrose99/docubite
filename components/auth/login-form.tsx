@@ -4,7 +4,7 @@ import { AuthDivider, AuthField, PasswordField, SubmitButton } from "@/component
 import { GoogleButton } from "@/components/auth/google-button"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { createClient } from "@/lib/supabase/client"
 import type { Route } from "next"
 import Link from "next/link"
 import { useState } from "react"
@@ -25,17 +25,24 @@ export function LoginForm({ defaultEmail, redirectTo = "/workspaces", googleEnab
     setBusy(true)
     setError(null)
     try {
-      const result = await authClient.signIn.email({ email, password })
-      if (result.error) {
+      const supabase = createClient()
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) {
         // Deliberately one message for both "no such account" and "wrong password": telling them
-        // apart turns this form into an oracle for which addresses have accounts.
+        // apart turns this form into an oracle for which addresses have accounts. Supabase's own
+        // error codes (invalid_credentials covers both) already collapse the two the same way.
         setError("That email and password do not match an account.")
         return
       }
+      // The password step alone only ever reaches aal1. An account with a TOTP factor enrolled
+      // needs a second step before it has a session hipaaMode workspaces will accept — see
+      // /mfa/challenge, which this sends them to instead of redirectTo when one is pending.
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      const needsChallenge = aal?.nextLevel === "aal2" && aal.nextLevel !== aal.currentLevel
       // A hard navigation, not router.push: the session cookie was minted a moment ago, and a
       // client-side push would render the destination against the session-less cached payload —
       // which on /invite/[token] shows "Invitation unavailable" to someone who just signed in.
-      window.location.href = redirectTo
+      window.location.href = needsChallenge ? `/mfa/challenge?next=${encodeURIComponent(redirectTo)}` : redirectTo
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign you in. Please try again.")
     } finally {

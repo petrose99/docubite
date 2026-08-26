@@ -52,7 +52,7 @@ function createPrismaClient() {
  * webhook that arrives with a customer id rather than a workspace — into an outage. Running `warn`
  * first turns that same set into a list to work through, at no risk. */
 function withScopeGuard(client: PrismaClient): PrismaClient {
-  const mode = process.env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "off" : "warn")
+  const mode = process.env.DB_SCOPE_GUARD ?? "warn"
   if (mode === "off") return client
   return client.$extends({
     query: {

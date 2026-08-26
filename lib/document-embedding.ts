@@ -1,3 +1,4 @@
+import { auditEventData } from "@/lib/audit"
 import { chunkFromBlocks, chunkFromText, type Chunk } from "@/lib/chunking"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
@@ -120,7 +121,7 @@ export async function processEmbedJob(job: EmbedJobInput): Promise<void> {
     await replaceDocumentChunks({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, chunks: inserts, source: document.source === "dictation" ? "asr" : "vlm_ocr" })
     await prisma.$transaction([
       prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } }),
-      prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "embedding_completed" } }),
+      prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: document.workspaceId, documentId: document.id, type: "embedding_completed" }) }),
     ])
   } catch (error) {
     const errorCode = safeErrorCode(error)
@@ -130,7 +131,7 @@ export async function processEmbedJob(job: EmbedJobInput): Promise<void> {
     // operator can see which documents never indexed and why.
     await prisma.$transaction([
       prisma.documentProcessingJob.update({ where: { id: job.id }, data: { status: permanent ? "failed" : "queued", errorCode, scheduledAt: permanent ? job.scheduledAt : retryAt, completedAt: permanent ? new Date() : null, leaseUntil: null } }),
-      ...(permanent ? [prisma.documentAuditEvent.create({ data: { workspaceId: document.workspaceId, documentId: document.id, type: "embedding_failed" } })] : []),
+      ...(permanent ? [prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: document.workspaceId, documentId: document.id, type: "embedding_failed", outcome: "failure" }) })] : []),
     ])
     throw error
   }

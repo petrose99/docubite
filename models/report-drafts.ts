@@ -1,3 +1,4 @@
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
 import { biasTermsForTemplate } from "@/lib/domains"
@@ -167,13 +168,14 @@ export async function signReport(input: { workspaceId: string; draftId: string; 
     sections,
   })
 
+  const context = await getRequestAuditContext()
   const [signed] = await prisma.$transaction([
     prisma.documentReportDraft.update({
       where: { id: draft.id },
       data: { status: "signed", signedById: input.actorId, signedAt: new Date(), renderedText },
     }),
     prisma.documentAuditEvent.create({
-      data: { workspaceId: input.workspaceId, documentId: draft.documentId, actorId: input.actorId, type: "report_signed" },
+      data: auditEventData({ workspaceId: input.workspaceId, documentId: draft.documentId, actorId: input.actorId, type: "report_signed" }, context),
     }),
   ])
   return signed

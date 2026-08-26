@@ -8,9 +8,7 @@ const columns: { label: string; links: { href: Route; label: string }[] }[] = [
   {
     label: "Product",
     links: [
-      { href: "/pricing", label: "Pricing" },
       { href: "/demo", label: "Book a demo" },
-      { href: "/signup", label: "Start free trial" },
       { href: "/login", label: "Sign in" },
     ],
   },

@@ -1,3 +1,4 @@
+import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import { documentExportRow, exportColumnLabels, exportColumns, lineItemExportRows } from "@/lib/document-export"
 import { parseTemplateFields } from "@/lib/document-templates"
@@ -27,6 +28,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ work
   const statusFilter = url.searchParams.get("status") || (templateCode ? "all" : "reviewed")
   const sheet = url.searchParams.get("sheet") || "documents"
   const safeName = file.name.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "file"
+
+  // The audit trail otherwise only sees writes (deletes, requeues) and never the action most
+  // relevant to a compliance review: someone pulling extracted data out of the system.
+  await recordDocumentAudit({ workspaceId, actorId: user.id, type: "file_exported", detail: { fileId, format, templateCode, sheet } })
 
   /** Once a file has a spreadsheet, the spreadsheet *is* the file: it holds the columns the user
    * added, the corrections they made and the formulas they wrote, none of which exist in the

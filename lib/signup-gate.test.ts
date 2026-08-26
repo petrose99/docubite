@@ -27,6 +27,6 @@ describe("assertSignupAllowed", () => {
   it("refuses an uninvited address while sign-up is disabled", async () => {
     config.auth.disableSignup = true
     vi.mocked(getPendingInvitationForEmail).mockResolvedValue(null)
-    await expect(assertSignupAllowed("stranger@example.com")).rejects.toMatchObject({ status: "FORBIDDEN" })
+    await expect(assertSignupAllowed("stranger@example.com")).rejects.toThrow("signup_disabled")
   })
 })
