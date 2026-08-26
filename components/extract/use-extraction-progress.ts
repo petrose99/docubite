@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-export type TrackedDocumentStatus = { status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean }
+export type TrackedDocumentStatus = { status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean; flaggedFields: string[] }
 
 const TERMINAL_STATUSES = new Set(["ready_for_review", "needs_review", "reviewed", "failed"])
 const POLL_MS = 2500
@@ -66,7 +66,7 @@ export function useExtractionProgress(workspaceId: string, seedIds: string[] = [
       const settled: string[] = []
       const next: Record<string, TrackedDocumentStatus> = {}
       for (const row of result.data) {
-        next[row.id] = { status: row.status, errorCode: row.errorCode, filename: row.filename, searchable: row.searchable, indexing: row.indexing }
+        next[row.id] = { status: row.status, errorCode: row.errorCode, filename: row.filename, searchable: row.searchable, indexing: row.indexing, flaggedFields: row.flaggedFields }
         const wasTerminal = TERMINAL_STATUSES.has(lastSeen.current[row.id] || "")
         if (!wasTerminal && TERMINAL_STATUSES.has(row.status)) {
           transitioned = true

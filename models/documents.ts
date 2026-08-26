@@ -3,6 +3,7 @@ import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
 import { projectDocumentFields } from "@/lib/field-projection"
+import { LOW_CONFIDENCE } from "@/lib/sheet-seed"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
@@ -226,19 +227,30 @@ export async function markDocumentsReviewed(workspaceId: string, documentIds: st
 /** Lightweight status read for the extraction-progress poller. Capped because callers track
  * one upload batch, not the whole workspace. `searchable` reports whether the document has any
  * stored chunks yet — true once embedding has run — and is only computed when document search is
- * configured; with the feature off it is always false, so nothing downstream ever shows the chip. */
+ * configured; with the feature off it is always false, so nothing downstream ever shows the chip.
+ * `flaggedFields` names every field a reviewer should double-check: missing required fields plus
+ * any field the model returned below the same LOW_CONFIDENCE threshold the sheet's amber tint
+ * uses — so the same signal the grid already carries also reaches the extract panel's row list. */
+export function flaggedFieldsFromConfidence(confidence: unknown): string[] {
+  const record = (confidence as Record<string, unknown> | null) ?? null
+  const missing = (record?.missingRequiredFields as string[] | null) ?? []
+  const fieldConfidence = (record?.fieldConfidence as Record<string, number> | null) ?? {}
+  const low = Object.entries(fieldConfidence).filter(([, score]) => typeof score === "number" && score < LOW_CONFIDENCE).map(([key]) => key)
+  return [...new Set([...missing, ...low])]
+}
+
 export async function getDocumentsStatus(workspaceId: string, documentIds: string[]) {
   if (!documentIds.length) return []
   const where = { workspaceId, id: { in: documentIds.slice(0, 50) } }
   // With document search off, skip the chunk-count join entirely and report searchable: false.
   if (!config.embeddings.enabled) {
-    const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true } })
-    return rows.map((row) => ({ ...row, searchable: false, indexing: false }))
+    const rows = await prisma.document.findMany({ where, select: { id: true, status: true, errorCode: true, filename: true, confidence: true } })
+    return rows.map(({ confidence, ...row }) => ({ ...row, searchable: false, indexing: false, flaggedFields: flaggedFieldsFromConfidence(confidence) }))
   }
   const rows = await prisma.document.findMany({
     where,
     select: {
-      id: true, status: true, errorCode: true, filename: true,
+      id: true, status: true, errorCode: true, filename: true, confidence: true,
       _count: { select: { chunks: true } },
       // Was implied — a poller had to guess indexing was still happening from "not searchable
       // yet" and a fixed tick budget. This makes it a fact: a queued/processing embed job exists,
@@ -246,7 +258,7 @@ export async function getDocumentsStatus(workspaceId: string, documentIds: strin
       jobs: { where: { type: "embed", status: { in: ["queued", "processing"] } }, select: { id: true }, take: 1 },
     },
   })
-  return rows.map(({ _count, jobs, ...row }) => ({ ...row, searchable: _count.chunks > 0, indexing: jobs.length > 0 }))
+  return rows.map(({ _count, jobs, confidence, ...row }) => ({ ...row, searchable: _count.chunks > 0, indexing: jobs.length > 0, flaggedFields: flaggedFieldsFromConfidence(confidence) }))
 }
 
 /** Deletes documents with their stored sources. Quota is deliberately not refunded: the

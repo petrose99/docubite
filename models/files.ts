@@ -4,7 +4,7 @@
 // publish every export as a callable endpoint. Server actions live in
 // app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
 import { DEFAULT_DOCUMENT_TEMPLATES, parseTemplateFields } from "@/lib/document-templates"
-import { dictationAdapters } from "@/lib/domains"
+import { dictationAdapters, findExtractionDomainPack } from "@/lib/domains"
 import { deleteDocumentSource, documentStorageKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
 import { Prisma } from "@/prisma/client"
@@ -115,6 +115,27 @@ export async function ensureDictationFile(workspaceId: string, userId: string) {
     })
   }
   return file
+}
+
+/** Adds a domain pack's worksheets to an existing file — the picker on the templates settings
+ * page. Idempotent per template code: a pack already (partially) added only gets whatever
+ * worksheets are still missing, the same "diverges forever otherwise" reasoning as
+ * ensureDictationFile above, just triggered by a user action instead of every page load. */
+export async function addDomainPackToFile(workspaceId: string, fileId: string, domain: string) {
+  const pack = findExtractionDomainPack(domain)
+  if (!pack) throw new Error("unknown_domain_pack")
+  const present = new Set((await prisma.documentTemplate.findMany({ where: { workspaceId, fileId }, select: { code: true } })).map((row) => row.code))
+  const missing = pack.adapters.filter((adapter) => !present.has(adapter.code))
+  for (const adapter of missing) {
+    await prisma.documentTemplate.create({
+      data: {
+        workspaceId, fileId, code: adapter.code, name: adapter.name, documentType: adapter.documentType,
+        isSystem: false, multiRow: adapter.multiRow,
+        versions: { create: { version: 1, fields: parseTemplateFields(adapter.fields), prompt: adapter.prompt } },
+      },
+    })
+  }
+  return { added: missing.length }
 }
 
 /** Slugifies a name into a template code, appending -2, -3, … on collision within the file. Codes

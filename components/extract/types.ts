@@ -29,4 +29,4 @@ export type StagedFileStatus = "staged" | "uploading" | "queued" | "processing" 
 
 /** One row of the panel's Files section: a browser File before upload, a workspace document
  * after. previewUrl is an object URL for staged files and the source route once uploaded. */
-export type StagedFile = { localId: string; file: File | null; filename: string; sizeBytes: number; mimeType: string; previewUrl: string | null; documentId: string | null; status: StagedFileStatus; error: string | null; relativePath?: string; searchable?: boolean; indexing?: boolean }
+export type StagedFile = { localId: string; file: File | null; filename: string; sizeBytes: number; mimeType: string; previewUrl: string | null; documentId: string | null; status: StagedFileStatus; error: string | null; relativePath?: string; searchable?: boolean; indexing?: boolean; flaggedFields?: string[] }

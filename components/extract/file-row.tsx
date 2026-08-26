@@ -8,6 +8,15 @@ import { createPortal } from "react-dom"
 
 const formatSize = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
 
+/** "shipping_date" -> "Shipping date" — good enough without a template-field lookup, which
+ * would need an extra join just to label a tooltip. */
+const formatFieldKey = (key: string) => {
+  const words = key.replaceAll("_", " ")
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+const flaggedFieldsTitle = (fields: string[]) => `The AI is unsure about, or is missing: ${fields.map(formatFieldKey).join(", ")}`
+
 function StatusBadge({ staged }: { staged: StagedFile }) {
   // A second chip reflecting document-search indexing, next to the extraction status. Extraction
   // finishing does not mean embedding has too (lib/document-processing.ts::kickEmbedJob may run it
@@ -20,16 +29,26 @@ function StatusBadge({ staged }: { staged: StagedFile }) {
       ? <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-400" title="Being indexed for document search"><Loader2 className="h-3 w-3 animate-spin" />Indexing…</span>
       : null
 
+  const flagged = staged.flaggedFields?.length
+    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600" title={flaggedFieldsTitle(staged.flaggedFields)}>
+        <AlertTriangle className="h-3 w-3" />{staged.flaggedFields.length} field{staged.flaggedFields.length === 1 ? "" : "s"}
+      </span>
+    : null
+
   let status: ReactNode = null
   if (staged.status === "uploading") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500"><Loader2 className="h-3 w-3 animate-spin" />Uploading</span>
   else if (staged.status === "queued" || staged.status === "processing") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Loader2 className="h-3 w-3 animate-spin" />Extracting</span>
   else if (staged.status === "done") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Check className="h-3 w-3" />Done</span>
-  else if (staged.status === "attention") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertTriangle className="h-3 w-3" />Review</span>
+  else if (staged.status === "attention") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600" title={staged.flaggedFields?.length ? flaggedFieldsTitle(staged.flaggedFields) : undefined}><AlertTriangle className="h-3 w-3" />Review</span>
   else if (staged.status === "failed") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600" title={staged.error || undefined}><X className="h-3 w-3" />Failed</span>
   else if (staged.status === "duplicate") status = <span className="inline-flex items-center gap-1 text-xs font-medium text-stone-500" title="This exact file was already extracted"><Copy className="h-3 w-3" />Already extracted</span>
 
-  if (!status && !searchable) return null
-  return <span className="inline-flex items-center gap-2">{status}{searchable}</span>
+  // The "Review" badge already implies a missing required field; showing the flagged count next
+  // to it would be redundant, so it only rides alongside "Done" — the case where AI-unsure fields
+  // exist but nothing blocked review.
+  const showFlagged = flagged && staged.status === "done"
+  if (!status && !searchable && !showFlagged) return null
+  return <span className="inline-flex items-center gap-2">{status}{showFlagged && flagged}{searchable}</span>
 }
 
 /** One file in the panel's Files section, mirroring Lido's row: name, status, then eye

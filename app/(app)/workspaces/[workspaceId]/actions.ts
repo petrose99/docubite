@@ -11,7 +11,7 @@ import { listShapesForMatch } from "@/models/extraction-shapes"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parsePageRange } from "@/lib/page-range"
 import { createDocumentFromBuffer, deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
-import { canEdit, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileAccess, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
+import { addDomainPackToFile, canEdit, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileAccess, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { getCurrentUser, getViewerUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
@@ -115,6 +115,17 @@ export async function createDocumentTemplateAction(workspaceId: string, formData
     await prisma.documentTemplate.create({ data: { workspaceId, fileId, name: parsed.data.name, code: parsed.data.code, documentType: "generic", versions: { create: { version: 1, fields, prompt: parsed.data.prompt?.trim() || null } } } })
     revalidatePath(paths(workspaceId).templates); return { success: true, data: null }
   } catch { return { success: false, error: "Fields must be a valid JSON array with unique field definitions" } }
+}
+
+export async function addDomainPackAction(workspaceId: string, fileId: string, domain: string): Promise<ActionState<{ added: number }>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
+  if (!(await getWorkspaceFile(workspaceId, fileId))) return { success: false, error: "File not found" }
+  try {
+    const result = await addDomainPackToFile(workspaceId, fileId, domain)
+    revalidatePath(paths(workspaceId).templates)
+    return { success: true, data: result }
+  } catch { return { success: false, error: "Could not add that domain pack" } }
 }
 
 export async function updateDocumentTemplateAction(workspaceId: string, templateId: string, formData: FormData): Promise<ActionState<null>> {
@@ -232,7 +243,7 @@ export async function saveExtractionSheetAction(workspaceId: string, fileId: str
 }
 
 /** Interval-polled by the extraction progress hook; deliberately no revalidatePath. */
-export async function getDocumentProcessingStatusAction(workspaceId: string, documentIds: string[]): Promise<ActionState<Array<{ id: string; status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean }>>> {
+export async function getDocumentProcessingStatusAction(workspaceId: string, documentIds: string[]): Promise<ActionState<Array<{ id: string; status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean; flaggedFields: string[] }>>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
   try {

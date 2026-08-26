@@ -7,7 +7,7 @@ const CELL_TYPE = { STRING: 1, NUMBER: 2, BOOLEAN: 3 } as const
 
 /** Below this the extraction is a guess worth a second look, which the grid tints amber. The
  * same threshold the review flow uses. */
-const LOW_CONFIDENCE = 0.6
+export const LOW_CONFIDENCE = 0.6
 
 export const SHEET_STYLE_IDS = { header: "dbHeader", low: "dbLowConfidence", missing: "dbMissingRequired" } as const
 

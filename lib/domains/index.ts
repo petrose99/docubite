@@ -76,6 +76,26 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
   return DOMAIN_ADAPTERS.find((adapter) => adapter.code === code) ?? null
 }
 
+/** The domain packs a file can opt into from the templates settings page — finance is excluded
+ * because it is already every file's default seed (DEFAULT_DOCUMENT_TEMPLATES), and general is
+ * excluded because it is the ephemeral dictation-only pack, not something with worksheets to add
+ * to a file. Adding a pack here is exactly what "ship the domain packs" means: pathology and
+ * logistics have been fully built and registered since Stage 3/4, just never reachable from the UI. */
+const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { pathology: "Pathology", logistics: "Logistics" }
+
+export type ExtractionDomainPack = { domain: DomainAdapter["domain"]; label: string; adapters: DomainAdapter[] }
+
+export function extractionDomainPacks(): ExtractionDomainPack[] {
+  return (Object.keys(EXTRACTION_PACK_LABELS) as DomainAdapter["domain"][]).map((domain) => ({
+    domain, label: EXTRACTION_PACK_LABELS[domain]!,
+    adapters: DOMAIN_ADAPTERS.filter((adapter) => adapter.domain === domain),
+  }))
+}
+
+export function findExtractionDomainPack(domain: string | null | undefined): ExtractionDomainPack | null {
+  return extractionDomainPacks().find((pack) => pack.domain === domain) ?? null
+}
+
 /** The template codes the dictation page offers, in the order it offers them.
  *
  * A list rather than "every adapter", because dictating a bill of lading is not a thing anyone
