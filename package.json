@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev -p 7331 --turbopack",
-    "build": "next build",
+    "build": "prisma migrate deploy && next build",
     "start": "prisma migrate deploy && next start",
     "lint": "eslint .",
     "worker:jobs": "tsx --env-file .env worker/job-worker.ts",
