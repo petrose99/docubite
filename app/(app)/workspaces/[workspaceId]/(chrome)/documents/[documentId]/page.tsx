@@ -6,14 +6,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DeleteDocumentButton } from "@/components/documents/delete-document-button"
 import { LineItemsEditor } from "@/components/documents/line-items-editor"
+import { PushToAccountingCard } from "@/components/documents/push-to-accounting-card"
 import { getCurrentUser } from "@/lib/auth"
+import config from "@/lib/config"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceDocument } from "@/models/documents"
+import { listWorkspaceIntegrationConnections, listWorkspaceIntegrationPushes, workspaceIntegrationsPlanEnabled } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6
+const PUSHABLE_TEMPLATE_CODES = new Set(["invoice", "receipt"])
 
 export default async function DocumentPage({ params }: { params: Promise<{ workspaceId: string; documentId: string }> }) {
   const { workspaceId, documentId } = await params
@@ -21,6 +25,15 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
   await requireWorkspaceRole(workspaceId, user.id)
   const document = await getWorkspaceDocument(workspaceId, documentId)
   if (!document) notFound()
+
+  // Accounting push affordance: only for a reviewed invoice/receipt, and only when the deployment
+  // and plan both allow integrations at all — cheap checks first so the two extra queries below
+  // are skipped for the common case (a document that never qualifies).
+  const canPush = document.status === "reviewed" && PUSHABLE_TEMPLATE_CODES.has(document.template?.code ?? "")
+    && config.integrations.enabled && (await workspaceIntegrationsPlanEnabled(workspaceId))
+  const [connections, pushes] = canPush
+    ? await Promise.all([listWorkspaceIntegrationConnections(workspaceId), listWorkspaceIntegrationPushes(workspaceId, documentId)])
+    : [[], []]
 
   const fields = parseTemplateFields(document.fieldSnapshot)
   const confidence = document.confidence as { missingRequiredFields?: string[]; fieldConfidence?: Record<string, number>; conflictingFields?: string[] } | null
@@ -49,5 +62,13 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
         )}
       </div>
     })}<Button type="submit">Save review</Button></form></CardContent></Card>
+    {canPush && (
+      <PushToAccountingCard
+        workspaceId={workspaceId}
+        documentId={documentId}
+        connections={connections}
+        pushes={pushes}
+      />
+    )}
   </main>
 }

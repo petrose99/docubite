@@ -148,3 +148,140 @@ export async function getDocumentForApi(workspaceId: string, documentId: string)
   const fieldValues = await getDocumentFieldValues(workspaceId, documentId)
   return { document, fieldValues }
 }
+
+// --- Accounting connectors (P2): QuickBooks / Xero ---
+
+/** Never selects accessTokenEnc/refreshTokenEnc — write-only outside the push/refresh internals
+ * (lib/integration-token-refresh.ts, lib/integration-push.ts), which read them straight off Prisma
+ * rather than through this list helper. */
+export async function listWorkspaceIntegrationConnections(workspaceId: string) {
+  return prisma.integrationConnection.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true, provider: true, externalTenantId: true, tenantName: true, status: true,
+      defaultExpenseAccountId: true, defaultExpenseAccountName: true, createdAt: true,
+    },
+  })
+}
+
+export async function getWorkspaceIntegrationConnection(workspaceId: string, provider: "quickbooks" | "xero") {
+  return prisma.integrationConnection.findFirst({
+    where: { workspaceId, provider },
+    select: {
+      id: true, provider: true, externalTenantId: true, tenantName: true, status: true,
+      defaultExpenseAccountId: true, defaultExpenseAccountName: true, createdAt: true,
+    },
+  })
+}
+
+/** Upserts the connection created/refreshed by the OAuth callback. Tokens arrive pre-encrypted
+ * (the callback route calls encryptSecret before this ever sees them) so this layer never handles
+ * plaintext secrets, matching createWorkspaceWebhookEndpoint's shape. */
+export async function upsertWorkspaceIntegrationConnection(
+  workspaceId: string,
+  input: {
+    provider: "quickbooks" | "xero"
+    externalTenantId: string
+    tenantName: string | null
+    accessTokenEnc: string
+    refreshTokenEnc: string
+    accessTokenExpiresAt: Date
+    refreshTokenExpiresAt: Date | null
+    scope: string | null
+    createdById: string
+  }
+) {
+  return prisma.integrationConnection.upsert({
+    where: { workspaceId_provider: { workspaceId, provider: input.provider } },
+    create: {
+      workspaceId,
+      provider: input.provider,
+      externalTenantId: input.externalTenantId,
+      tenantName: input.tenantName,
+      accessTokenEnc: input.accessTokenEnc,
+      refreshTokenEnc: input.refreshTokenEnc,
+      accessTokenExpiresAt: input.accessTokenExpiresAt,
+      refreshTokenExpiresAt: input.refreshTokenExpiresAt,
+      scope: input.scope,
+      status: "active",
+      createdById: input.createdById,
+    },
+    update: {
+      externalTenantId: input.externalTenantId,
+      tenantName: input.tenantName,
+      accessTokenEnc: input.accessTokenEnc,
+      refreshTokenEnc: input.refreshTokenEnc,
+      accessTokenExpiresAt: input.accessTokenExpiresAt,
+      refreshTokenExpiresAt: input.refreshTokenExpiresAt,
+      scope: input.scope,
+      status: "active",
+    },
+    select: { id: true, provider: true },
+  })
+}
+
+export async function setWorkspaceIntegrationDefaultAccount(
+  workspaceId: string,
+  connectionId: string,
+  account: { id: string; name: string }
+) {
+  const res = await prisma.integrationConnection.updateMany({
+    where: { id: connectionId, workspaceId },
+    data: { defaultExpenseAccountId: account.id, defaultExpenseAccountName: account.name },
+  })
+  if (!res.count) throw new Error("integration_connection_not_found")
+}
+
+/** Disconnects (deletes) a connection. Cascades to its IntegrationPush rows (onDelete: Cascade in
+ * the schema) — a pending push against a connection that no longer exists has nothing to push to. */
+export async function deleteWorkspaceIntegrationConnection(workspaceId: string, connectionId: string) {
+  const res = await prisma.integrationConnection.deleteMany({ where: { id: connectionId, workspaceId } })
+  if (!res.count) throw new Error("integration_connection_not_found")
+}
+
+// --- Accounting pushes ---
+
+export async function listWorkspaceIntegrationPushes(workspaceId: string, documentId?: string) {
+  return prisma.integrationPush.findMany({
+    where: { workspaceId, ...(documentId ? { documentId } : {}) },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true, connectionId: true, documentId: true, provider: true, status: true, attempts: true,
+      externalBillId: true, errorCode: true, createdAt: true, completedAt: true,
+    },
+  })
+}
+
+/** Upserts the push row for (documentId, connectionId): re-pushing after a document edit reuses the
+ * same row rather than creating a duplicate bill, per the unique constraint. Resets it to a fresh
+ * pending attempt cycle so a push after a previous failure (or success) is a normal retry, not stuck
+ * behind stale state. */
+export async function upsertWorkspaceIntegrationPush(
+  workspaceId: string,
+  input: { connectionId: string; documentId: string; provider: "quickbooks" | "xero"; payload: object; createdById: string }
+) {
+  return prisma.integrationPush.upsert({
+    where: { documentId_connectionId: { documentId: input.documentId, connectionId: input.connectionId } },
+    create: {
+      workspaceId,
+      connectionId: input.connectionId,
+      documentId: input.documentId,
+      provider: input.provider,
+      payload: input.payload as Prisma.InputJsonValue,
+      status: "pending",
+      nextAttemptAt: new Date(),
+      createdById: input.createdById,
+    },
+    update: {
+      payload: input.payload as Prisma.InputJsonValue,
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      leaseUntil: null,
+      errorCode: null,
+      completedAt: null,
+    },
+    select: { id: true, status: true },
+  })
+}

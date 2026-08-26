@@ -42,6 +42,8 @@ model User {
   editedTranscripts     Document[]            @relation("TranscriptEditor")
   decidedFieldSuggestions FieldSuggestion[]   @relation("FieldSuggestionDecider")
   createdApiKeys        WorkspaceApiKey[]     @relation("ApiKeyCreator")
+  createdIntegrationConnections IntegrationConnection[] @relation("IntegrationConnectionCreator")
+  createdIntegrationPushes      IntegrationPush[]       @relation("IntegrationPushCreator")
 
   @@map("users")
 }
@@ -78,6 +80,8 @@ model Workspace {
   apiKeys         WorkspaceApiKey[]
   webhookEndpoints WebhookEndpoint[]
   webhookDeliveries WebhookDelivery[]
+  integrationConnections IntegrationConnection[]
+  integrationPushes IntegrationPush[]
 
   @@map("workspaces")
 }
@@ -412,6 +416,7 @@ model Document {
   reportDrafts      DocumentReportDraft[]
   fieldSuggestions  FieldSuggestion[]
   webhookDeliveries WebhookDelivery[]
+  integrationPushes IntegrationPush[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -760,6 +765,73 @@ model WebhookDelivery {
   @@index([workspaceId, createdAt])
   @@index([endpointId])
   @@map("webhook_deliveries")
+}
+
+/// A connected accounting provider (P2): one QuickBooks or Xero connection per workspace. Tokens
+/// are AES-GCM-sealed (lib/secret-crypto.ts), exactly like WebhookEndpoint.secretEnc, and never
+/// selected in a list query — see models/integrations.ts. `defaultExpenseAccountId`/Name is the one
+/// expense account every pushed bill's line items are coded to (scope: one account per connection,
+/// no per-line mapping). `status` moves to "needs_reauth" when a refresh fails with an auth-shaped
+/// error (lib/integration-token-refresh.ts), which is what the settings UI and the push affordance
+/// both check before attempting a push.
+model IntegrationConnection {
+  id                        String            @id @default(uuid()) @db.Uuid
+  workspaceId               String            @map("workspace_id") @db.Uuid
+  provider                  String
+  externalTenantId          String?           @map("external_tenant_id")
+  tenantName                String?           @map("tenant_name")
+  accessTokenEnc            String            @map("access_token_enc")
+  refreshTokenEnc           String            @map("refresh_token_enc")
+  accessTokenExpiresAt      DateTime?         @map("access_token_expires_at")
+  refreshTokenExpiresAt     DateTime?         @map("refresh_token_expires_at")
+  scope                     String?
+  defaultExpenseAccountId   String?           @map("default_expense_account_id")
+  defaultExpenseAccountName String?           @map("default_expense_account_name")
+  status                    String            @default("active")
+  createdById               String?           @map("created_by_id") @db.Uuid
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
+  workspace                 Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy                 User?             @relation("IntegrationConnectionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  pushes                    IntegrationPush[]
+
+  @@unique([workspaceId, provider])
+  @@map("integration_connections")
+}
+
+/// One attempt-tracked push of one document as a bill/invoice to one connection — the queue row,
+/// modelled on WebhookDelivery exactly (claim/process/drain trio in lib/integration-push.ts), but
+/// with its own smaller attempt cap (5, not 8; see lib/integration-push-policy.ts). `payload` is the
+/// normalized bill snapshot (lib/integration-bill-mapping.ts), captured once so a retry re-sends the
+/// same facts even if the source document is edited afterward. `externalBillId` is the created
+/// record's id at the provider, for a link back out. One push per (document, connection): re-pushing
+/// after a document edit reuses the same row via upsert rather than creating a duplicate bill.
+model IntegrationPush {
+  id            String                @id @default(uuid()) @db.Uuid
+  workspaceId   String                @map("workspace_id") @db.Uuid
+  connectionId  String                @map("connection_id") @db.Uuid
+  documentId    String                @map("document_id") @db.Uuid
+  provider      String
+  payload       Json
+  status        String                @default("pending")
+  attempts      Int                   @default(0)
+  nextAttemptAt DateTime              @default(now()) @map("next_attempt_at")
+  leaseUntil    DateTime?             @map("lease_until")
+  externalBillId String?              @map("external_bill_id")
+  errorCode     String?               @map("error_code")
+  createdById   String?               @map("created_by_id") @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  completedAt   DateTime?             @map("completed_at")
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection    IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  document      Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy     User?                 @relation("IntegrationPushCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, connectionId])
+  @@index([status, nextAttemptAt])
+  @@index([workspaceId, createdAt])
+  @@map("integration_pushes")
 }
 
 model Session {

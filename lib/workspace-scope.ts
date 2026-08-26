@@ -40,6 +40,11 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "WorkspaceApiKey",
   "WebhookEndpoint",
   "WebhookDelivery",
+  // Outbound integrations (P2): accounting connectors. IntegrationPush is drained across all
+  // workspaces exactly like WebhookDelivery, and its global drain wraps its claim in unscoped()
+  // (see lib/integration-push.ts).
+  "IntegrationConnection",
+  "IntegrationPush",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.

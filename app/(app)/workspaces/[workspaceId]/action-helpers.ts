@@ -33,6 +33,9 @@ const BILLING_MESSAGES: Record<string, string> = {
   api_key_not_found: "That API key no longer exists.",
   webhook_endpoint_not_found: "That webhook endpoint no longer exists.",
   delivery_not_found: "That delivery no longer exists.",
+  // Accounting connectors (P2).
+  integration_connection_not_found: "That connection no longer exists.",
+  bill_missing_total: "This document has no total to push.",
 }
 
 export const errorMessage = (error: unknown, fallback: string) => {

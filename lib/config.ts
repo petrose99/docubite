@@ -131,6 +131,16 @@ const envSchema = z.object({
   // current key, and a value sealed under the old key is re-encrypted lazily on its next write.
   SECRETS_ENCRYPTION_KEY: z.string().optional(),
   SECRETS_ENCRYPTION_KEY_PREVIOUS: z.string().optional(),
+  // Accounting connectors (P2): push a reviewed invoice/receipt to QuickBooks or Xero as a bill.
+  // Each provider is its own gate (client id + secret + the master SECRETS_ENCRYPTION_KEY), so a
+  // deployment can configure one, both, or neither without touching the other's card in the UI.
+  QUICKBOOKS_CLIENT_ID: z.string().optional(),
+  QUICKBOOKS_CLIENT_SECRET: z.string().optional(),
+  // "sandbox" talks to Intuit's sandbox company; "production" to a real one. Sandbox by default so
+  // an unconfigured deployment can never accidentally write a real bill.
+  QUICKBOOKS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  XERO_CLIENT_ID: z.string().optional(),
+  XERO_CLIENT_SECRET: z.string().optional(),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -226,6 +236,20 @@ const config = {
     enabled: Boolean(env.SECRETS_ENCRYPTION_KEY),
     encryptionKey: env.SECRETS_ENCRYPTION_KEY || "",
     encryptionKeyPrevious: env.SECRETS_ENCRYPTION_KEY_PREVIOUS || "",
+    // Accounting connectors. Each `enabled` also requires the master encryption key — without it
+    // there is nowhere safe to store the OAuth tokens, so the card stays hidden even if a client
+    // id/secret pair is set.
+    quickbooks: {
+      enabled: Boolean(env.SECRETS_ENCRYPTION_KEY && env.QUICKBOOKS_CLIENT_ID && env.QUICKBOOKS_CLIENT_SECRET),
+      clientId: env.QUICKBOOKS_CLIENT_ID || "",
+      clientSecret: env.QUICKBOOKS_CLIENT_SECRET || "",
+      environment: env.QUICKBOOKS_ENVIRONMENT,
+    },
+    xero: {
+      enabled: Boolean(env.SECRETS_ENCRYPTION_KEY && env.XERO_CLIENT_ID && env.XERO_CLIENT_SECRET),
+      clientId: env.XERO_CLIENT_ID || "",
+      clientSecret: env.XERO_CLIENT_SECRET || "",
+    },
   },
 } as const
 

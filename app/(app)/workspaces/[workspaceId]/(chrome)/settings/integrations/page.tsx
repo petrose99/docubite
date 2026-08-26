@@ -5,6 +5,7 @@ import config from "@/lib/config"
 import { WEBHOOK_EVENT_TYPES } from "@/lib/webhooks"
 import {
   listWorkspaceApiKeys,
+  listWorkspaceIntegrationConnections,
   listWorkspaceWebhookDeliveries,
   listWorkspaceWebhookEndpoints,
   workspaceIntegrationsPlanEnabled,
@@ -43,10 +44,11 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ w
     </main>
   }
 
-  const [apiKeys, endpoints, deliveries] = await Promise.all([
+  const [apiKeys, endpoints, deliveries, connections] = await Promise.all([
     listWorkspaceApiKeys(workspaceId),
     listWorkspaceWebhookEndpoints(workspaceId),
     listWorkspaceWebhookDeliveries(workspaceId, 50),
+    listWorkspaceIntegrationConnections(workspaceId),
   ])
 
   return <main className="space-y-6">
@@ -62,6 +64,8 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ w
       apiKeys={apiKeys}
       endpoints={endpoints}
       deliveries={deliveries}
+      accountingProviders={{ quickbooks: config.integrations.quickbooks.enabled, xero: config.integrations.xero.enabled }}
+      connections={connections}
     />
   </main>
 }

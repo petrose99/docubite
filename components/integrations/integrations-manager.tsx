@@ -12,6 +12,11 @@ import {
   revokeApiKeyAction,
   setWebhookEndpointStatusAction,
 } from "@/app/(app)/workspaces/[workspaceId]/integrations-actions"
+import {
+  disconnectIntegrationAction,
+  listExpenseAccountsAction,
+  setDefaultExpenseAccountAction,
+} from "@/app/(app)/workspaces/[workspaceId]/integration-connection-actions"
 import { Check, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
@@ -20,6 +25,94 @@ import { toast } from "sonner"
 type ApiKey = { id: string; name: string; keyPrefix: string; lastUsedAt: Date | null; revokedAt: Date | null; createdAt: Date }
 type Endpoint = { id: string; url: string; events: string[]; status: string; failureCount: number; createdAt: Date }
 type Delivery = { id: string; endpointId: string; eventType: string; status: string; attempts: number; responseStatus: number | null; errorCode: string | null; deliveredAt: Date | null; createdAt: Date }
+type IntegrationConnection = {
+  id: string
+  provider: string
+  externalTenantId: string | null
+  tenantName: string | null
+  status: string
+  defaultExpenseAccountId: string | null
+  defaultExpenseAccountName: string | null
+  createdAt: Date
+}
+
+const PROVIDER_LABELS: Record<string, string> = { quickbooks: "QuickBooks", xero: "Xero" }
+
+/** One connected-provider card: shows tenant/status, a default-expense-account picker (fetched live
+ * from the provider on demand — the chart of accounts isn't cached), and Disconnect. */
+function AccountingConnectionCard({ workspaceId, connection, isOwner, onChanged }: {
+  workspaceId: string
+  connection: IntegrationConnection
+  isOwner: boolean
+  onChanged: () => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null)
+  const [loadingAccounts, setLoadingAccounts] = useState(false)
+
+  const loadAccounts = () => {
+    setLoadingAccounts(true)
+    startTransition(async () => {
+      const res = await listExpenseAccountsAction(workspaceId, connection.id)
+      setLoadingAccounts(false)
+      if (res.success) setAccounts(res.data ?? [])
+      else toast.error(res.error || "Could not load expense accounts")
+    })
+  }
+
+  const onSelectAccount = (accountId: string) => {
+    const account = accounts?.find((a) => a.id === accountId)
+    if (!account) return
+    startTransition(async () => {
+      const res = await setDefaultExpenseAccountAction(workspaceId, connection.id, account.id, account.name)
+      if (res.success) onChanged()
+      else toast.error(res.error || "Could not set the default account")
+    })
+  }
+
+  return (
+    <li className="rounded border px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="font-medium">{PROVIDER_LABELS[connection.provider] ?? connection.provider}</span>{" "}
+          <span className="text-xs text-muted-foreground">{connection.tenantName || connection.externalTenantId}</span>
+          {connection.status === "needs_reauth" && <span className="ml-2 text-xs text-red-600">needs reconnect</span>}
+        </span>
+        {isOwner && (
+          <Button type="button" size="sm" variant="ghost" disabled={pending}
+            onClick={() => { if (confirm(`Disconnect ${PROVIDER_LABELS[connection.provider] ?? connection.provider}? Pushes to it will stop.`)) startTransition(async () => {
+              const res = await disconnectIntegrationAction(workspaceId, connection.id)
+              if (res.success) onChanged()
+              else toast.error(res.error || "Could not disconnect")
+            }) }}>
+            Disconnect
+          </Button>
+        )}
+      </div>
+      {isOwner && connection.status === "active" && (
+        <div className="mt-2 flex items-center gap-2 text-xs">
+          <Label htmlFor={`account-${connection.id}`} className="shrink-0 text-muted-foreground">Default expense account</Label>
+          {accounts === null ? (
+            <Button type="button" size="sm" variant="outline" disabled={loadingAccounts} onClick={loadAccounts}>
+              {connection.defaultExpenseAccountName || (loadingAccounts ? "Loading…" : "Choose account")}
+            </Button>
+          ) : (
+            <select
+              id={`account-${connection.id}`}
+              className="rounded border px-2 py-1 text-xs"
+              defaultValue={connection.defaultExpenseAccountId ?? ""}
+              disabled={pending}
+              onChange={(e) => onSelectAccount(e.target.value)}
+            >
+              <option value="" disabled>Select an account</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
 
 /** The one place a freshly-minted secret is shown. Once dismissed it is gone: we only stored the
  * hash / ciphertext, so there is no way to show it again — which the copy affordance makes plain. */
@@ -50,7 +143,7 @@ function SecretReveal({ label, value, onDone }: { label: string; value: string; 
 }
 
 export function IntegrationsManager({
-  workspaceId, isOwner, eventTypes, apiKeys, endpoints, deliveries,
+  workspaceId, isOwner, eventTypes, apiKeys, endpoints, deliveries, accountingProviders, connections,
 }: {
   workspaceId: string
   isOwner: boolean
@@ -58,6 +151,8 @@ export function IntegrationsManager({
   apiKeys: ApiKey[]
   endpoints: Endpoint[]
   deliveries: Delivery[]
+  accountingProviders: { quickbooks: boolean; xero: boolean }
+  connections: IntegrationConnection[]
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -77,8 +172,56 @@ export function IntegrationsManager({
   const toggleEvent = (type: string) =>
     setSelectedEvents((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
 
+  const connectionsByProvider = new Map(connections.map((c) => [c.provider, c]))
+  const anyProviderConfigured = accountingProviders.quickbooks || accountingProviders.xero
+
   return (
     <div className="space-y-6">
+      {/* Accounting connectors (P2) — omitted entirely if neither provider is configured on this deployment. */}
+      {anyProviderConfigured && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Accounting</CardTitle>
+            <CardDescription>Connect QuickBooks or Xero to push a reviewed invoice or receipt as a bill.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {(["quickbooks", "xero"] as const)
+                .filter((provider) => accountingProviders[provider])
+                .map((provider) => {
+                  const connection = connectionsByProvider.get(provider)
+                  if (connection) {
+                    return (
+                      <AccountingConnectionCard
+                        key={provider}
+                        workspaceId={workspaceId}
+                        connection={connection}
+                        isOwner={isOwner}
+                        onChanged={() => router.refresh()}
+                      />
+                    )
+                  }
+                  return (
+                    <li key={provider} className="flex items-center justify-between rounded border px-3 py-2">
+                      <span className="font-medium">{PROVIDER_LABELS[provider]}</span>
+                      {isOwner ? (
+                        <a
+                          className="text-sm font-medium text-emerald-700 hover:underline"
+                          href={`/api/integrations/${provider}/connect?workspaceId=${workspaceId}`}
+                        >
+                          Connect
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not connected</span>
+                      )}
+                    </li>
+                  )
+                })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* API keys */}
       <Card>
         <CardHeader>
