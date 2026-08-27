@@ -41,7 +41,7 @@ export function MarketingFooter() {
             </div>
           ))}
           <div>
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[.16em] text-amber-300">Product</p>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[.16em] text-amber-300">Products</p>
             <ul className="space-y-2.5 text-sm">
               {PRODUCT_LINKS.map((item) => (
                 <li key={item.href}><Link href={item.href as Route} className="transition-colors hover:text-white">{item.name}</Link></li>

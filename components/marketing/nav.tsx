@@ -1,7 +1,7 @@
 "use client"
 
 import { Logo } from "@/components/marketing/logo"
-import { PRODUCT_LINKS, SOLUTION_GROUPS, SOLUTIONS, solutionsByGroup } from "@/lib/solutions"
+import { INDUSTRIES, PRODUCT_LINKS, SOLUTION_GROUPS, SOLUTIONS, solutionsByGroup } from "@/lib/solutions"
 import { ArrowRight, ChevronDown, Menu, X } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react"
 
 const solutionHref = (slug: string) => `/solutions/${slug}` as Route
 
-type MenuKey = "product" | "solutions"
+type MenuKey = "products" | "solutions" | "industries"
 
 /** The marketing header. Both dropdowns are hand-rolled on the outside-click/Escape pattern
  * already used by components/shell/account-menu.tsx — @radix-ui/react-navigation-menu would be a
@@ -49,13 +49,13 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
         <nav className="hidden items-center gap-1 lg:flex">
           <button
             type="button"
-            onClick={() => setOpenMenu((value) => (value === "product" ? null : "product"))}
-            aria-expanded={openMenu === "product"}
+            onClick={() => setOpenMenu((value) => (value === "products" ? null : "products"))}
+            aria-expanded={openMenu === "products"}
             aria-haspopup="true"
             className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-cream-100 hover:text-stone-950"
           >
-            Product
-            <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "product" ? "rotate-180" : ""}`} />
+            Products
+            <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "products" ? "rotate-180" : ""}`} />
           </button>
           <button
             type="button"
@@ -66,6 +66,16 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
           >
             Solutions
             <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "solutions" ? "rotate-180" : ""}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenMenu((value) => (value === "industries" ? null : "industries"))}
+            aria-expanded={openMenu === "industries"}
+            aria-haspopup="true"
+            className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-cream-100 hover:text-stone-950"
+          >
+            Industries
+            <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "industries" ? "rotate-180" : ""}`} />
           </button>
         </nav>
 
@@ -95,20 +105,17 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
         </button>
       </div>
 
-      {openMenu === "product" && (
+      {openMenu === "products" && (
         <div className="absolute inset-x-0 top-full hidden border-b border-cream-200 bg-white shadow-[0_28px_60px_-36px_rgba(41,37,36,.5)] lg:block">
           <div className="mx-auto max-w-6xl px-5 py-8">
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Product</p>
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Products</p>
             <div className="grid gap-x-8 gap-y-1 md:grid-cols-2">
               {PRODUCT_LINKS.map((item) => (
                 <Link key={item.href} href={item.href as Route} className="flex gap-3 rounded-xl p-3 transition-colors hover:bg-cream-100">
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700">
                     <item.icon className="h-4 w-4" />
                   </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-stone-900">{item.name}</span>
-                    <span className="block text-sm leading-snug text-stone-500">{item.tagline}</span>
-                  </span>
+                  <span className="block text-sm font-semibold text-stone-900">{item.name}</span>
                 </Link>
               ))}
             </div>
@@ -121,23 +128,20 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
           <div className="mx-auto max-w-6xl px-5 py-8">
             <div className="mb-2 flex items-center justify-between px-3">
               <p className="text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Browse solutions</p>
-              <Link href="/solutions" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900">All solutions & industries<ChevronDown aria-hidden className="h-3.5 w-3.5 -rotate-90" /></Link>
+              <Link href="/solutions" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900">All solutions<ChevronDown aria-hidden className="h-3.5 w-3.5 -rotate-90" /></Link>
             </div>
-            <div className="grid gap-x-12 gap-y-8 md:grid-cols-2">
+            <div className="grid gap-x-12 gap-y-1 md:grid-cols-2">
               {SOLUTION_GROUPS.map((group) => (
                 <div key={group.id}>
                   <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">{group.label}</p>
                   <ul>
                     {solutionsByGroup(group.id).map((solution) => (
                       <li key={solution.slug}>
-                        <Link href={solutionHref(solution.slug)} className="flex gap-3 rounded-xl p-3 transition-colors hover:bg-cream-100">
-                          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700">
+                        <Link href={solutionHref(solution.slug)} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-cream-100">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700">
                             <solution.icon className="h-4 w-4" />
                           </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-semibold text-stone-900">{solution.name}</span>
-                            <span className="block text-sm leading-snug text-stone-500">{solution.tagline}</span>
-                          </span>
+                          <span className="text-sm font-semibold text-stone-900">{solution.name}</span>
                         </Link>
                       </li>
                     ))}
@@ -145,8 +149,23 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
                 </div>
               ))}
             </div>
-            <div className="mt-4 border-t border-cream-200 px-3 pt-4">
-              <Link href={"/solutions#industries" as Route} className="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Browse by industry →</Link>
+          </div>
+        </div>
+      )}
+
+      {openMenu === "industries" && (
+        <div className="absolute inset-x-0 top-full hidden border-b border-cream-200 bg-white shadow-[0_28px_60px_-36px_rgba(41,37,36,.5)] lg:block">
+          <div className="mx-auto max-w-6xl px-5 py-8">
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Industries</p>
+            <div className="grid gap-x-8 gap-y-1 md:grid-cols-3">
+              {INDUSTRIES.map((industry) => (
+                <Link key={industry.name} href={"/solutions#industries" as Route} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-cream-100">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700">
+                    <industry.icon className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-semibold text-stone-900">{industry.name}</span>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
@@ -156,7 +175,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
         <div className="border-t border-cream-200 bg-white lg:hidden">
           <div className="space-y-5 px-5 py-5">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Product</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Products</p>
               <ul className="space-y-0.5">
                 {PRODUCT_LINKS.map((item) => (
                   <li key={item.href}>
@@ -182,7 +201,18 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
                 ))}
               </ul>
             </div>
-            <Link href={"/solutions#industries" as Route} className="block rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-cream-100">Industries</Link>
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Industries</p>
+              <ul className="space-y-0.5">
+                {INDUSTRIES.map((industry) => (
+                  <li key={industry.name}>
+                    <Link href={"/solutions#industries" as Route} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-cream-100">
+                      <industry.icon className="h-4 w-4 text-emerald-700" />{industry.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
             {workspaceHref ? (
               <Link href={workspaceHref as Route} className="flex h-11 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Open workspace</Link>
             ) : (
