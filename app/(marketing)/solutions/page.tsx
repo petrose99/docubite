@@ -1,5 +1,6 @@
 import { DocTypeGrid, type DocCard } from "@/components/marketing/sections/doc-type-grid"
-import { ArrowRight, Check, Clock, FlaskConical, Landmark, Truck, type LucideIcon } from "lucide-react"
+import { INDUSTRIES } from "@/lib/solutions"
+import { ArrowRight, Check, Clock } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
@@ -27,66 +28,6 @@ const byQuality: DocCard[] = [
   { name: "Scanned PDFs", text: "Image-only PDFs, faxes, photocopies", icon: "ScanLine" },
   { name: "Phone photos", text: "Angled, low-light snaps, curled thermal paper", icon: "Camera" },
   { name: "Long bundles", text: "40-page scans batched and stitched, not truncated", icon: "Layers" },
-]
-
-type Industry = {
-  icon: LucideIcon
-  name: string
-  tagline: string
-  tags: string[]
-  before: string[]
-  after: string[]
-}
-
-const industries: Industry[] = [
-  {
-    icon: Landmark,
-    name: "Finance & bookkeeping",
-    tagline: "Month-end shouldn't mean a keyboard and a shoebox of receipts.",
-    tags: ["Supplier invoices", "Expense receipts", "Bank & card statements", "Remittance advice"],
-    before: [
-      "Open each PDF and retype supplier, date, net, VAT, total",
-      "Squint at photographed receipts and faded thermal paper",
-      "Hunt for the source PDF when a figure looks wrong",
-    ],
-    after: [
-      "Drop the whole folder — invoices, receipts, statements — and get back the missing months and duplicates first",
-      "Fields land as rows; low-confidence ones flag themselves",
-      "Total per supplier with the assistant, click any figure to its line",
-    ],
-  },
-  {
-    icon: FlaskConical,
-    name: "Healthcare & clinics",
-    tagline: "Less admin between the patient and the record.",
-    tags: ["Referral letters", "Lab result sheets", "Insurance claim forms", "Intake & consent forms"],
-    before: [
-      "Re-key referral and intake forms into the system by hand",
-      "Copy values off faxed, scanned or handwritten result sheets",
-      "Chase which form a value came from when a claim is queried",
-    ],
-    after: [
-      "Scan or upload the form — handwriting and faxes read fine",
-      "One template pulls the same fields every time, into a clean row",
-      "Every value stays pinned to the form it was read from, for the audit trail",
-    ],
-  },
-  {
-    icon: Truck,
-    name: "Logistics & supply chain",
-    tagline: "When the paperwork moves slower than the freight.",
-    tags: ["Bills of lading", "Delivery notes / PODs", "Packing lists", "Customs declarations"],
-    before: [
-      "Type BOL and delivery-note numbers off crumpled, signed paper",
-      "Match packing lists to invoices, line by line",
-      "Key customs fields under a clearance deadline",
-    ],
-    after: [
-      "Photograph the signed POD or drop the BOL PDF",
-      "Line items come out as rows — quantities and refs structured, not a blob",
-      "Ask the assistant to flag mismatches across the whole shipment folder, and diff this month's paperwork against last month's",
-    ],
-  },
 ]
 
 export default function SolutionsPage() {
@@ -122,7 +63,7 @@ export default function SolutionsPage() {
       </p>
 
       <div className="mt-10 flex flex-col gap-4">
-        {industries.map((industry) => (
+        {INDUSTRIES.map((industry) => (
           <article key={industry.name} className="grid gap-8 rounded-[1.75rem] rounded-tr-lg border border-stone-200 bg-white p-6 sm:p-7 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
             <div>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700"><industry.icon className="h-[22px] w-[22px]" /></span>

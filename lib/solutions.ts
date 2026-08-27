@@ -1,4 +1,4 @@
-import { FileText, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, type LucideIcon } from "lucide-react"
+import { FileText, FlaskConical, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, Truck, type LucideIcon } from "lucide-react"
 
 /** The Solutions mega-menu and the /solutions/[slug] pages read from this one list, so a new
  * solution is a single entry here rather than a page plus a nav edit that can drift apart.
@@ -102,6 +102,68 @@ export const SOLUTIONS: Solution[] = [
       { title: "Only text reaches the model", text: "The document is parsed into text first, and that text is what gets sent on for structuring — the page image itself never reaches the AI model." },
       { title: "Skew, speckle and photocopy grey", text: "Third-generation photocopies and fax-quality scans are what the parser is built for, so a bad scan is read rather than refused." },
       { title: "Long documents are batched, not truncated", text: "Multi-page scans are processed in batches so a forty-page bundle comes back whole rather than stopping at whatever fitted in one request." },
+    ],
+  },
+]
+
+export type Industry = {
+  icon: LucideIcon
+  name: string
+  tagline: string
+  tags: string[]
+  before: string[]
+  after: string[]
+}
+
+/** The industries teased on the homepage and detailed on /solutions#industries. Shared here (like
+ * SOLUTIONS) so the two pages can never drift on which industries exist or what they're called. */
+export const INDUSTRIES: Industry[] = [
+  {
+    icon: Landmark,
+    name: "Finance & bookkeeping",
+    tagline: "Month-end shouldn't mean a keyboard and a shoebox of receipts.",
+    tags: ["Supplier invoices", "Expense receipts", "Bank & card statements", "Remittance advice"],
+    before: [
+      "Open each PDF and retype supplier, date, net, VAT, total",
+      "Squint at photographed receipts and faded thermal paper",
+      "Hunt for the source PDF when a figure looks wrong",
+    ],
+    after: [
+      "Drop the whole folder — invoices, receipts, statements — and get back the missing months and duplicates first",
+      "Fields land as rows; low-confidence ones flag themselves",
+      "Total per supplier with the assistant, click any figure to its line",
+    ],
+  },
+  {
+    icon: FlaskConical,
+    name: "Healthcare & clinics",
+    tagline: "Less admin between the patient and the record.",
+    tags: ["Referral letters", "Lab result sheets", "Insurance claim forms", "Intake & consent forms"],
+    before: [
+      "Re-key referral and intake forms into the system by hand",
+      "Copy values off faxed, scanned or handwritten result sheets",
+      "Chase which form a value came from when a claim is queried",
+    ],
+    after: [
+      "Scan or upload the form — handwriting and faxes read fine",
+      "One template pulls the same fields every time, into a clean row",
+      "Every value stays pinned to the form it was read from, for the audit trail",
+    ],
+  },
+  {
+    icon: Truck,
+    name: "Logistics & supply chain",
+    tagline: "When the paperwork moves slower than the freight.",
+    tags: ["Bills of lading", "Delivery notes / PODs", "Packing lists", "Customs declarations"],
+    before: [
+      "Type BOL and delivery-note numbers off crumpled, signed paper",
+      "Match packing lists to invoices, line by line",
+      "Key customs fields under a clearance deadline",
+    ],
+    after: [
+      "Photograph the signed POD or drop the BOL PDF",
+      "Line items come out as rows — quantities and refs structured, not a blob",
+      "Ask the assistant to flag mismatches across the whole shipment folder, and diff this month's paperwork against last month's",
     ],
   },
 ]

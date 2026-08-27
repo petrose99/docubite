@@ -5,6 +5,7 @@ import { ExtractionCore } from "@/components/marketing/sections/extraction-core"
 import { Faq } from "@/components/marketing/sections/faq"
 import { FolderReport } from "@/components/marketing/sections/folder-report"
 import { Hero } from "@/components/marketing/sections/hero"
+import { IndustriesTeaser } from "@/components/marketing/sections/industries-teaser"
 import { IntegrationsApi } from "@/components/marketing/sections/integrations-api"
 import { Provenance } from "@/components/marketing/sections/provenance"
 import { RepeatingDocs } from "@/components/marketing/sections/repeating-docs"
@@ -36,6 +37,7 @@ export default function Home() {
     <Sharing />
     <IntegrationsApi />
     <SolutionsTeaser />
+    <IndustriesTeaser />
     <Security />
     <Faq />
     <CtaBand />

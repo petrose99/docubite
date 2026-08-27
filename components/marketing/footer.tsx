@@ -46,6 +46,7 @@ export function MarketingFooter() {
               {PRODUCT_LINKS.map((item) => (
                 <li key={item.href}><Link href={item.href as Route} className="transition-colors hover:text-white">{item.name}</Link></li>
               ))}
+              <li><Link href={"/solutions#industries" as Route} className="transition-colors hover:text-white">Industries</Link></li>
               <li><Link href="/login" className="transition-colors hover:text-white">Sign in</Link></li>
             </ul>
           </div>
