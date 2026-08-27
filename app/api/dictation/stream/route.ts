@@ -1,4 +1,5 @@
 import { getAsrBackend } from "@/lib/asr"
+import { isAsrAllowed } from "@/lib/asr/gating"
 import { SUPPORTED_AUDIO_TYPES } from "@/lib/asr/types"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
@@ -24,7 +25,12 @@ export async function POST(request: Request) {
 
   const user = await getCurrentUser()
   const workspaceId = new URL(request.url).searchParams.get("workspaceId")
-  if (!workspaceId || !(await getWorkspaceMembership(workspaceId, user.id))) return Response.json({ error: "forbidden" }, { status: 403 })
+  const membership = workspaceId ? await getWorkspaceMembership(workspaceId, user.id) : null
+  if (!membership) return Response.json({ error: "forbidden" }, { status: 403 })
+  if (membership.workspace.productMode !== "clinical") return Response.json({ error: "dictation_not_configured" }, { status: 503 })
+  // Distinct from the mode check above: this workspace IS clinical, it just has no confirmed BAA
+  // yet for the configured external ASR provider — see lib/asr/gating.ts.
+  if (!isAsrAllowed(membership.workspace)) return Response.json({ error: "baa_required" }, { status: 403 })
 
   const mimeType = (request.headers.get("content-type") || "").split(";")[0].trim()
   if (!SUPPORTED_AUDIO_TYPES.has(mimeType)) return Response.json({ error: "unsupported_audio_type" }, { status: 415 })

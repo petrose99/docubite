@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "@/prisma/client"
+import config from "@/lib/config"
 import { checkWorkspaceScope } from "@/lib/workspace-scope"
 
 const globalForPrisma = globalThis as unknown as {
@@ -52,7 +53,7 @@ function createPrismaClient() {
  * webhook that arrives with a customer id rather than a workspace — into an outage. Running `warn`
  * first turns that same set into a list to work through, at no risk. */
 function withScopeGuard(client: PrismaClient): PrismaClient {
-  const mode = process.env.DB_SCOPE_GUARD ?? "warn"
+  const mode = config.isolation.scopeGuard
   if (mode === "off") return client
   return client.$extends({
     query: {

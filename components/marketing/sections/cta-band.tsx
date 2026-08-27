@@ -2,10 +2,14 @@ import { TRIAL_DAYS } from "@/lib/plans"
 import { ArrowRight } from "lucide-react"
 import Link from "next/link"
 
-/** No dollar figures on the marketing site: WORKSPACE_PLANS (lib/plans.ts) still drives real
- * billing and the in-app Billing & Usage card, but the public pitch is demo-only. Absorbs what
- * used to be sections/pricing.tsx's DemoCta so the page ends on one panel, not two back to back. */
-export function CtaBand() {
+type CtaVariant = "demo" | "selfServe"
+
+/** Accounting is self-serve now that /pricing is real (see app/(marketing)/pricing) — this band
+ * has to say that instead of "book a demo" or it contradicts the page a visitor just left. Clinical
+ * (and the neutral homepage) stay demo-led: BAA coverage is set up with sales, not a signup form. */
+export function CtaBand({ variant = "demo" }: { variant?: CtaVariant }) {
+  const selfServe = variant === "selfServe"
+
   return (
     <section id="pricing" className="bg-cream-50">
       <div className="mx-auto max-w-6xl px-5 py-20">
@@ -14,20 +18,24 @@ export function CtaBand() {
             Your inbox is full of documents. Let something else <span className="text-amber-300">read them.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-7 text-emerald-100/75">
-            Book a demo and put your worst-looking folder — or a free-form recording — through it first.
+            {selfServe
+              ? `Start a ${TRIAL_DAYS}-day free trial and put your worst-looking folder through it first.`
+              : "Book a demo and put your worst-looking folder — or a free-form recording — through it first."}
           </p>
 
           <Link
-            href="/demo"
+            href={selfServe ? "/signup" : "/demo"}
             className="group mx-auto mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-7 text-base font-semibold text-emerald-950 shadow-sm transition-colors hover:bg-cream-100"
           >
-            Book a demo<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            {selfServe ? "Start free trial" : "Book a demo"}<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
 
           <div className="perforation mx-auto mt-10 max-w-md text-emerald-800" aria-hidden />
 
           <p className="mx-auto mt-6 max-w-lg text-sm leading-6 text-emerald-100/70">
-            Workspace-based pricing, sized to how your team uses it — every workspace starts on a {TRIAL_DAYS}-day free trial, no credit card required. No price list, no guessing: we&apos;ll walk through usage, seats and the right plan on the call.
+            {selfServe
+              ? <>See plans and what&apos;s included on <Link href="/pricing" className="font-semibold text-white underline underline-offset-2">the pricing page</Link> — every workspace starts on a {TRIAL_DAYS}-day free trial, no credit card required.</>
+              : `Workspace-based pricing, sized to how your team uses it — every workspace starts on a ${TRIAL_DAYS}-day free trial, no credit card required. We'll walk through usage, seats and the right plan on the call.`}
           </p>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { parseTemplateFields } from "@/lib/document-templates"
+import { isAsrAllowed } from "@/lib/asr/gating"
 import { ensureDictationFile, getFileTemplates } from "@/models/files"
 import { ensureWorkspaceReportTemplates } from "@/models/report-templates"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -19,12 +20,26 @@ export const dynamic = "force-dynamic"
  * front door of its own. */
 export default async function DictationPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params
-  // 404 rather than a disabled screen: with no ASR backend there is nothing here to show, and the
-  // rail does not link to it either.
-  if (!config.asr.enabled) notFound()
-
   const user = await getCurrentUser()
-  await requireWorkspaceRole(workspaceId, user.id)
+  const membership = await requireWorkspaceRole(workspaceId, user.id)
+  // 404 rather than a disabled screen: with no ASR backend, or in an accounting-mode workspace,
+  // there is nothing here to show, and the rail does not link to it either.
+  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
+
+  // A confirmed BAA is what makes sending audio to the external ASR backend lawful for a
+  // hipaaMode workspace (lib/asr/gating.ts) — a fact an admin has to confirm, not something the
+  // page can route around. Shown here rather than a 404: the feature exists for this workspace,
+  // it is just not switched on yet.
+  if (!isAsrAllowed(membership.workspace)) {
+    return <main className="mx-auto w-full max-w-2xl space-y-3 p-6 text-center">
+      <h1 className="text-2xl font-bold text-stone-900">Dictation is pending BAA coverage</h1>
+      <p className="text-sm text-stone-600">
+        This workspace handles protected health information, and dictation sends audio to an external transcription
+        provider. Recording is disabled here until a signed Business Associate Agreement covering that provider is
+        confirmed for this workspace. Contact {config.app.supportEmail} to arrange one.
+      </p>
+    </main>
+  }
 
   // Idempotent, and cheap after the first visit. Done here rather than in a migration or a startup
   // hook so an existing workspace gets its dictation container and report template the first time
@@ -52,7 +67,7 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   // "Agnostic" for the picker — it IS the blank-slate template agnostic mode discovers fields onto,
   // just under a name that says what choosing it does rather than what it's called internally.
   // getFileTemplates orders isSystem first, so this stays the first option.
-  const fileTemplates = await getFileTemplates(file.id)
+  const fileTemplates = await getFileTemplates(workspaceId, file.id)
   const templates = fileTemplates.map((template) => ({
     id: template.id,
     name: template.code === "general_report" ? "Agnostic — figure it out" : template.name,

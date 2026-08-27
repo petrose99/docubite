@@ -46,6 +46,17 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   // (see lib/integration-push.ts).
   "IntegrationConnection",
   "IntegrationPush",
+  // Foundation phase 1 (WP4). TaxProfileVersion is reached only through its scoped parent, the
+  // same DocumentTemplateVersion precedent, and stays unlisted.
+  "TaxProfile",
+  // Accounting core (WP9).
+  "IngestionItem",
+  // Accounting core (WP10).
+  "ReviewTask",
+  // Accounting core (WP11).
+  "AutomationRule",
+  // Accounting core (WP12).
+  "DocumentCheckResult",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.

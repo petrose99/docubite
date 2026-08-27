@@ -1,8 +1,10 @@
 "use server"
 
 import { ActionState } from "@/lib/actions"
+import { track } from "@/lib/analytics"
 import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
+import { isAsrAllowed } from "@/lib/asr/gating"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { processDocumentJob } from "@/lib/document-processing"
@@ -31,8 +33,11 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 export async function createDictationAction(workspaceId: string, formData: FormData): Promise<ActionState<{ documentId: string }>> {
   const user = await getCurrentUser()
-  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  const membership = await requireMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
   if (!config.asr.enabled) return { success: false, error: "Dictation is not configured on this deployment." }
+  if (membership.workspace.productMode !== "clinical") return { success: false, error: "Dictation is only available in a clinical-mode workspace." }
+  if (!isAsrAllowed(membership.workspace)) return { success: false, error: "Dictation is pending BAA coverage for this workspace's external ASR provider." }
 
   const audio = formData.get("audio")
   if (!(audio instanceof File) || !audio.size) return { success: false, error: "No recording was received." }
@@ -66,6 +71,7 @@ export async function createDictationAction(workspaceId: string, formData: FormD
       mimeType: audio.type, buffer,
     })
 
+    if (!result.duplicate) await track("document_uploaded", { fileId: file.id, documentId: result.document.id, source: "dictation" }, { workspaceId })
     const jobId = result.duplicate ? null : result.job?.id
     if (jobId) after(() => processDocumentJob(jobId).catch(() => {}))
     revalidatePath(paths(workspaceId).dictation)

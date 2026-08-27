@@ -1,7 +1,9 @@
 import { WorkspaceAiToggle } from "@/components/workspace/ai-toggle"
 import { WorkspaceDangerZone } from "@/components/workspace/danger-zone"
 import { WorkspaceHipaaModeToggle } from "@/components/workspace/hipaa-mode-toggle"
+import { WorkspaceProductModeToggle } from "@/components/workspace/product-mode-toggle"
 import { InvitePanel } from "@/components/workspace/invite-panel"
+import { parseProductMode } from "@/types/product-mode"
 import { MembersTable } from "@/components/workspace/members-table"
 import { TeamWorkspaceForm } from "@/components/workspace/team-workspace-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,6 +38,9 @@ export default async function WorkspaceSettingsPage({ params }: { params: Promis
       </CardHeader>
       <CardContent className="space-y-4">
         {owner ? <WorkspaceAiToggle workspaceId={workspaceId} enabled={membership.workspace.aiEnabled} /> : <p className="text-sm">AI extraction is {membership.workspace.aiEnabled ? "enabled" : "disabled"} by the workspace owner.</p>}
+        {owner
+          ? <WorkspaceProductModeToggle workspaceId={workspaceId} mode={parseProductMode(membership.workspace.productMode) || "accounting"} />
+          : <p className="text-sm">This workspace is set up for {membership.workspace.productMode} by the workspace owner.</p>}
         {owner
           ? <WorkspaceHipaaModeToggle workspaceId={workspaceId} enabled={membership.workspace.hipaaMode} />
           : <p className="text-sm">HIPAA mode is {membership.workspace.hipaaMode ? "enabled" : "disabled"} by the workspace owner.</p>}

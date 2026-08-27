@@ -11,9 +11,11 @@ export const metadata: Metadata = {
 
 const byType: DocCard[] = [
   { name: "Invoices", text: "Supplier, number, dates, line items, tax", icon: "FileText" },
-  { name: "Receipts", text: "Merchant, date, total, VAT, payment method", icon: "Receipt" },
+  { name: "Receipts", text: "Merchant, date, total, tax, line items", icon: "Receipt" },
+  { name: "Expense receipts", text: "Merchant, total, tax code, category, payment method", icon: "Receipt" },
   { name: "Bank statements", text: "Multi-page transaction tables into rows", icon: "Landmark" },
   { name: "Purchase orders", text: "PO number, supplier, line items, totals", icon: "Package" },
+  { name: "Remittance advice", text: "Payer, payee, invoice allocations", icon: "Landmark" },
   { name: "Referral letters", text: "Patient, referrer, reason, dates", icon: "Mail" },
   { name: "Lab result sheets", text: "Test, value, reference range, date", icon: "FlaskConical" },
   { name: "Insurance claims", text: "Claimant, policy no., amounts, codes", icon: "ShieldCheck" },

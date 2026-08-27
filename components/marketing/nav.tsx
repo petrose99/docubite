@@ -86,6 +86,7 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             </Link>
           ) : (
             <>
+              <Link href="/pricing" className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-950">Pricing</Link>
               <Link href="/login" className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-950">Sign in</Link>
               <Link href="/demo" className="group inline-flex h-11 items-center gap-1.5 rounded-full bg-emerald-950 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900">
                 Book a demo<ArrowRight aria-hidden className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -216,9 +217,12 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             {workspaceHref ? (
               <Link href={workspaceHref as Route} className="flex h-11 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Open workspace</Link>
             ) : (
-              <div className="flex gap-3">
-                <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
-                <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Book a demo</Link>
+              <div className="flex flex-col gap-3">
+                <Link href="/pricing" className="flex h-10 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Pricing</Link>
+                <div className="flex gap-3">
+                  <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
+                  <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Book a demo</Link>
+                </div>
               </div>
             )}
           </div>

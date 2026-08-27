@@ -1,7 +1,8 @@
 "use client"
 
-import { deleteDocumentsAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { deleteDocumentsAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
+import { downscaleImage } from "@/components/extract/downscale-image"
 import { FileRow } from "@/components/extract/file-row"
 import { filesFromDataTransfer } from "@/components/extract/folder-traverse"
 import { FolderReport } from "@/components/extract/folder-report"
@@ -94,6 +95,8 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   const autoSuggested = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const zipInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   // The queued document ids of the last batch and whether its "processed" toast has fired, so a
   // folder of documents announces itself once, when it finishes, rather than on every poll.
   const batchQueuedIds = useRef<string[]>([])
@@ -344,6 +347,62 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
     } finally { setBusy(false) }
   }
 
+  /** Server-side ZIP expansion (WP9): no client-side staging, since a batch this size is a
+   * deliberate action rather than something worth previewing entry by entry first. Reuses the
+   * exact same polling this panel already has — the returned document ids feed onDocumentsQueued
+   * exactly like uploadRows' do, so a ZIP batch's progress shows up the same way. */
+  async function uploadZip(file: File) {
+    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
+    setBusy(true)
+    try {
+      const templateId = await ensureSheetSaved()
+      if (!templateId) return
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.set("templateId", templateId)
+      const result = await uploadZipAction(workspaceId, fileId, formData)
+      if (!result.success || !result.data) { toast.error(result.error || "ZIP upload failed"); return }
+      const { documents, skipped, truncated, count } = result.data
+      const queued = documents.filter((doc) => !doc.duplicate).map((doc) => doc.id)
+      if (queued.length) onDocumentsQueued(queued)
+      const batchId = crypto.randomUUID()
+      setLastBatch({ id: batchId, size: documents.length })
+      batchQueuedIds.current = queued
+      batchToasted.current = false
+      toast.success(`${count} document${count === 1 ? "" : "s"} queued from the ZIP`, {
+        description: [skipped > 0 ? `${skipped} entr${skipped === 1 ? "y" : "ies"} skipped (unsupported type)` : null, truncated ? "Archive was larger than the batch limit — not everything was processed" : null].filter(Boolean).join(". ") || undefined,
+      })
+    } catch {
+      toast.error("Could not reach the server — the ZIP was not uploaded")
+    } finally { setBusy(false) }
+  }
+
+  /** Mobile camera capture (WP13): downscaled client-side (components/extract/downscale-image.ts)
+   * so a phone's multi-megabyte original never leaves the device, then uploaded straight through
+   * uploadDocumentsAction with source "camera" — the same pipeline every other upload uses, just
+   * tagged with where it came from. No staging step: a capture is already a deliberate one-shot
+   * action the way a ZIP drop is, not a batch worth previewing first. */
+  async function uploadCameraCapture(file: File) {
+    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
+    setBusy(true)
+    try {
+      const templateId = await ensureSheetSaved()
+      if (!templateId) return
+      const downscaled = await downscaleImage(file)
+      const formData = new FormData()
+      formData.append("files", downscaled)
+      formData.set("templateId", templateId)
+      formData.set("source", "camera")
+      const result = await uploadDocumentsAction(workspaceId, fileId, formData)
+      if (!result.success || !result.data) { toast.error(result.error || "Upload failed"); return }
+      const uploaded = result.data.documents[0]
+      if (uploaded && !uploaded.duplicate) onDocumentsQueued([uploaded.id])
+      toast.success(uploaded?.duplicate ? "Already have this document" : "Photo queued for extraction")
+    } catch {
+      toast.error("Could not reach the server — the photo was not uploaded")
+    } finally { setBusy(false) }
+  }
+
   const processable = staged.filter((row) => row.status === "staged" || (row.status === "failed" && !row.documentId))
 
   const reprocess = async (row: StagedFile) => {
@@ -466,10 +525,19 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
           onDrop={(event) => { event.preventDefault(); setDragOver(false); handleDrop(event.dataTransfer) }}>
           <FileUp className="h-5 w-5 text-stone-400" />
           <span><span className="font-semibold text-emerald-700">Click to upload</span> <span className="text-stone-500">or drag and drop</span></span>
-          <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" onClick={(event) => { event.stopPropagation(); folderInputRef.current?.click() }}>or upload a whole folder</button>
+          <span className="flex flex-wrap items-center justify-center gap-3">
+            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" onClick={(event) => { event.stopPropagation(); folderInputRef.current?.click() }}>or upload a whole folder</button>
+            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); zipInputRef.current?.click() }}>or upload a ZIP</button>
+            {/* capture="environment" only does anything on a device with a camera (phones/tablets)
+             * — elsewhere it degrades to an ordinary file picker, so this button costs nothing on
+             * desktop and needs no separate desktop/mobile branch. */}
+            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); cameraInputRef.current?.click() }}>or take a photo</button>
+          </span>
         </button>
         <input ref={inputRef} type="file" multiple className="hidden" accept={acceptedTypes} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
         <input ref={folderInputRef} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
+        <input ref={zipInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadZip(file); event.target.value = "" }} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCameraCapture(file); event.target.value = "" }} />
         <div className="mt-2.5 flex items-center gap-4 text-sm">
           <button type="button" className="font-medium text-stone-400 hover:text-stone-600 disabled:opacity-50" disabled={!staged.length || busy} onClick={resetAll}>Reset all files</button>
           <button type="button" className="font-medium text-red-500 hover:text-red-700 disabled:opacity-50" disabled={!staged.length || busy || deleting} onClick={requestDeleteAll}>Delete all files</button>

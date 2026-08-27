@@ -32,6 +32,11 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      # The full suite must stay green with the scope guard in its strictest (production) mode —
+      # any query missing a workspaceId filter fails the build here instead of leaking cross-tenant
+      # rows in prod. See lib/workspace-scope.ts.
+      DB_SCOPE_GUARD: throw
     steps:
       - uses: actions/checkout@v7
         with:
@@ -58,6 +63,49 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npx tsc --noEmit
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    # Fresh-DB migrations were previously validated nowhere: `prisma migrate deploy` had never run
+    # against a clean database in CI. This job does that, then builds — so a migration that fails
+    # from scratch (as opposed to on a dev database that has drifted from what's committed) fails
+    # the PR instead of the next production deploy.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: docubite
+          POSTGRES_PASSWORD: docubite
+          POSTGRES_DB: docubite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U docubite"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://docubite:docubite@localhost:5432/docubite
+      # `next build` runs as NODE_ENV=production regardless of what's set here, which trips the
+      # placeholder/unset guard in lib/config.ts — these are CI-only dummy values, never read for
+      # anything but satisfying that check and letting the build compile every route.
+      INTERNAL_WORKER_SECRET: ci-build-dummy-worker-secret-not-used-anywhere
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-build.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-dummy-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-build-dummy-service-role-key
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run build:ci
 
   docker-build:
     name: Docker Build

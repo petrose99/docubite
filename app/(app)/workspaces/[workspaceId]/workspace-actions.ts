@@ -16,6 +16,7 @@ import {
   updateWorkspaceMemberRole,
   WorkspaceRole,
 } from "@/models/workspaces"
+import { parseProductMode } from "@/types/product-mode"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
@@ -46,11 +47,14 @@ async function deliverInvitation(input: { email: string; workspaceName: string; 
 
 /** Any member may create a workspace; createTeamWorkspace itself is what gates it on the
  * strongest plan the user owns, so the upsell cannot be clicked past. */
-export async function createWorkspaceAction(name: string): Promise<ActionState<{ workspaceId: string }>> {
+export async function createWorkspaceAction(name: string, productMode?: string): Promise<ActionState<{ workspaceId: string }>> {
   const user = await getCurrentUser()
   if (!name.trim()) return { success: false, error: "Enter a workspace name" }
+  // Absent/unrecognised falls through to createWorkspaceForUser's own "accounting" default —
+  // this is the one chance to set it, not a value worth hard-failing the whole creation over.
+  const parsedMode = parseProductMode(productMode) ?? undefined
   try {
-    const workspace = await createTeamWorkspace(user, name)
+    const workspace = await createTeamWorkspace(user, name, parsedMode)
     revalidateWorkspaceLayout()
     return { success: true, data: { workspaceId: workspace.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the workspace") } }

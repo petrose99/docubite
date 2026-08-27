@@ -1,4 +1,5 @@
 import { default as globalConfig } from "@/lib/config"
+import { buildCsp, generateNonce } from "@/lib/csp"
 import { updateSession } from "@/lib/supabase/middleware"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -22,10 +23,21 @@ import { NextRequest, NextResponse } from "next/server"
 const PROTECTED_PREFIXES = ["/workspaces", "/admin-next"]
 
 export async function proxy(request: NextRequest) {
+  // Set before updateSession runs: it builds its response via NextResponse.next({ request }) off
+  // this same request object, so mutating request.headers here is what gets x-nonce to the actual
+  // page render — Next.js auto-nonces the inline scripts it injects when it sees this header.
+  const nonce = generateNonce()
+  request.headers.set("x-nonce", nonce)
+
   const { response, userId } = await updateSession(request)
   const isProtected = PROTECTED_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
-  if (isProtected && !userId) return NextResponse.redirect(new URL(globalConfig.auth.loginUrl, request.url))
-  return response
+  const result = isProtected && !userId ? NextResponse.redirect(new URL(globalConfig.auth.loginUrl, request.url)) : response
+
+  // Report-Only until CSP_ENFORCE=true: soak on real traffic first, since `'strict-dynamic'` is
+  // only as safe as the nonce actually reaching every script Next.js emits — see lib/csp.ts.
+  const cspHeaderName = globalConfig.security.cspEnforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only"
+  result.headers.set(cspHeaderName, buildCsp(nonce))
+  return result
 }
 
 /** /admin-next's real guards are requireAdminPage (the console page) and requireAdminActor (the

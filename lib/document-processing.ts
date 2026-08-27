@@ -1,4 +1,8 @@
 import { requestLLM } from "@/ai/providers/llmProvider"
+import { track } from "@/lib/analytics"
+import { SUPPLIER_FIELD_BY_TEMPLATE } from "@/lib/automation/rules"
+import { applyAutomationRules } from "@/models/automation-rules"
+import { runDeterministicChecks } from "@/models/document-checks"
 import config from "@/lib/config"
 import { buildDocumentJsonSchema, buildDocumentPrompt, DocumentClassification, DocumentFieldDefinition, extractClassification, extractFieldConfidence, extractFieldProvenance, FieldProvenanceHints, findMissingRequiredFields, parseTemplateFields, ProvenanceHint, validateDocumentValues } from "@/lib/document-templates"
 import { documentBlocksKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
@@ -206,6 +210,11 @@ async function failDocumentJob(
     }
   })
   if (webhookQueued) await kickWebhookDrain()
+  if (permanent) {
+    const failed = await prisma.document.findUnique({ where: { id: job.documentId }, select: { receivedAt: true, template: { select: { code: true } } } })
+    if (failed) await track("document_extraction_completed", { documentId: job.documentId, templateCode: failed.template?.code ?? "unknown", status: "failed", durationMs: Date.now() - failed.receivedAt.getTime() }, { workspaceId: job.workspaceId })
+    await prisma.ingestionItem.updateMany({ where: { documentId: job.documentId }, data: { status: "failed" } })
+  }
 }
 
 export async function processDocumentJob(jobId: string) {
@@ -392,6 +401,24 @@ export async function processDocumentJob(jobId: string) {
       })
       webhookQueued = emitted.queued > 0
     }, { timeout: 20_000 })
+    await track("document_extraction_completed", { documentId: document.id, templateCode: document.template?.code ?? "unknown", status: "success", durationMs: Date.now() - document.receivedAt.getTime() }, { workspaceId: document.workspaceId })
+    await prisma.ingestionItem.updateMany({ where: { documentId: document.id }, data: { status: "extracted" } })
+    const templateCode = document.template?.code
+    const supplierField = templateCode ? SUPPLIER_FIELD_BY_TEMPLATE[templateCode] : undefined
+    if (templateCode && supplierField) {
+      const supplierValue = extraction[supplierField]
+      await applyAutomationRules({
+        workspaceId: document.workspaceId, documentId: document.id, templateCode,
+        extraction: {
+          templateCode,
+          supplierValue: typeof supplierValue === "string" ? supplierValue : null,
+          supplierConfidence: fieldConfidence[supplierField] ?? null,
+        },
+      })
+    }
+    // Runs after rules, per the roadmap — a check comparing against codingData (or a future check
+    // that does) needs the rule's coding to already be on the document.
+    await runDeterministicChecks({ workspaceId: document.workspaceId, documentId: document.id })
   } catch (error) {
     await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: document.id, workspaceId: document.workspaceId }, error)
     // Rethrown below, after the embed job is kicked — a document that OCR'd successfully is

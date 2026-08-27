@@ -8,6 +8,7 @@ import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
 import { createFile, deleteFiles } from "@/models/files"
+import type { ProductMode } from "@/types/product-mode"
 import { User } from "@/prisma/client"
 import crypto, { randomBytes } from "crypto"
 import { cache } from "react"
@@ -49,7 +50,7 @@ export async function isWorkspaceLimitExempt(workspaceId: string) {
   return Boolean(await prisma.workspaceMember.findFirst({ where: { workspaceId, ...EXEMPT_OWNER_FILTER }, select: { userId: true } }))
 }
 
-export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "email">, options: { name?: string; kind?: WorkspaceKind; planCode?: string } = {}) {
+export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "email">, options: { name?: string; kind?: WorkspaceKind; planCode?: string; productMode?: ProductMode } = {}) {
   // Every workspace starts on a trial, and this is the only place one is created — including the
   // lazy creation on the first /workspaces visit, which is what puts password sign-ups and
   // Google sign-ups on identical footing without either auth path knowing about billing.
@@ -59,6 +60,11 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
     data: {
       name: options.name?.trim() || `${user.name || user.email}'s workspace`,
       kind: options.kind || "personal",
+      // "accounting" is the primary buyer going forward — see docs on Workspace.productMode.
+      // The team-workspace creation form is the picker that passes "clinical" through here; the
+      // lazily-created personal workspace (first /workspaces visit) never does, so it always
+      // defaults to accounting — there is no onboarding step in that path to ask the question.
+      productMode: options.productMode || "accounting",
       members: { create: { userId: user.id, role: "owner" } },
       subscription: { create: { trialEndsAt, ...(options.planCode ? { planCode: options.planCode } : {}) } },
     },
@@ -70,8 +76,13 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
 }
 
 /** Lido's Workspace nav item: a shared team, which the entry plan's single seat does not
- * allow. Gated here as well as in the UI so the upsell cannot be clicked past. */
-export async function createTeamWorkspace(user: Pick<User, "id" | "name" | "email" | "role">, name: string) {
+ * allow. Gated here as well as in the UI so the upsell cannot be clicked past.
+ *
+ * productMode has to be chosen HERE, at creation, not set afterward: createWorkspaceForUser seeds
+ * a file immediately (the line below this comment in that function), so by the time control
+ * returns to any caller the workspace already has content and setProductMode's lock has already
+ * engaged — there is no "create empty, then pick a mode" window in practice. */
+export async function createTeamWorkspace(user: Pick<User, "id" | "name" | "email" | "role">, name: string, productMode?: ProductMode) {
   const memberships = await prisma.workspaceMember.findMany({
     where: { userId: user.id, role: "owner" },
     include: { workspace: { include: { subscription: true } } },
@@ -85,7 +96,7 @@ export async function createTeamWorkspace(user: Pick<User, "id" | "name" | "emai
   // The new workspace inherits the plan that authorised its creation. Dropping it would put the
   // team on the default 1-seat starter subscription, so the owner could create the workspace and
   // then immediately be told they have no seat to invite anyone into.
-  return createWorkspaceForUser(user, { name, kind: "team", planCode: best.code })
+  return createWorkspaceForUser(user, { name, kind: "team", planCode: best.code, productMode })
 }
 
 export const getWorkspacesForUser = cache(async (userId: string) => prisma.workspace.findMany({
@@ -122,6 +133,31 @@ export async function renameWorkspace(workspaceId: string, name: string) {
   const trimmed = name.trim()
   if (trimmed.length < 2 || trimmed.length > 80) throw new Error("invalid_workspace_name")
   return prisma.workspace.update({ where: { id: workspaceId }, data: { name: trimmed } })
+}
+
+/** Whether a workspace can still change its product mode: only before it has any content. A file
+ * (or the documents inside it) was seeded according to the mode active at the time — worksheets
+ * for accounting, the dictation container for clinical — so switching after the fact would leave
+ * that content orphaned rather than actually reclassifying anything. */
+async function hasWorkspaceContent(workspaceId: string): Promise<boolean> {
+  return Boolean(await prisma.documentFile.findFirst({ where: { workspaceId }, select: { id: true } }))
+}
+
+/** Sets the workspace's product mode — the keystone gate for everything mode-specific (nav
+ * entries, seeded templates, the AI prompt preamble). Locked once the workspace has any content
+ * (`product_mode_locked`), and coupled to hipaaMode: a workspace presumed to handle ePHI cannot
+ * be accounting-mode (`hipaa_mode_requires_clinical`) — hipaaMode has to come off first, through
+ * the workspace's own HIPAA toggle, rather than being silently cleared as a side effect here. */
+export async function setProductMode(input: { workspaceId: string; actorId: string; mode: ProductMode }): Promise<void> {
+  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: input.workspaceId }, select: { productMode: true, hipaaMode: true } })
+  if (workspace.productMode === input.mode) return
+  if (workspace.hipaaMode && input.mode !== "clinical") throw new Error("hipaa_mode_requires_clinical")
+  if (await hasWorkspaceContent(input.workspaceId)) throw new Error("product_mode_locked")
+  const context = await getRequestAuditContext()
+  await prisma.$transaction([
+    prisma.workspace.update({ where: { id: input.workspaceId }, data: { productMode: input.mode } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, actorId: input.actorId, type: "workspace_product_mode_set", detail: { mode: input.mode } }, context) }),
+  ])
 }
 
 /** Deliberately does NOT re-check the plan's seat limit: seats gate *adding* people, and a

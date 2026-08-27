@@ -233,8 +233,8 @@ export async function folderTrail(workspaceId: string, folderId: string | null) 
 
 export const getWorkspaceFile = cache(async (workspaceId: string, fileId: string) => prisma.documentFile.findFirst({ where: { id: fileId, workspaceId } }))
 
-export const getFileTemplates = cache(async (fileId: string) => prisma.documentTemplate.findMany({
-  where: { fileId },
+export const getFileTemplates = cache(async (workspaceId: string, fileId: string) => prisma.documentTemplate.findMany({
+  where: { workspaceId, fileId },
   include: { versions: { orderBy: { version: "desc" }, take: 1 } },
   orderBy: [{ isSystem: "desc" }, { createdAt: "asc" }],
 }))

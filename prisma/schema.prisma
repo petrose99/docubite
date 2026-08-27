@@ -49,6 +49,10 @@ model User {
   createdApiKeys        WorkspaceApiKey[]     @relation("ApiKeyCreator")
   createdIntegrationConnections IntegrationConnection[] @relation("IntegrationConnectionCreator")
   createdIntegrationPushes      IntegrationPush[]       @relation("IntegrationPushCreator")
+  productEvents         ProductEvent[]        @relation("ProductEventActor")
+  assignedReviewTasks   ReviewTask[]          @relation("ReviewTaskAssignee")
+  createdReviewTasks    ReviewTask[]          @relation("ReviewTaskCreator")
+  createdAutomationRules AutomationRule[]     @relation("AutomationRuleCreator")
 
   @@map("users")
 }
@@ -60,12 +64,29 @@ model Workspace {
    * their files live by default. "team" — a shared workspace, creatable only on a plan whose
    * member limit is above one. */
   kind            String                 @default("personal")
+  /// "accounting" | "clinical" (types/product-mode.ts). Which of the app's two positionings this
+  /// workspace is: what gets seeded into a new file, which nav entries show, and which AI prompt
+  /// preamble is used. Locked once the workspace has any content — see setProductMode in
+  /// models/workspaces.ts — so switching never leaves content seeded for the wrong mode behind.
+  productMode     String                 @default("accounting") @map("product_mode")
   aiEnabled       Boolean                @default(true) @map("ai_enabled")
   /// F15: when on, this workspace is presumed to handle ePHI. setLinkAccess refuses anything but
   /// "none", getFileAccess ignores an existing linkAccess for a signed-out viewer, and the share
   /// dialog hides the link tab — see models/files.ts. MFA enforcement reads the `aal` claim off
   /// the Supabase session (aal2 required once a factor is enrolled) — see the workspace layout.
   hipaaMode       Boolean                @default(false) @map("hipaa_mode")
+  /// "BAA coverage confirmed" for this workspace's external ASR provider (Whisper/Deepgram via
+  /// lib/asr) — settable only from the admin console (app/admin-next/baa), which writes an
+  /// AdminAuditEvent on every change. False by default: a clinical, hipaaMode workspace must not
+  /// get external ASR just because the deployment has one configured — see lib/asr/gating.ts.
+  asrExternalAllowed Boolean             @default(false) @map("asr_external_allowed")
+  /// Opaque per-workspace token routing an inbound email to this workspace (WP13) — the recipient
+  /// address is "<token>@inbound.<domain>", never the workspace's own uuid, so leaking a workspace
+  /// id elsewhere (a URL, a support ticket) can never be used to guess or spoof its inbound
+  /// address. Null until first generated (models/inbound-email.ts's ensureInboundEmailToken).
+  /// Deliberately never issued for a clinical workspace — see the same file: unencrypted email
+  /// is not an acceptable channel for ePHI, so the route refuses one even if a token existed.
+  inboundEmailToken  String?             @unique @map("inbound_email_token")
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
   members         WorkspaceMember[]
@@ -92,6 +113,12 @@ model Workspace {
   webhookDeliveries WebhookDelivery[]
   integrationConnections IntegrationConnection[]
   integrationPushes IntegrationPush[]
+  taxProfile      TaxProfile?
+  productEvents   ProductEvent[]
+  ingestionItems  IngestionItem[]
+  reviewTasks     ReviewTask[]
+  automationRules AutomationRule[]
+  checkResults    DocumentCheckResult[]
 
   @@map("workspaces")
 }
@@ -377,6 +404,15 @@ model Document {
   shapeId           String?                  @map("shape_id") @db.Uuid
   /// {docType, entity, period} read alongside the extraction, reused by the folder report.
   classification    Json?
+  /// Coding an AutomationRule (WP11) assigned — account/taxCode/costCentre/project, whatever keys
+  /// the matched rule's `actions` set. Separate from fieldSnapshot/reviewedData because this is
+  /// classification metadata layered on top of extraction, not a value read off the document
+  /// itself; a template has no "cost centre" field to validate it against. Null means no rule
+  /// matched (or none exist yet).
+  codingData        Json?                    @map("coding_data")
+  /// The rule that produced codingData, if any — SetNull so deleting a rule does not silently
+  /// misattribute already-coded documents to no rule at all versus a different one.
+  appliedRuleId     String?                  @map("applied_rule_id") @db.Uuid
   /// The upload batch (one drag of files) this document arrived in, so a folder can be reported on
   /// as a set. Just a grouping key — null for documents uploaded one at a time.
   uploadBatchId     String?                  @map("upload_batch_id") @db.Uuid
@@ -418,6 +454,8 @@ model Document {
   template          DocumentTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
   templateVersion   DocumentTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
   shape             ExtractionShape?         @relation(fields: [shapeId], references: [id], onDelete: SetNull)
+  appliedRule       AutomationRule?          @relation(fields: [appliedRuleId], references: [id], onDelete: SetNull)
+  checkResults      DocumentCheckResult[]
   transcriptEditedBy User?                   @relation("TranscriptEditor", fields: [transcriptEditedById], references: [id], onDelete: SetNull)
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
@@ -427,6 +465,8 @@ model Document {
   fieldSuggestions  FieldSuggestion[]
   webhookDeliveries WebhookDelivery[]
   integrationPushes IntegrationPush[]
+  ingestionItems    IngestionItem[]
+  reviewTasks       ReviewTask[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -869,6 +909,213 @@ model IntegrationPush {
   @@index([status, nextAttemptAt])
   @@index([workspaceId, createdAt])
   @@map("integration_pushes")
+}
+
+/** One workspace's tax configuration: which region it files in, versioned the same way
+ * DocumentTemplate is (currentVersion + immutable TaxProfileVersion rows) so a rate change never
+ * rewrites what an already-extracted document was checked against. One per workspace — accounting
+ * mode's WP4; Phase 1's only consumers are currency/prompt hints, with WP12's tax-consistency
+ * check as the reason the rate-with-effective-date shape exists at all (lib/tax/regions.ts). */
+model TaxProfile {
+  id             String              @id @default(uuid()) @db.Uuid
+  workspaceId    String              @unique @map("workspace_id") @db.Uuid
+  /// "za" | "ls" | "gb" | "us" — see types/product-mode.ts's sibling, lib/tax/regions.ts's
+  /// TAX_REGIONS registry.
+  region         String
+  currentVersion Int                 @default(1) @map("current_version")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions       TaxProfileVersion[]
+
+  @@map("tax_profiles")
+}
+
+/// Immutable snapshot of one TaxRegionConfig (lib/tax/regions.ts), the version a document's tax
+/// check (WP12) is run against. Never updated in place — a region or rate change creates a new
+/// version and bumps TaxProfile.currentVersion, exactly like DocumentTemplateVersion.
+model TaxProfileVersion {
+  id        String     @id @default(uuid()) @db.Uuid
+  profileId String     @map("profile_id") @db.Uuid
+  version   Int
+  config    Json
+  createdAt DateTime   @default(now()) @map("created_at")
+  profile   TaxProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, version])
+  @@map("tax_profile_versions")
+}
+
+/** One deterministic check's result for one document (WP12) — a table, not a Json bag on
+ * Document, so both the review queue and analytics can query "every failing arithmetic check this
+ * month" without deserialising every document's blob to find out. `@@unique([documentId,
+ * checkCode])` makes re-running checks (a reprocess, a rule correction that changes coding) an
+ * upsert rather than an ever-growing history — each check's LATEST verdict is what matters here;
+ * DocumentAuditEvent is where the history of what changed actually lives. */
+model DocumentCheckResult {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  documentId  String    @map("document_id") @db.Uuid
+  /// invoice_arithmetic | statement_balance | duplicate | missing_statement_period |
+  /// tax_consistency | suspicious_resubmission
+  checkCode   String    @map("check_code")
+  /// pass | warn | fail
+  status      String
+  message     String
+  detail      Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, checkCode])
+  @@index([workspaceId, status])
+  @@map("document_check_results")
+}
+
+/** A supplier automation rule (WP11): "when this document's supplier/merchant matches this way,
+ * on these template codes, apply this coding" — the engine itself is pure (lib/automation/rules.ts
+ * applyRules), this is only its data. `matcher` and `actions` are Json rather than columns because
+ * the shape is genuinely open-ended (which fields a rule sets varies by template), and because a
+ * hand-rolled matcher/action DSL evolving is a data change here, not a migration, exactly like
+ * DocumentTemplate's own field DSL.
+ *
+ * matcher: { type: "exact" | "contains", value: string, templateCodes?: string[] }
+ * actions: { codingData: Record<string, string | number>, defaults?: Record<string, unknown> }
+ *
+ * hitCount is incremented every time applyRules picks this rule for a document — the "hit stats"
+ * the settings/rules UI shows. Editing a rule (the reviewer "update rule" correction flow, WP11)
+ * only ever affects documents extracted AFTER the edit; already-applied documents are untouched,
+ * which is why the rule itself carries no history of what it used to say. */
+model AutomationRule {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  name           String
+  matcher        Json
+  actions        Json
+  /// A match below this confidence on the matched field still applies the rule's coding, but
+  /// also raises requireReview regardless of the rule's own flag — a low-confidence supplier read
+  /// matching a rule is exactly the case a person should glance at before trusting the coding.
+  minConfidence  Float?    @map("min_confidence")
+  requireReview  Boolean   @default(false) @map("require_review")
+  isActive       Boolean   @default(true) @map("is_active")
+  hitCount       Int       @default(0) @map("hit_count")
+  createdById    String?   @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User?     @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  appliedTo      Document[]
+
+  @@index([workspaceId, isActive])
+  @@map("automation_rules")
+}
+
+/** One item of work in the accounting review queue (WP10): a document that needs a person to
+ * look at it, and why. `reason` is what WP11 (automation rules) and WP12 (deterministic checks)
+ * will create these for automatically — "manual" is the only reason a person can create one today,
+ * since nothing else populates the queue until those land. Every status transition writes a
+ * DocumentAuditEvent (models/review-tasks.ts) — this is the reviewed history WP11's correction
+ * flow must never rewrite, only append to.
+ *
+ * ReviewComment and ReviewSavedFilter (also named in the roadmap) are deliberately not built yet:
+ * the roadmap itself defers them as follow-ups once table+detail+bulk actions are shipped and in
+ * use — adding their schema now with no UI to exercise it would be undertested surface. */
+model ReviewTask {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  documentId   String    @map("document_id") @db.Uuid
+  /// open | in_review | approved | rejected
+  status       String    @default("open")
+  /// manual | low_confidence | rule_required | check_failed
+  reason       String    @default("manual")
+  assigneeId   String?   @map("assignee_id") @db.Uuid
+  /// Free text: what a rule or check found, or a note from whoever flagged it manually.
+  detail       String?
+  priority     Int       @default(0)
+  dueAt        DateTime? @map("due_at")
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  assignee     User?     @relation("ReviewTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy    User?     @relation("ReviewTaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, assigneeId, status])
+  @@index([documentId])
+  @@map("review_tasks")
+}
+
+/** A durable record of one accepted upload, independent of the Document it produces (WP9).
+ *
+ * Two things a Document row cannot give the intake layer on its own: an idempotency key that
+ * exists BEFORE a Document is created (so a provider retry of the same bytes — a re-sent email,
+ * a re-uploaded ZIP — is recognised at the door rather than becoming a second Document.fileId_
+ * sha256-scoped row in a different file), and a status ledger that survives across every intake
+ * channel (upload, camera, email, zip, api) uniformly, which is what a batch progress panel polls.
+ *
+ * Wraps DocumentProcessingJob rather than replacing it: extraction retry/backoff still lives
+ * there (lib/document-processing.ts); this only tracks whether the item ever became a Document at
+ * all, and if not, why (rejected by malware scan, or a workspace-wide duplicate of one already
+ * ingested). attempts/nextRetryAt mirror the WebhookDelivery/IntegrationPush shape for a future
+ * ingestion-level retry (e.g. a transient malware-scan outage); nothing drains them yet — every
+ * ingestion attempt today is synchronous within the request/action that created this row. */
+model IngestionItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  fileId         String    @map("file_id") @db.Uuid
+  documentId     String?   @map("document_id") @db.Uuid
+  /// upload | camera | email | zip | api
+  source         String
+  /// sha256 of the raw bytes, unique per workspace — the workspace-wide idempotency key described
+  /// above. Distinct from Document's own (fileId, sha256) unique constraint, which is scoped to
+  /// one file and exists for a different reason (the same PDF may deliberately go into two files).
+  idempotencyKey String    @map("idempotency_key")
+  /// pending | clean | infected | scan_failed
+  malwareStatus  String    @default("pending") @map("malware_status")
+  /// received | rejected | duplicate | extracting | extracted | failed
+  status         String    @default("received")
+  attempts       Int       @default(0)
+  nextRetryAt    DateTime? @map("next_retry_at")
+  errorCode      String?   @map("error_code")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document       Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+  @@index([documentId])
+  @@map("ingestion_items")
+}
+
+/** First-party product analytics (WP5) — no third-party SDK, on the theory that a HIPAA-safe
+ * event store has to be this app's own database rather than handed to an outside analytics
+ * vendor. `props` is validated at the point of writing (lib/analytics.ts's per-event zod schemas,
+ * not here) to keep document content, filenames, and free text out of it by construction — this
+ * table is read for aggregate rollups (admin console), never for identifying what one customer's
+ * document said.
+ *
+ * workspaceId is nullable and this is NOT in WORKSPACE_SCOPED_MODELS: the admin rollups this
+ * exists for read across every workspace by design, the same reasoning as StripeWebhookEvent and
+ * AdminAuditEvent. onDelete: SetNull, not Cascade — a deleted workspace's history should not
+ * silently distort a rollup that already counted it. */
+model ProductEvent {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  actorId     String?    @map("actor_id") @db.Uuid
+  name        String
+  props       Json
+  createdAt   DateTime   @default(now()) @map("created_at")
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actor       User?      @relation("ProductEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([name, createdAt])
+  @@map("product_events")
 }
 
 /** F16: the third parties that can receive customer document content or metadata, and whether a

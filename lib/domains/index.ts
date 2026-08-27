@@ -1,6 +1,6 @@
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import { BLANK_BIAS_TERMS, BLANK_TEMPLATES } from "@/lib/domains/blank"
-import { FINANCE_BIAS_TERMS, FINANCE_TEMPLATES } from "@/lib/domains/finance"
+import { FINANCE_BIAS_TERMS, FINANCE_OPTIONAL_TEMPLATES, FINANCE_TEMPLATES } from "@/lib/domains/finance"
 import { LOGISTICS_BIAS_TERMS, LOGISTICS_TEMPLATES } from "@/lib/domains/logistics"
 import { PATHOLOGY_BIAS_TERMS, PATHOLOGY_TEMPLATES } from "@/lib/domains/pathology"
 
@@ -66,6 +66,7 @@ const PATHOLOGY_PROMPT = [
 
 export const DOMAIN_ADAPTERS: DomainAdapter[] = [
   ...pack(FINANCE_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
+  ...pack(FINANCE_OPTIONAL_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
   ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT, false, "soap_note"),
   ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS, null, false, "table"),
   ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true, "narrative"),
@@ -76,19 +77,26 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
   return DOMAIN_ADAPTERS.find((adapter) => adapter.code === code) ?? null
 }
 
-/** The domain packs a file can opt into from the templates settings page — finance is excluded
- * because it is already every file's default seed (DEFAULT_DOCUMENT_TEMPLATES), and general is
- * excluded because it is the ephemeral dictation-only pack, not something with worksheets to add
- * to a file. Adding a pack here is exactly what "ship the domain packs" means: pathology and
- * logistics have been fully built and registered since Stage 3/4, just never reachable from the UI. */
-const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { pathology: "Pathology", logistics: "Logistics" }
+/** The domain packs a file can opt into from the templates settings page. General is excluded
+ * because it is the ephemeral dictation-only pack, not something with worksheets to add to a
+ * file. Finance IS offered now (WP8) — unlike pathology/logistics its "pack" is only the four
+ * optional templates (bank_statement, purchase_order, remittance_advice, supplier_statement);
+ * the seeded four (invoice, receipt, expense_receipt, generic) are filtered out below since every
+ * file already has them. Adding a pack here is exactly what "ship the domain packs" means:
+ * pathology and logistics have been fully built and registered since Stage 3/4, just never
+ * reachable from the UI. */
+const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { finance: "Finance (optional)", pathology: "Pathology", logistics: "Logistics" }
+
+/** Codes already seeded into every new file (models/files.ts) — excluded from every pack so the
+ * picker never offers to "add" a worksheet a file already has. Only finance has any overlap. */
+const SEEDED_CODES = new Set<string>(FINANCE_TEMPLATES.map((template) => template.code))
 
 export type ExtractionDomainPack = { domain: DomainAdapter["domain"]; label: string; adapters: DomainAdapter[] }
 
 export function extractionDomainPacks(): ExtractionDomainPack[] {
   return (Object.keys(EXTRACTION_PACK_LABELS) as DomainAdapter["domain"][]).map((domain) => ({
     domain, label: EXTRACTION_PACK_LABELS[domain]!,
-    adapters: DOMAIN_ADAPTERS.filter((adapter) => adapter.domain === domain),
+    adapters: DOMAIN_ADAPTERS.filter((adapter) => adapter.domain === domain && !SEEDED_CODES.has(adapter.code)),
   }))
 }
 

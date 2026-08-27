@@ -3,16 +3,16 @@ import { Check, Mic, Route, ShieldCheck } from "lucide-react"
 const WAVEFORM_BARS = 28
 
 const transcriptLines = [
-  "Log an expense of two hundred forty dollars",
-  "for client dinner, paid to Riverside Bistro,",
+  "Specimen is a skin punch biopsy",
+  "from the left forearm, received fresh",
   "on the fourteenth.",
 ]
 
 const fields = [
-  { label: "Merchant", value: "Riverside Bistro" },
-  { label: "Amount", value: "$240.00" },
-  { label: "Category", value: "Client entertainment" },
-  { label: "Date", value: "Aug 14" },
+  { label: "Specimen", value: "Skin, left forearm" },
+  { label: "Type", value: "Punch biopsy" },
+  { label: "Received", value: "Aug 14" },
+  { label: "Status", value: "Pending review" },
 ]
 
 /** The dictation section's own mock, mirroring ExtractionDemo's language (a self-playing CSS
@@ -44,7 +44,7 @@ export function DictationDemo() {
                 <span className="dict-rec-dot h-1.5 w-1.5 rounded-full bg-rose-500" />Recording
               </span>
               <span className="dict-routed absolute right-0 inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-2 py-1 text-[0.68rem] font-semibold text-white">
-                <Route className="h-3 w-3" />Finance record
+                <Route className="h-3 w-3" />Pathology report
               </span>
             </span>
           </div>
@@ -81,7 +81,7 @@ export function DictationDemo() {
             <div className="space-y-1.5 bg-stone-50/60 px-3.5 py-3">
               <p className="text-[0.62rem] font-bold uppercase tracking-[.1em] text-stone-400">Report · Table</p>
               <div className="dict-report space-y-1 text-[0.68rem] text-stone-600">
-                <p className="flex items-center gap-1"><Check className="h-3 w-3 shrink-0 text-emerald-600" />One row, four fields, ready to file.</p>
+                <p className="flex items-center gap-1"><Check className="h-3 w-3 shrink-0 text-emerald-600" />Synoptic block drafted, ready to review.</p>
                 <p className="flex items-center gap-1"><Check className="h-3 w-3 shrink-0 text-emerald-600" />No format chosen by hand.</p>
               </div>
             </div>

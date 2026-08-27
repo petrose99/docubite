@@ -1,3 +1,4 @@
+import { track } from "@/lib/analytics"
 import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import { documentExportRow, exportColumnLabels, exportColumns, lineItemExportRows } from "@/lib/document-export"
@@ -32,12 +33,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ work
   // The audit trail otherwise only sees writes (deletes, requeues) and never the action most
   // relevant to a compliance review: someone pulling extracted data out of the system.
   await recordDocumentAudit({ workspaceId, actorId: user.id, type: "file_exported", detail: { fileId, format, templateCode, sheet } })
+  await track("document_exported", { fileId, format: format === "xlsx" ? "xlsx" : "csv" }, { workspaceId, actorId: user.id })
 
   /** Once a file has a spreadsheet, the spreadsheet *is* the file: it holds the columns the user
    * added, the corrections they made and the formulas they wrote, none of which exist in the
    * Documents rows. Exporting from anywhere else would hand them a download missing their own
    * work. The document-derived paths below stay for files that predate the grid. */
-  const workbook = await getWorkbook(fileId)
+  const workbook = await getWorkbook(workspaceId, fileId)
   if (workbook) {
     if (format === "xlsx") {
       const buffer = await snapshotToXlsx(workbook.snapshot)
@@ -53,7 +55,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ work
     // first tab, which is the one the file opens on.
     const sheets = snapshotToSheets(workbook.snapshot)
     const sheetName = url.searchParams.get("sheetName")
-    const templates = templateCode ? await getFileTemplates(fileId) : []
+    const templates = templateCode ? await getFileTemplates(workspaceId, fileId) : []
     const wanted = templates.find((candidate) => candidate.code === templateCode)?.name
     const chosen = (sheetName && sheets.find((sheet) => sheet.name === sheetName))
       || (wanted && sheets.find((sheet) => sheet.name === wanted))
@@ -76,7 +78,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ work
   }
 
   // Worksheet codes are unique per file, so this lookup has to be scoped to the file.
-  const templates = await getFileTemplates(fileId)
+  const templates = await getFileTemplates(workspaceId, fileId)
   const template = templates.find((t) => t.code === templateCode)
   if (!template?.versions[0]) return new Response("Template not found", { status: 404 })
   const fields = parseTemplateFields(template.versions[0].fields)

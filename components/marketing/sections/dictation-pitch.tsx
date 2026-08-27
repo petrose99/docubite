@@ -6,7 +6,7 @@ const points = [
   {
     icon: Mic,
     title: "Just talk. No menu first.",
-    text: "There's no dropdown to fill in before you start recording. Dictate freely — a finance note, a pathology read, a delivery update, a to-do — and DocuBite works out what it's listening to as you go, with the transcript appearing live as you speak.",
+    text: "There's no dropdown to fill in before you start recording. Dictate freely — a pathology read, a referral note, a delivery update, a to-do — and DocuBite works out what it's listening to as you go, with the transcript appearing live as you speak.",
   },
   {
     icon: AudioLines,

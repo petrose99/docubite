@@ -27,8 +27,8 @@ export class StaleRevisionError extends Error {
   }
 }
 
-export async function getWorkbook(fileId: string): Promise<StoredWorkbook | null> {
-  const row = await prisma.spreadsheetWorkbook.findUnique({ where: { fileId }, select: { rev: true, snapshot: true, updatedAt: true } })
+export async function getWorkbook(workspaceId: string, fileId: string): Promise<StoredWorkbook | null> {
+  const row = await prisma.spreadsheetWorkbook.findFirst({ where: { workspaceId, fileId }, select: { rev: true, snapshot: true, updatedAt: true } })
   return row ? { rev: row.rev, snapshot: row.snapshot as WorkbookSnapshot, updatedAt: row.updatedAt } : null
 }
 
@@ -37,7 +37,7 @@ export async function getWorkbook(fileId: string): Promise<StoredWorkbook | null
  * rejected rather than silently overwriting the edits it never saw. */
 export async function saveWorkbook(input: { workspaceId: string; fileId: string; rev: number; snapshot: WorkbookSnapshot }): Promise<StoredWorkbook> {
   const snapshot = input.snapshot as Prisma.InputJsonValue
-  const existing = await prisma.spreadsheetWorkbook.findUnique({ where: { fileId: input.fileId }, select: { rev: true } })
+  const existing = await prisma.spreadsheetWorkbook.findFirst({ where: { workspaceId: input.workspaceId, fileId: input.fileId }, select: { rev: true } })
 
   if (!existing) {
     const created = await prisma.spreadsheetWorkbook.create({
@@ -50,12 +50,12 @@ export async function saveWorkbook(input: { workspaceId: string; fileId: string;
   // The rev guard lives in the WHERE clause rather than in a read-then-write, so two saves
   // racing on the same rev cannot both pass the check.
   const result = await prisma.spreadsheetWorkbook.updateMany({
-    where: { fileId: input.fileId, rev: input.rev },
+    where: { workspaceId: input.workspaceId, fileId: input.fileId, rev: input.rev },
     data: { rev: { increment: 1 }, snapshot },
   })
   if (result.count === 0) throw new StaleRevisionError(existing.rev)
 
-  const saved = await prisma.spreadsheetWorkbook.findUniqueOrThrow({ where: { fileId: input.fileId }, select: { rev: true, snapshot: true, updatedAt: true } })
+  const saved = await prisma.spreadsheetWorkbook.findFirstOrThrow({ where: { workspaceId: input.workspaceId, fileId: input.fileId }, select: { rev: true, snapshot: true, updatedAt: true } })
   return { rev: saved.rev, snapshot: saved.snapshot as WorkbookSnapshot, updatedAt: saved.updatedAt }
 }
 
@@ -80,18 +80,18 @@ const MAX_SEEDED_ROWS = 2000
  * because a row could not be appended. */
 export async function ensureFileWorkbook(workspaceId: string, fileId: string): Promise<StoredWorkbook | null> {
   const templates = await prisma.documentTemplate.findMany({
-    where: { fileId },
+    where: { workspaceId, fileId },
     include: { versions: { orderBy: { version: "desc" }, take: 1 } },
     orderBy: [{ isSystem: "desc" }, { createdAt: "asc" }],
   })
-  if (!templates.length) return getWorkbook(fileId)
+  if (!templates.length) return getWorkbook(workspaceId, fileId)
 
-  const existing = await getWorkbook(fileId)
+  const existing = await getWorkbook(workspaceId, fileId)
 
   // Seeding a file for the first time takes every document; reconciling one takes only what
   // the sheet has not already absorbed.
   const pending = await prisma.document.findMany({
-    where: { fileId, status: { notIn: PENDING_STATUSES }, ...(existing ? { sheetAppliedAt: null } : {}) },
+    where: { workspaceId, fileId, status: { notIn: PENDING_STATUSES }, ...(existing ? { sheetAppliedAt: null } : {}) },
     select: { id: true, filename: true, templateId: true, reviewedData: true, rawExtraction: true, confidence: true },
     orderBy: { receivedAt: "asc" },
     take: MAX_SEEDED_ROWS,
@@ -138,7 +138,7 @@ export async function ensureFileWorkbook(workspaceId: string, fileId: string): P
     await stamp()
     return saved
   } catch (error) {
-    if (error instanceof StaleRevisionError) return getWorkbook(fileId)
+    if (error instanceof StaleRevisionError) return getWorkbook(workspaceId, fileId)
     throw error
   }
 }

@@ -4,7 +4,13 @@ import path from "path"
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "forms/**/*.test.ts", "models/**/*.test.ts", "worker/**/*.test.ts", "ai/**/*.test.ts"],
+    include: [
+      "lib/**/*.test.ts", "forms/**/*.test.ts", "models/**/*.test.ts", "worker/**/*.test.ts", "ai/**/*.test.ts",
+      // Inbound email (WP13) is shipped dark with no provider wired up yet, so a fixture-driven
+      // test of the route itself is the only verification available before one exists — not a
+      // general invitation to unit-test app/api/**, which this repo otherwise deliberately doesn't.
+      "app/api/inbound-email/**/*.test.ts",
+    ],
     // SECRETS_ENCRYPTION_KEY is a fixed test-only key (never used outside vitest) so tests that
     // round-trip lib/secret-crypto.ts (webhook secrets, integration OAuth tokens) don't each need
     // their own env plumbing before config.ts is first imported.

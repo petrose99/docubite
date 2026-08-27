@@ -48,7 +48,7 @@ export default async function SheetPage({ params, searchParams }: {
   // The workbook is brought up to date with extraction before it is handed to the client, so a
   // file whose documents were extracted while nothing was watching still opens with its rows.
   const [templates, usage, workbook] = await Promise.all([
-    getFileTemplates(fileId),
+    getFileTemplates(workspaceId, fileId),
     getWorkspaceUsage(workspaceId),
     ensureFileWorkbook(workspaceId, fileId),
   ])

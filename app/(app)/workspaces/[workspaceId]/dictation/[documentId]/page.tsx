@@ -24,10 +24,9 @@ export const dynamic = "force-dynamic"
  * is a transcript they have to take on trust. */
 export default async function DictationDetailPage({ params }: { params: Promise<{ workspaceId: string; documentId: string }> }) {
   const { workspaceId, documentId } = await params
-  if (!config.asr.enabled) notFound()
-
   const user = await getCurrentUser()
-  await requireWorkspaceRole(workspaceId, user.id)
+  const membership = await requireWorkspaceRole(workspaceId, user.id)
+  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
 
   const document = await prisma.document.findFirst({
     where: { id: documentId, workspaceId, source: "dictation" },

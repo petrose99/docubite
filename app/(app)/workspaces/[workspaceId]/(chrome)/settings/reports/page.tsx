@@ -15,10 +15,9 @@ import { notFound } from "next/navigation"
  * raised by the pre-sign-off checklist), and which prose sections follow. */
 export default async function ReportTemplatesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params
-  if (!config.asr.enabled) notFound()
-
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
+  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
   await ensureWorkspaceReportTemplates(workspaceId)
   const templates = await listReportTemplates(workspaceId)
 

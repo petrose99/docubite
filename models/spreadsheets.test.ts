@@ -14,16 +14,16 @@ const input = { workspaceId: "ws", fileId: "file", snapshot: { id: "file", sheet
 beforeEach(() => {
   vi.clearAllMocks()
   db.spreadsheetWorkbook = {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     updateMany: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
+    findFirstOrThrow: vi.fn(),
   }
 })
 
 describe("saveWorkbook", () => {
   it("creates the workbook at revision 1 when the file has never been opened in the grid", async () => {
-    db.spreadsheetWorkbook.findUnique.mockResolvedValue(null)
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue(null)
     db.spreadsheetWorkbook.create.mockResolvedValue({ rev: 1, snapshot: input.snapshot, updatedAt: new Date(0) })
 
     const saved = await saveWorkbook({ ...input, rev: 0 })
@@ -34,22 +34,22 @@ describe("saveWorkbook", () => {
   })
 
   it("guards the revision inside the update so two saves racing on one revision cannot both win", async () => {
-    db.spreadsheetWorkbook.findUnique.mockResolvedValue({ rev: 4 })
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue({ rev: 4 })
     db.spreadsheetWorkbook.updateMany.mockResolvedValue({ count: 1 })
-    db.spreadsheetWorkbook.findUniqueOrThrow.mockResolvedValue({ rev: 5, snapshot: input.snapshot, updatedAt: new Date(0) })
+    db.spreadsheetWorkbook.findFirstOrThrow.mockResolvedValue({ rev: 5, snapshot: input.snapshot, updatedAt: new Date(0) })
 
     const saved = await saveWorkbook({ ...input, rev: 4 })
 
     expect(saved.rev).toBe(5)
-    expect(db.spreadsheetWorkbook.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { fileId: "file", rev: 4 } }))
+    expect(db.spreadsheetWorkbook.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { workspaceId: "ws", fileId: "file", rev: 4 } }))
   })
 
   it("rejects a save from a tab that loaded an older revision, reporting the current one", async () => {
-    db.spreadsheetWorkbook.findUnique.mockResolvedValue({ rev: 9 })
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue({ rev: 9 })
     db.spreadsheetWorkbook.updateMany.mockResolvedValue({ count: 0 })
 
     await expect(saveWorkbook({ ...input, rev: 4 })).rejects.toThrow(StaleRevisionError)
     await expect(saveWorkbook({ ...input, rev: 4 }).catch((error) => (error as InstanceType<typeof StaleRevisionError>).currentRev)).resolves.toBe(9)
-    expect(db.spreadsheetWorkbook.findUniqueOrThrow).not.toHaveBeenCalled()
+    expect(db.spreadsheetWorkbook.findFirstOrThrow).not.toHaveBeenCalled()
   })
 })

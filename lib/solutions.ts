@@ -47,15 +47,30 @@ export const SOLUTIONS: Solution[] = [
     slug: "receipts",
     group: "type",
     name: "Receipts",
-    tagline: "Merchant, date, total, VAT, payment method",
+    tagline: "Merchant, date, total, tax, line items",
     icon: Receipt,
     title: "Turn a shoebox of receipts into expense rows",
     description: "Photographed till receipts, crumpled thermal paper and emailed PDFs all read into the same clean set of expense fields, ready for review and CSV export.",
-    fields: ["Merchant", "Purchase date", "Total", "VAT / sales tax", "Payment method", "Card last 4", "Category", "Currency"],
+    fields: ["Merchant", "Purchase date", "Receipt number", "Total", "Tax total", "Line items", "Currency"],
     points: [
       { title: "Phone photos are the normal case", text: "Receipts arrive as camera snaps at an angle, in bad light, on curled thermal paper. Pages that local text extraction cannot read are sent down the vision path instead of failing." },
       { title: "Faded thermal print still resolves", text: "Low-contrast thermal receipts are the single most common reason extraction fails elsewhere. They are handled as a first-class case, not an edge case." },
       { title: "One row per receipt, in the shape you export", text: "Fields land in a reviewable sheet, so the handoff to your bookkeeping workflow is a CSV you already know the columns of." },
+    ],
+  },
+  {
+    slug: "expense-receipts",
+    group: "type",
+    name: "Expense receipts",
+    tagline: "Merchant, total, tax code, category, payment method",
+    icon: Receipt,
+    title: "Receipts read straight to a categorized expense feed",
+    description: "The Expense receipt worksheet reads a receipt into one row — merchant, total, tax code and payment method as printed, plus a category when the receipt itself shows one — ready to review and export without touching a line-item table first.",
+    fields: ["Merchant", "Purchase date", "Total", "Tax total", "Tax code", "Category", "Payment method", "Currency"],
+    points: [
+      { title: "One row per receipt, not a line-item table", text: "Add the Expense receipt worksheet from Settings when you want fast categorization rather than an itemized breakdown — the same Receipt worksheet with line items is still there when you need it." },
+      { title: "Category is read, never invented", text: "If the receipt itself is stamped or annotated with a category, it comes through; if not, the field is left blank rather than guessed at." },
+      { title: "Tax code is read verbatim", text: "Whatever rate label or exemption code is printed on the receipt lands in the field as printed — matching it against your configured tax rates is a review step, not something extraction assumes for you." },
     ],
   },
   {
@@ -65,13 +80,12 @@ export const SOLUTIONS: Solution[] = [
     tagline: "Multi-page transaction tables into rows",
     icon: Landmark,
     title: "Bank statement PDFs, read as transaction tables",
-    description: "Multi-page statements come back as structured transaction rows — date, description, money in, money out, running balance — with the account header captured alongside them.",
-    fields: ["Account holder", "Account number", "Sort code / IBAN", "Statement period", "Opening balance", "Closing balance", "Transaction rows"],
+    description: "Multi-page statements come back as structured transaction rows — date, description, money in, money out, running balance — with the account header captured alongside them. Add the Bank statement worksheet from Settings; it isn't seeded by default.",
+    fields: ["Account holder", "Account number", "Statement period", "Opening balance", "Closing balance", "Transaction rows"],
     points: [
       { title: "Tables that run across pages stay one table", text: "Statements are processed in page batches and the transaction rows are stitched back together, so a table broken by a page header does not become two half-tables." },
       { title: "Money in and money out stay apart", text: "Debit and credit columns are extracted as distinct fields rather than one signed number, which is what makes the export usable without a second cleanup pass." },
       { title: "Balances give you a check to run", text: "Opening and closing balances come out with the rows, so the arithmetic can be verified before anyone trusts the data." },
-      { title: "A month goes missing, the report says so", text: "Upload the year's statements as one folder and the folder report flags the missing months and the duplicate uploads before anyone starts reconciling." },
     ],
   },
   {
@@ -122,14 +136,14 @@ export const INDUSTRIES: Industry[] = [
     icon: Landmark,
     name: "Finance & bookkeeping",
     tagline: "Month-end shouldn't mean a keyboard and a shoebox of receipts.",
-    tags: ["Supplier invoices", "Expense receipts", "Bank & card statements", "Remittance advice"],
+    tags: ["Supplier invoices", "Expense receipts", "Bank statements", "Remittance advice"],
     before: [
       "Open each PDF and retype supplier, date, net, VAT, total",
       "Squint at photographed receipts and faded thermal paper",
       "Hunt for the source PDF when a figure looks wrong",
     ],
     after: [
-      "Drop the whole folder — invoices, receipts, statements — and get back the missing months and duplicates first",
+      "Drop the whole folder — invoices, receipts, statements — and get back the duplicates first",
       "Fields land as rows; low-confidence ones flag themselves",
       "Total per supplier with the assistant, click any figure to its line",
     ],
@@ -172,13 +186,15 @@ export const INDUSTRIES: Industry[] = [
  * sections rather than dedicated pages — every target already exists and carries an id. */
 export type ProductLink = { href: string; name: string; tagline: string; icon: LucideIcon }
 
+// Anchors point at /accounting or /clinical, not the homepage — the homepage is a light chooser
+// (WP6) and no longer carries the deep sections these ids live on.
 export const PRODUCT_LINKS: ProductLink[] = [
-  { href: "/#extraction", name: "Document extraction", tagline: "Invoices, receipts and scans into a live sheet", icon: FileText },
-  { href: "/#dictation", name: "Dictation", tagline: "Speak a document into existence, nothing invented", icon: Mic },
-  { href: "/#how", name: "AI in the sheet", tagline: "=AI() runs on your data, without leaving the cell", icon: Sheet },
-  { href: "/#folders", name: "Folder reports", tagline: "Duplicates, gaps and what needs attention", icon: FileText },
-  { href: "/#integrations", name: "Integrations & API", tagline: "QuickBooks, Xero, and a webhook-backed REST API", icon: Plug },
-  { href: "/#security", name: "Security & compliance", tagline: "HIPAA mode, audit trail, malware scanning", icon: ShieldCheck },
+  { href: "/accounting#extraction", name: "Document extraction", tagline: "Invoices, receipts and scans into a live sheet", icon: FileText },
+  { href: "/clinical#dictation", name: "Dictation", tagline: "Speak a document into existence, nothing invented", icon: Mic },
+  { href: "/accounting#how", name: "AI in the sheet", tagline: "=AI() runs on your data, without leaving the cell", icon: Sheet },
+  { href: "/accounting#folders", name: "Folder reports", tagline: "Duplicates, gaps and what needs attention", icon: FileText },
+  { href: "/accounting#integrations", name: "Integrations & API", tagline: "QuickBooks, Xero, and a webhook-backed REST API", icon: Plug },
+  { href: "/accounting#security", name: "Security & compliance", tagline: "HIPAA mode, audit trail, malware scanning", icon: ShieldCheck },
 ]
 
 export const getSolution = (slug: string) => SOLUTIONS.find((solution) => solution.slug === slug)

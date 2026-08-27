@@ -126,14 +126,14 @@ const envSchema = z.object({
   // gate (also requires INTERNAL_WORKER_SECRET to be set for real).
   EMBED_DETACHED: z.enum(["true", "false"]).default("false"),
   // Workspace-scope guard (lib/workspace-scope.ts).
-  //   off   — no checking. Opt-in only now, via an explicit env var — see below.
-  //   warn  — logs every unscoped query without changing behaviour. The default everywhere,
-  //           including production, until the logs are clean.
-  //   throw — refuses them. The end state, adopted once `warn` reports nothing in production.
-  // Staged deliberately: this touches every query in a live app, so it earns its way to `throw`.
-  // `off` used to be production's default — a cross-tenant leak from a missing workspaceId filter
-  // is exactly the failure this guard exists to catch, and shipping with it disabled by default
-  // left every query author's memory as the only safeguard. `warn` costs nothing but a log line.
+  //   off   — no checking. Opt-in only, via an explicit env var — see below.
+  //   warn  — logs every unscoped query without changing behaviour. Dev's default.
+  //   throw — refuses them. Production's default now that the `warn`-caught unscoped queries
+  //           (models/files.ts, models/spreadsheets.ts) are fixed.
+  // `off` and unconditional `warn` used to be the defaults — a cross-tenant leak from a missing
+  // workspaceId filter is exactly the failure this guard exists to catch, and shipping with it
+  // non-fatal by default left every query author's memory as the only safeguard. The env var still
+  // overrides in either direction for a fast rollback.
   DB_SCOPE_GUARD: z.enum(["off", "warn", "throw"]).optional(),
   // Postgres row-level security (lib/db-rls.ts). The deeper guarantee, and the riskier change;
   // gated so it can be rolled back without a redeploy, and only after DB_SCOPE_GUARD=throw holds.
@@ -172,6 +172,19 @@ const envSchema = z.object({
   QUICKBOOKS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   XERO_CLIENT_ID: z.string().optional(),
   XERO_CLIENT_SECRET: z.string().optional(),
+  // Inbound email intake (WP13). Shipped dark on purpose: built and tested against recorded
+  // provider fixtures, but with no inbound DNS/provider (Postmark inbound, SES) provisioned yet.
+  // The route refuses everything with no secret configured — the same fail-closed shape as
+  // MALWARE_SCAN_URL unset in production, not a feature flag that quietly no-ops.
+  EMAIL_INBOUND_SECRET: z.string().optional(),
+  // The domain inbound addresses are issued under — "<token>@" + this. Informational (shown
+  // nowhere yet, since the feature is dark), read once a workspace's address needs displaying.
+  EMAIL_INBOUND_DOMAIN: z.string().default("inbound.docubite.com"),
+  // Nonce-based script-src (lib/csp.ts, proxy.ts). Off by default: the policy ships Report-Only
+  // first so real traffic can surface anything the allowlist missed before it can block a script.
+  // Flipping this is a config change, not a deploy — the whole point of staging it behind an env
+  // var instead of shipping straight to enforced.
+  CSP_ENFORCE: z.enum(["true", "false"]).default("false"),
 })
 
 const env = envSchema.parse(Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== "")))
@@ -262,9 +275,17 @@ const config = {
   // Tenant isolation. Both default to their safe-for-a-live-app setting; see the env comments for
   // the staged adoption path from `warn` to `throw` to RLS.
   isolation: {
-    scopeGuard: env.DB_SCOPE_GUARD ?? "warn",
+    // `warn` in dev keeps local iteration unblocked; production defaults to `throw` now that the
+    // five unscoped queries it caught (models/files.ts, models/spreadsheets.ts) are fixed. The env
+    // var still overrides either way for a fast rollback.
+    scopeGuard: env.DB_SCOPE_GUARD ?? (process.env.NODE_ENV === "production" ? "throw" : "warn"),
     rlsEnabled: env.DB_RLS_ENABLED === "true",
   },
+  security: { cspEnforce: env.CSP_ENFORCE === "true" },
+  // `enabled` gates the whole inbound-email surface, the same "off unless a real secret is set"
+  // shape as embeddings/integrations elsewhere in this file. Off by default in every environment,
+  // including production, until DNS/a provider is actually provisioned for it.
+  inboundEmail: { enabled: Boolean(env.EMAIL_INBOUND_SECRET), secret: env.EMAIL_INBOUND_SECRET || "", domain: env.EMAIL_INBOUND_DOMAIN },
   // Agnostic dictation (lib/dictation). Off by default and fail-safe by design: with it off, or on
   // any router/extraction failure, a dictation with no pre-selected template still gets the general
   // handler's default format — never a forced route, never a blocked recording.

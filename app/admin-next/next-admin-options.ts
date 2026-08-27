@@ -55,7 +55,7 @@ export const options: NextAdminOptions = {
       // No "delete": a cascade here orphans every stored document. See the header.
       permissions: ["edit"],
       list: {
-        display: ["id", "name", "kind", "aiEnabled", "hipaaMode", "createdAt"],
+        display: ["id", "name", "kind", "productMode", "aiEnabled", "hipaaMode", "asrExternalAllowed", "createdAt"],
         search: ["name"],
         defaultSort: { field: "createdAt", direction: "desc" },
       },
@@ -63,6 +63,11 @@ export const options: NextAdminOptions = {
       // every file's linkAccess back to "none" in the same transaction as the flag flip — a raw
       // field edit here would turn the flag on while leaving existing share links live, which is
       // exactly the invariant this header warns about.
+      //
+      // productMode is absent for the same reason setProductMode exists at all: it is locked once
+      // a workspace has content and coupled to hipaaMode, neither of which a raw field edit knows
+      // about. asrExternalAllowed is absent because confirming it must write an AdminAuditEvent —
+      // see app/admin-next/baa, which is where it is actually set.
       edit: { display: ["name", "kind", "aiEnabled"] },
     },
     WorkspaceSubscription: {
@@ -96,6 +101,26 @@ export const options: NextAdminOptions = {
       permissions: [],
       list: {
         display: ["id", "stripeEventId", "type", "status", "attempts", "errorCode", "createdAt"],
+        defaultSort: { field: "createdAt", direction: "desc" },
+      },
+    },
+    ProductEvent: {
+      title: "Analytics events",
+      icon: "ChartPieIcon",
+      // Read-only, like the other event-log tables — see the rollup page at /admin-next/analytics
+      // for the aggregate view this exists to feed; this is for spot-checking raw rows.
+      permissions: [],
+      list: {
+        display: ["id", "name", "workspaceId", "actorId", "createdAt"],
+        defaultSort: { field: "createdAt", direction: "desc" },
+      },
+    },
+    DocumentCheckResult: {
+      title: "Deterministic checks",
+      icon: "CheckCircleIcon",
+      permissions: [],
+      list: {
+        display: ["id", "documentId", "checkCode", "status", "createdAt"],
         defaultSort: { field: "createdAt", direction: "desc" },
       },
     },
