@@ -21,7 +21,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const workspaceHref = user ? (workspace ? `/workspaces/${workspace.id}/files` : "/workspaces") : undefined
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-stone-900">
+    <div className="flex min-h-screen flex-col bg-cream-50 text-stone-900">
       <MarketingNav workspaceHref={workspaceHref} />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

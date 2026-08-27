@@ -1,34 +1,22 @@
+import { Reveal } from "@/components/marketing/reveal"
 import { Link2, Share2 } from "lucide-react"
 
 const levels = [
   { label: "View", note: "read only", selected: false },
-  { label: "Interact", note: "live grid, edits never saved", selected: true },
+  { label: "Can interact", note: "live grid, edits never saved", selected: true },
   { label: "Edit", note: "full access", selected: false },
   { label: "Off", note: "", selected: false },
 ]
 
-/** The sharing story, kept compact: the differentiator is the "interact" level — a live sandbox
- * grid the recipient can total and formula over where nothing is ever saved, and where =AI() is
- * switched off so a visitor can't spend the owner's credits. Split-section mirrors provenance.tsx;
- * the mock is the actual share dialog's four levels. */
+/** The sharing story, kept compact: the differentiator is the "can interact" level — a live
+ * sandbox grid the recipient can total and formula over where nothing is ever saved, and where
+ * =AI() is switched off so a visitor can't spend the owner's credits. Mirrors provenance.tsx but
+ * reversed — mock on the left, tinted emerald-50, so the two sections don't read identically. */
 export function Sharing() {
   return (
-    <section className="border-t border-stone-200 bg-white">
-      <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.05fr_0.95fr]">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Sharing</p>
-          <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-            Send the sheet, not a screenshot of it.
-          </h2>
-          <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-            A file shares by public link or per email address, and the person on the other end doesn&apos;t need an account. Three levels: view it, interact with it, or edit it — and &ldquo;interact&rdquo; is the interesting one: a live grid they can total, formula over and poke at, where nothing they do is ever saved. A sandbox, not a liability.
-          </p>
-          <p className="mt-5 max-w-lg text-sm leading-6 text-stone-500">
-            <span className="font-mono">=AI()</span> is switched off on shared links. Visitors explore your data; they don&apos;t spend your credits.
-          </p>
-        </div>
-
-        <div className="overflow-hidden rounded-[1.4rem] rounded-tr-md border border-stone-200 bg-white shadow-[0_40px_80px_-50px_rgba(41,37,36,.5)]">
+    <section className="border-t border-cream-200 bg-white">
+      <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[0.95fr_1.05fr]">
+        <Reveal delay={0.15} className="-rotate-1 overflow-hidden rounded-[1.4rem] rounded-tr-md border border-cream-200 bg-white shadow-[0_40px_80px_-50px_rgba(41,37,36,.5)] lg:order-1">
           <div className="flex items-center gap-2 border-b border-stone-100 px-3.5 py-2.5">
             <Share2 className="h-3.5 w-3.5 text-stone-400" />
             <span className="text-sm font-semibold text-stone-800">Share · Q1 utilities</span>
@@ -51,7 +39,20 @@ export function Sharing() {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
+
+        <Reveal className="lg:order-2">
+          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Sharing</p>
+          <h2 className="mt-3 font-display text-4xl font-bold leading-[1.05] tracking-[-0.035em] text-stone-950 sm:text-5xl">
+            Send the sheet, <span className="text-emerald-600">not a screenshot of it.</span>
+          </h2>
+          <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
+            A file shares by public link or per email address, and the person on the other end doesn&apos;t need an account. Three levels: view it, interact with it, or edit it — and &ldquo;can interact&rdquo; is the interesting one: a live grid they can total, formula over and poke at, where nothing they do is ever saved. A sandbox, not a liability.
+          </p>
+          <p className="mt-5 max-w-lg text-sm leading-6 text-stone-500">
+            <span className="font-mono">=AI()</span> is switched off on shared links. Visitors explore your data; they don&apos;t spend your credits.
+          </p>
+        </Reveal>
       </div>
     </section>
   )

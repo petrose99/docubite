@@ -4,10 +4,13 @@ import Link from "next/link"
 
 export function Faq() {
   return (
-    <section className="border-t border-stone-200 bg-white">
+    <section className="border-t border-cream-200 bg-cream-50">
+      <div className="perforation text-cream-200" aria-hidden />
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 lg:grid-cols-[0.75fr_1.25fr]">
         <div>
-          <h2 className="font-display text-3xl font-bold tracking-[-0.03em] text-stone-950 sm:text-4xl">Questions people ask first</h2>
+          <h2 className="font-display text-4xl font-bold leading-[1.05] tracking-[-0.035em] text-stone-950 sm:text-5xl">
+            Questions people <span className="text-emerald-600">ask first</span>
+          </h2>
           <p className="mt-4 leading-7 text-stone-600">
             Anything else, <Link href="/demo" className="font-medium text-emerald-800 underline underline-offset-4">book a demo</Link> and ask it live.
           </p>

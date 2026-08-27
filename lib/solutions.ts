@@ -1,4 +1,4 @@
-import { FileText, Landmark, PenLine, Receipt, ScanLine, type LucideIcon } from "lucide-react"
+import { FileText, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, type LucideIcon } from "lucide-react"
 
 /** The Solutions mega-menu and the /solutions/[slug] pages read from this one list, so a new
  * solution is a single entry here rather than a page plus a nav edit that can drift apart.
@@ -104,6 +104,19 @@ export const SOLUTIONS: Solution[] = [
       { title: "Long documents are batched, not truncated", text: "Multi-page scans are processed in batches so a forty-page bundle comes back whole rather than stopping at whatever fitted in one request." },
     ],
   },
+]
+
+/** The homepage's Product mega-menu, and the footer's Product column. Anchors into homepage
+ * sections rather than dedicated pages — every target already exists and carries an id. */
+export type ProductLink = { href: string; name: string; tagline: string; icon: LucideIcon }
+
+export const PRODUCT_LINKS: ProductLink[] = [
+  { href: "/#extraction", name: "Document extraction", tagline: "Invoices, receipts and scans into a live sheet", icon: FileText },
+  { href: "/#dictation", name: "Dictation", tagline: "Speak a document into existence, nothing invented", icon: Mic },
+  { href: "/#how", name: "AI in the sheet", tagline: "=AI() runs on your data, without leaving the cell", icon: Sheet },
+  { href: "/#folders", name: "Folder reports", tagline: "Duplicates, gaps and what needs attention", icon: FileText },
+  { href: "/#integrations", name: "Integrations & API", tagline: "QuickBooks, Xero, and a webhook-backed REST API", icon: Plug },
+  { href: "/#security", name: "Security & compliance", tagline: "HIPAA mode, audit trail, malware scanning", icon: ShieldCheck },
 ]
 
 export const getSolution = (slug: string) => SOLUTIONS.find((solution) => solution.slug === slug)

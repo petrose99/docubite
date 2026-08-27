@@ -1,5 +1,5 @@
 import { DocTypeGrid, type DocCard } from "@/components/marketing/sections/doc-type-grid"
-import { Check, Clock, FlaskConical, Landmark, Truck, type LucideIcon } from "lucide-react"
+import { ArrowRight, Check, Clock, FlaskConical, Landmark, Truck, type LucideIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
@@ -91,14 +91,16 @@ const industries: Industry[] = [
 
 export default function SolutionsPage() {
   return <>
-    <section className="mx-auto max-w-6xl px-5 pt-16 pb-2 lg:pt-20">
-      <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
-      <h1 className="mt-3.5 max-w-3xl font-display text-4xl font-bold leading-[1.04] tracking-[-0.04em] text-stone-950 sm:text-5xl">
-        Point DocuBite at whatever your team keys in by hand.
-      </h1>
-      <p className="mt-4 max-w-xl text-lg leading-8 text-stone-600">
-        Pick the document, or the mess it arrived in — then see the before/after for your industry. The parser is general and the templates are yours.
-      </p>
+    <section className="bg-cream-50">
+      <div className="mx-auto max-w-6xl px-5 pt-16 pb-2 lg:pt-20">
+        <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Solutions</p>
+        <h1 className="mt-3.5 max-w-3xl font-display text-5xl font-bold leading-[0.98] tracking-[-0.045em] text-stone-950 sm:text-6xl">
+          Point DocuBite at whatever <span className="text-emerald-600">your team keys in by hand.</span>
+        </h1>
+        <p className="mt-4 max-w-xl text-lg leading-8 text-stone-600">
+          Pick the document, or the mess it arrived in — then see the before/after for your industry. The parser is general and the templates are yours.
+        </p>
+      </div>
     </section>
 
     <section id="by-type" className="mx-auto max-w-6xl px-5 pt-11">
@@ -174,7 +176,7 @@ export default function SolutionsPage() {
             Book a demo and bring a sample — we&apos;ll build the template with you, live.
           </p>
           <div className="relative mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/demo" className="inline-flex h-[50px] items-center justify-center rounded-xl bg-white px-6 text-[15px] font-semibold text-emerald-800">Book a demo</Link>
+            <Link href="/demo" className="group inline-flex h-12 items-center justify-center gap-1.5 rounded-full bg-white px-7 text-[15px] font-semibold text-emerald-950">Book a demo<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></Link>
           </div>
         </div>
       </div>

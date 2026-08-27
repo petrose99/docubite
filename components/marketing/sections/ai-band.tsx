@@ -1,4 +1,7 @@
+import { Reveal } from "@/components/marketing/reveal"
 import { MessageCircle, PencilRuler, Sparkles, Table2 } from "lucide-react"
+
+const ROTATIONS = ["sm:-rotate-1", "sm:rotate-1", "sm:-rotate-1"]
 
 /** The dark "ink" band that carries the two distinct AI surfaces — the assistant and =AI()
  * formulas — since conflating them in one paragraph elsewhere made it unclear DocuBite has
@@ -8,39 +11,47 @@ export function AiBand() {
     <section id="how" className="bg-emerald-950 text-white">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[0.95fr_1.05fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-400">AI in the sheet</p>
-          <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] sm:text-4xl">
-            Three ways to put AI to work — without leaving the cell.
-          </h2>
+          <Reveal>
+            <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-400">AI in the sheet</p>
+            <h2 className="mt-3 font-display text-4xl font-bold leading-[1.05] tracking-[-0.035em] sm:text-5xl">
+              Three ways to put AI to work — <span className="text-amber-300">without leaving the cell.</span>
+            </h2>
+          </Reveal>
 
           <div className="mt-8 space-y-6">
-            <div className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><MessageCircle className="h-5 w-5" /></span>
-              <div>
-                <h3 className="font-display text-lg font-bold text-white">The assistant, for &ldquo;do it for me&rdquo;</h3>
-                <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  &ldquo;Total each numeric column.&rdquo; &ldquo;Which rows are missing a VAT number?&rdquo; &ldquo;Add a column for line total.&rdquo; It reads, it writes, and it hands back a summary where every reference is clickable — with an Undo / Accept bar before anything sticks.
-                </p>
+            <Reveal delay={0.05} className={ROTATIONS[0]}>
+              <div className="flex gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><MessageCircle className="h-5 w-5" /></span>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-white">The assistant, for &ldquo;do it for me&rdquo;</h3>
+                  <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
+                    &ldquo;Total each numeric column.&rdquo; &ldquo;Which rows are missing a VAT number?&rdquo; &ldquo;Add a column for line total.&rdquo; It reads, it writes, and it hands back a summary where every reference is clickable — with an Undo / Accept bar before anything sticks.
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><Table2 className="h-5 w-5" /></span>
-              <div>
-                <h3 className="font-display text-lg font-bold text-white"><span className="font-mono">=AI()</span> formulas, for &ldquo;what&apos;s the formula?&rdquo;</h3>
-                <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  Type <span className="font-mono text-emerald-300">=AI(&quot;classify this supplier&quot;, B2)</span> like any other function and it fills down the column. Answers are cached, so recalculating on every reload costs nothing.
-                </p>
+            </Reveal>
+            <Reveal delay={0.1} className={ROTATIONS[1]}>
+              <div className="flex gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><Table2 className="h-5 w-5" /></span>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-white"><span className="font-mono">=AI()</span> formulas, for &ldquo;what&apos;s the formula?&rdquo;</h3>
+                  <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
+                    Type <span className="font-mono text-emerald-300">=AI(&quot;classify this supplier&quot;, B2)</span> like any other function and it fills down the column. Answers are cached, so recalculating on every reload costs nothing.
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><PencilRuler className="h-5 w-5" /></span>
-              <div>
-                <h3 className="font-display text-lg font-bold text-white">The formula builder, for &ldquo;write it for me&rdquo;</h3>
-                <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
-                  Describe the calculation in English — &ldquo;net plus tax, minus the deposit&rdquo; — and get back the formula with a one-sentence explanation of what it does. Nothing lands in the sheet until you hit Insert.
-                </p>
+            </Reveal>
+            <Reveal delay={0.15} className={ROTATIONS[2]}>
+              <div className="flex gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-400/15 text-emerald-300"><PencilRuler className="h-5 w-5" /></span>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-white">The formula builder, for &ldquo;write it for me&rdquo;</h3>
+                  <p className="mt-1.5 text-[0.95rem] leading-6 text-emerald-100/75">
+                    Describe the calculation in English — &ldquo;net plus tax, minus the deposit&rdquo; — and get back the formula with a one-sentence explanation of what it does. Nothing lands in the sheet until you hit Insert.
+                  </p>
+                </div>
               </div>
-            </div>
+            </Reveal>
           </div>
         </div>
 

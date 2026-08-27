@@ -5,7 +5,7 @@ import { ExtractionCore } from "@/components/marketing/sections/extraction-core"
 import { Faq } from "@/components/marketing/sections/faq"
 import { FolderReport } from "@/components/marketing/sections/folder-report"
 import { Hero } from "@/components/marketing/sections/hero"
-import { DemoCta } from "@/components/marketing/sections/pricing"
+import { IntegrationsApi } from "@/components/marketing/sections/integrations-api"
 import { Provenance } from "@/components/marketing/sections/provenance"
 import { RepeatingDocs } from "@/components/marketing/sections/repeating-docs"
 import { Repositioning } from "@/components/marketing/sections/repositioning"
@@ -34,9 +34,9 @@ export default function Home() {
     <Workflow />
     <Provenance />
     <Sharing />
+    <IntegrationsApi />
     <SolutionsTeaser />
     <Security />
-    <DemoCta />
     <Faq />
     <CtaBand />
   </>

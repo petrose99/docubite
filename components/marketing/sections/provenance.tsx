@@ -1,10 +1,11 @@
+import { Reveal } from "@/components/marketing/reveal"
 import { Check, FileText } from "lucide-react"
 
 const points = [
   "Low-confidence values tinted amber in the sheet; missing required fields red",
   "Reviewed data kept separate from the raw extraction — corrections never overwrite the evidence",
   "A full audit trail per document: received, extracted, reviewed, edited — who and when",
-  "Line-item tables come out as rows, not a blob",
+  "Search every folder by content — hybrid semantic and keyword search, with natural-language filters",
 ]
 
 /** The trust-building close before pricing: a sheet of numbers with no working shown is a claim
@@ -12,15 +13,15 @@ const points = [
  * staying a bullet inside the triptych above. */
 export function Provenance() {
   return (
-    <section className="border-t border-stone-200 bg-stone-50">
+    <section className="border-t border-cream-200 bg-cream-100">
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.05fr_0.95fr]">
-        <div>
+        <Reveal>
           <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Persistent provenance</p>
-          <h2 className="mt-3 font-display text-3xl font-bold leading-[1.1] tracking-[-0.03em] text-stone-950 sm:text-4xl">
-            A sheet of extracted numbers is a claim about a source nobody is looking at.
+          <h2 className="mt-3 font-display text-4xl font-bold leading-[1.05] tracking-[-0.035em] text-stone-950 sm:text-5xl">
+            A sheet of numbers is a claim <span className="text-emerald-600">nobody is checking.</span>
           </h2>
           <p className="mt-5 max-w-lg text-lg leading-7 text-stone-600">
-            So DocuBite keeps the thread. Click any cell and the original document opens to the exact line the value came from — the page, the box on the scan, highlighted. Hand-edit a value and its stale source pin drops, because a highlight over the old figure would be worse than none. And when the pages of a document disagree with each other, DocuBite says so, page by page, instead of picking one quietly.
+            So DocuBite keeps the thread. Click any cell and the original document opens to the exact line the value came from — the page, the box on the scan, highlighted. Hand-edit a value and its stale source pin drops, because a highlight over the old figure would be worse than none.
           </p>
           <ul className="mt-6 space-y-3">
             {points.map((point) => (
@@ -29,9 +30,9 @@ export function Provenance() {
               </li>
             ))}
           </ul>
-        </div>
+        </Reveal>
 
-        <div className="overflow-hidden rounded-[1.4rem] rounded-tr-md border border-stone-200 bg-white shadow-[0_40px_80px_-50px_rgba(41,37,36,.5)]">
+        <Reveal delay={0.15} className="rotate-1 overflow-hidden rounded-[1.4rem] rounded-tr-md border border-cream-200 bg-white shadow-[0_40px_80px_-50px_rgba(41,37,36,.5)]">
           <div className="flex items-center gap-2 border-b border-stone-100 px-3.5 py-2.5">
             <FileText className="h-3.5 w-3.5 text-stone-400" />
             <span className="text-sm font-semibold text-stone-800">invoice-0481.pdf</span>
@@ -57,7 +58,7 @@ export function Provenance() {
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   )

@@ -3,6 +3,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 @config "../tailwind.config.ts";
 
+/* Warm paper cream for the marketing site only — the app shell keeps its stone/white tokens. */
+@theme {
+  --color-cream-50: #FBF7F0;
+  --color-cream-100: #F5EEE1;
+  --color-cream-200: #EDE3D0;
+}
+
 /* The palette is emerald on a warm stone neutral ramp — the colours the app shell already uses
  * for its brand mark, active nav item and links. The stock shadcn tokens these replaced were a
  * near-black primary (240 5.9% 10%) on cool blue-grey neutrals, so every Button rendered flat
@@ -137,6 +144,53 @@
   14% { opacity: 1; transform: none; }
   94% { opacity: 1; transform: none; }
   100% { opacity: 0; transform: none; }
+}
+
+/* Scroll-reveal used by components/marketing/reveal.tsx. Gated behind `scripting: enabled` so
+ * content never hides for a no-JS visitor, and behind `prefers-reduced-motion: no-preference` so
+ * it never hides for someone who asked not to see motion — either way the fallback is simply
+ * "always visible", never "stuck invisible". */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+.reveal.is-inview {
+  opacity: 1;
+  transform: none;
+  transition: opacity .7s ease, transform .7s cubic-bezier(.22,1,.36,1);
+  transition-delay: var(--reveal-delay, 0s);
+}
+
+/* Marquee track for components/marketing/marquee.tsx — children are rendered twice back-to-back
+ * and this shifts the whole track by exactly half its width, so the loop point is invisible. */
+@keyframes docubite-marquee {
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: docubite-marquee 40s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* Gentle float for the hero's decorative UI chips. */
+@keyframes docubite-float {
+  50% { transform: translateY(-6px); }
+}
+.docubite-float {
+  animation: docubite-float 7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docubite-float {
+    animation: none;
+  }
 }
 
 @layer base {
