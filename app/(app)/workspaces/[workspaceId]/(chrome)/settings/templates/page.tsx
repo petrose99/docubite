@@ -21,7 +21,7 @@ export default async function TemplatesPage({ params }: { params: Promise<{ work
     prisma.documentTemplate.findMany({ where: { workspaceId }, include: { versions: { orderBy: { version: "desc" }, take: 1 } }, orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
   ])
   const byFile = new Map(files.map((file) => [file.id, templates.filter((template) => template.fileId === file.id)]))
-  const dictationEnabled = config.asr.enabled && membership.workspace.productMode === "clinical"
+  const dictationEnabled = config.asr.enabled && membership.workspace.industry === "healthcare"
   const domainPacks = extractionDomainPacks()
 
   return <main className="space-y-6">

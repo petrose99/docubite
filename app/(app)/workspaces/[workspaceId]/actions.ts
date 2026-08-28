@@ -15,8 +15,8 @@ import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
 import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
 import { addDomainPackToFile, canEdit, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileAccess, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
-import { consumeWorkspaceQuota, setProductMode } from "@/models/workspaces"
-import { parseProductMode } from "@/types/product-mode"
+import { consumeWorkspaceQuota, setIndustry } from "@/models/workspaces"
+import { parseIndustry } from "@/types/industry"
 import { getCurrentUser, getViewerUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
@@ -347,16 +347,16 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id, ["owner"])
   if (!membership) return { success: false, error: NO_ACCESS }
-  // hipaaMode presumes ePHI, which is clinical-mode territory — see setProductMode. An empty
-  // workspace turning it on for the first time is auto-switched into clinical mode rather than
-  // refused; one that already has accounting-mode content is refused rather than silently
+  // hipaaMode presumes ePHI, which is healthcare-industry territory — see setIndustry. An empty
+  // workspace turning it on for the first time is auto-switched into healthcare rather than
+  // refused; one that already has content in another industry is refused rather than silently
   // reclassifying it.
-  if (enabled && membership.workspace.productMode !== "clinical") {
+  if (enabled && membership.workspace.industry !== "healthcare") {
     try {
-      await setProductMode({ workspaceId, actorId: user.id, mode: "clinical" })
+      await setIndustry({ workspaceId, actorId: user.id, mode: "healthcare" })
     } catch (error) {
       if (error instanceof Error && error.message === "product_mode_locked") {
-        return { success: false, error: "Switch this workspace to clinical mode in Workspace settings before enabling HIPAA mode — it already has files in accounting mode." }
+        return { success: false, error: "Switch this workspace to healthcare industry in Workspace settings before enabling HIPAA mode — it already has files in another industry." }
       }
       return { success: false, error: "Could not change the HIPAA mode setting" }
     }
@@ -374,22 +374,22 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
 }
 
 /** The counterpart picker in Workspace settings: manual switches only, since hipaaMode's own
- * toggle already drives the auto-switch into clinical above. Locked once the workspace has any
- * content — see setProductMode. */
-export async function setWorkspaceProductModeAction(workspaceId: string, mode: string): Promise<ActionState<null>> {
+ * toggle already drives the auto-switch into healthcare above. Locked once the workspace has any
+ * content — see setIndustry. */
+export async function setWorkspaceIndustryAction(workspaceId: string, mode: string): Promise<ActionState<null>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
-  const parsed = parseProductMode(mode)
-  if (!parsed) return { success: false, error: "Invalid product mode" }
+  const parsed = parseIndustry(mode)
+  if (!parsed) return { success: false, error: "Invalid industry" }
   try {
-    await setProductMode({ workspaceId, actorId: user.id, mode: parsed })
+    await setIndustry({ workspaceId, actorId: user.id, mode: parsed })
     revalidatePath(paths(workspaceId).workspace)
     return { success: true, data: null }
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_error"
-    if (message === "product_mode_locked") return { success: false, error: "This workspace already has files — product mode can no longer be changed." }
-    if (message === "hipaa_mode_requires_clinical") return { success: false, error: "Turn off HIPAA mode in this settings page before switching to accounting mode." }
-    return { success: false, error: "Could not change the product mode" }
+    if (message === "product_mode_locked") return { success: false, error: "This workspace already has files — industry can no longer be changed." }
+    if (message === "hipaa_mode_requires_clinical") return { success: false, error: "Turn off HIPAA mode in this settings page before switching industry." }
+    return { success: false, error: "Could not change the industry" }
   }
 }
 

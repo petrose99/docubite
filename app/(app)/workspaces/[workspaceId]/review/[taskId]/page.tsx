@@ -17,7 +17,7 @@ export default async function ReviewTaskDetailPage({ params }: { params: Promise
   const { workspaceId, taskId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.productMode !== "accounting") notFound()
+  if (membership.workspace.industry !== "finance") notFound()
 
   const task = await getReviewTask(workspaceId, taskId)
   if (!task) notFound()

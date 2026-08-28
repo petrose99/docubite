@@ -15,7 +15,7 @@ const STATUS_TABS: { value: ReviewTaskStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
 ]
 
-/** The accounting review queue (WP10) — accounting-mode only, matching the sidebar entry that
+/** The accounting review queue (WP10) — finance-industry only, matching the sidebar entry that
  * links here. Table + bulk actions first, per the roadmap; a detail page per task follows this
  * one. Nothing populates this automatically yet — WP11 (rules) and WP12 (checks) are what will —
  * so today every row here was created manually. */
@@ -27,7 +27,7 @@ export default async function ReviewQueuePage({ params, searchParams }: {
   const { status: statusParam } = await searchParams
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.productMode !== "accounting") notFound()
+  if (membership.workspace.industry !== "finance") notFound()
 
   const status = statusParam && statusParam !== "all" ? parseReviewTaskStatus(statusParam) ?? undefined : undefined
   const tasks = await listReviewTasks(workspaceId, status ? { status } : {})

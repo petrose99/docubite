@@ -8,12 +8,12 @@ import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
 
 /** Review-queue actions, kept out of actions.ts for the same reason dictation-actions.ts is: a
  * smaller "use server" surface is easier to audit for what it lets a caller do. Every action here
- * is accounting-mode only — a clinical workspace has no review queue (WP2's sidebar already
+ * is finance-industry only — a non-finance workspace has no review queue (WP2's sidebar already
  * omits the entry; this is the same gate on the server side, since a URL can be guessed). */
 async function requireAccountingMember(workspaceId: string, userId: string) {
   const membership = await requireMember(workspaceId, userId)
   if (!membership) return null
-  if (membership.workspace.productMode !== "accounting") return null
+  if (membership.workspace.industry !== "finance") return null
   return membership
 }
 

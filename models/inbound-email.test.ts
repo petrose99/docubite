@@ -23,19 +23,19 @@ beforeEach(() => {
 
 describe("ensureInboundEmailToken", () => {
   it("refuses a clinical workspace outright", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: null, productMode: "clinical" }) }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: null, industry: "healthcare" }) }
     await expect(ensureInboundEmailToken("w1")).rejects.toThrow("inbound_email_disabled_for_clinical")
   })
 
   it("returns the existing token without generating a new one", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: "existing-token", productMode: "accounting" }), update: vi.fn() }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: "existing-token", industry: "finance" }), update: vi.fn() }
     const token = await ensureInboundEmailToken("w1")
     expect(token).toBe("existing-token")
     expect(db.workspace.update).not.toHaveBeenCalled()
   })
 
   it("generates and persists a token when none exists", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: null, productMode: "accounting" }), update: vi.fn() }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ inboundEmailToken: null, industry: "finance" }), update: vi.fn() }
     const token = await ensureInboundEmailToken("w1")
     expect(token).toEqual(expect.any(String))
     expect(token.length).toBeGreaterThan(10)

@@ -64,11 +64,12 @@ model Workspace {
    * their files live by default. "team" — a shared workspace, creatable only on a plan whose
    * member limit is above one. */
   kind            String                 @default("personal")
-  /// "accounting" | "clinical" (types/product-mode.ts). Which of the app's two positionings this
-  /// workspace is: what gets seeded into a new file, which nav entries show, and which AI prompt
-  /// preamble is used. Locked once the workspace has any content — see setProductMode in
-  /// models/workspaces.ts — so switching never leaves content seeded for the wrong mode behind.
-  productMode     String                 @default("accounting") @map("product_mode")
+  /// "finance" | "healthcare" | "construction" | "logistics" | "general" (types/industry.ts).
+  /// Which industry this workspace is: what gets seeded into a new file, which nav entries show
+  /// (via lib/modules), and which AI prompt preamble is used. Locked once the workspace has any
+  /// content — see setIndustry in models/workspaces.ts — so switching never leaves content seeded
+  /// for the wrong industry behind.
+  industry        String                 @default("general")
   aiEnabled       Boolean                @default(true) @map("ai_enabled")
   /// F15: when on, this workspace is presumed to handle ePHI. setLinkAccess refuses anything but
   /// "none", getFileAccess ignores an existing linkAccess for a signed-out viewer, and the share

@@ -60,21 +60,21 @@ describe("POST /api/inbound-email", () => {
   })
 
   it("refuses a clinical workspace even with a valid token", async () => {
-    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", productMode: "clinical" } as never)
+    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", industry: "healthcare" } as never)
     const response = await POST(request(postmarkFixture()))
     expect(response.status).toBe(403)
     expect(processInboundEmail).not.toHaveBeenCalled()
   })
 
   it("returns 403 when the model refuses the sender", async () => {
-    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", productMode: "accounting" } as never)
+    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", industry: "finance" } as never)
     vi.mocked(processInboundEmail).mockRejectedValue(new Error("sender_not_allowed"))
     const response = await POST(request(postmarkFixture()))
     expect(response.status).toBe(403)
   })
 
   it("processes a valid recorded-shape payload end to end", async () => {
-    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", productMode: "accounting" } as never)
+    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", industry: "finance" } as never)
     vi.mocked(processInboundEmail).mockResolvedValue({ accepted: 1, rejected: 0 })
 
     const response = await POST(request(postmarkFixture()))
@@ -88,7 +88,7 @@ describe("POST /api/inbound-email", () => {
   })
 
   it("extracts a bare (non-bracketed) To/From address the same way", async () => {
-    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", productMode: "accounting" } as never)
+    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", industry: "finance" } as never)
     vi.mocked(processInboundEmail).mockResolvedValue({ accepted: 0, rejected: 0 })
 
     await POST(request(postmarkFixture({ To: "abc123token@inbound.docubite.test", From: "owner@example.com" })))
@@ -98,7 +98,7 @@ describe("POST /api/inbound-email", () => {
   })
 
   it("drops an attachment missing a name, type, or content rather than crashing", async () => {
-    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", productMode: "accounting" } as never)
+    vi.mocked(resolveWorkspaceByInboundToken).mockResolvedValue({ id: "w1", industry: "finance" } as never)
     vi.mocked(processInboundEmail).mockResolvedValue({ accepted: 0, rejected: 0 })
 
     await POST(request(postmarkFixture({ Attachments: [{ Name: "invoice.pdf" }] })))

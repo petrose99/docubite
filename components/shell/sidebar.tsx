@@ -17,21 +17,21 @@ export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = fals
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
-  /** config.asr.enabled AND productMode === "clinical". Dictation gets a rail entry only where the
+  /** config.asr.enabled AND industry === "healthcare". Dictation gets a rail entry only where the
    * server can actually transcribe and the workspace is positioned for it — a front door onto a
-   * page that answers "not configured" (or belongs to the other mode) is worse than no door. */
+   * page that answers "not configured" (or belongs to another industry) is worse than no door. */
   dictationEnabled?: boolean
   /** The server's config.integrations.enabled. Same omit-if-unconfigured rule as dictation: no
    * Integrations entry unless the deployment has an encryption key to run webhooks/API keys. */
   integrationsEnabled?: boolean
-  /** productMode === "accounting". Tax settings are meaningless for a clinical workspace, which
+  /** industry === "finance". Tax settings are meaningless for a healthcare workspace, which
    * has no tax profile to set — see app/(app)/workspaces/[workspaceId]/(chrome)/settings/tax. */
   taxSettingsEnabled?: boolean
-  /** productMode === "accounting". The review queue (WP10) has nothing to show a clinical
+  /** industry === "finance". The review queue (WP10) has nothing to show a healthcare
    * workspace — nothing populates it there, and dictation has its own verify screen already. */
   reviewQueueEnabled?: boolean
-  /** productMode === "accounting". Supplier rules (WP11) only ever match finance-template
-   * fields (vendor/merchant/supplier) — no clinical template has an equivalent. */
+  /** industry === "finance". Supplier rules (WP11) only ever match finance-template
+   * fields (vendor/merchant/supplier) — no healthcare template has an equivalent. */
   rulesEnabled?: boolean
 }) {
   const pathname = usePathname()

@@ -41,11 +41,11 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
       user={{ name: user.name, email: user.email }}
-      dictationEnabled={config.asr.enabled && membership.workspace.productMode === "clinical"}
+      dictationEnabled={config.asr.enabled && membership.workspace.industry === "healthcare"}
       integrationsEnabled={config.integrations.enabled}
-      taxSettingsEnabled={membership.workspace.productMode === "accounting"}
-      reviewQueueEnabled={membership.workspace.productMode === "accounting"}
-      rulesEnabled={membership.workspace.productMode === "accounting"} />
+      taxSettingsEnabled={membership.workspace.industry === "finance"}
+      reviewQueueEnabled={membership.workspace.industry === "finance"}
+      rulesEnabled={membership.workspace.industry === "finance"} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

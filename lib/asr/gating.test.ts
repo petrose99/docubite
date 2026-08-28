@@ -10,23 +10,23 @@ beforeEach(() => { asrEnabled.value = true })
 describe("isAsrAllowed", () => {
   it("refuses everything when no ASR backend is configured", () => {
     asrEnabled.value = false
-    expect(isAsrAllowed({ productMode: "clinical", hipaaMode: true, asrExternalAllowed: false })).toBe(false)
-    expect(isAsrAllowed({ productMode: "accounting", hipaaMode: false, asrExternalAllowed: false })).toBe(false)
+    expect(isAsrAllowed({ industry: "healthcare", hipaaMode: true, asrExternalAllowed: false })).toBe(false)
+    expect(isAsrAllowed({ industry: "finance", hipaaMode: false, asrExternalAllowed: false })).toBe(false)
   })
 
-  it("allows a non-clinical workspace regardless of the BAA flag", () => {
-    expect(isAsrAllowed({ productMode: "accounting", hipaaMode: false, asrExternalAllowed: false })).toBe(true)
+  it("allows a non-healthcare workspace regardless of the BAA flag", () => {
+    expect(isAsrAllowed({ industry: "finance", hipaaMode: false, asrExternalAllowed: false })).toBe(true)
   })
 
-  it("allows a clinical workspace with hipaaMode off, regardless of the BAA flag", () => {
-    expect(isAsrAllowed({ productMode: "clinical", hipaaMode: false, asrExternalAllowed: false })).toBe(true)
+  it("allows a healthcare workspace with hipaaMode off, regardless of the BAA flag", () => {
+    expect(isAsrAllowed({ industry: "healthcare", hipaaMode: false, asrExternalAllowed: false })).toBe(true)
   })
 
-  it("refuses a clinical, hipaaMode workspace with no confirmed BAA", () => {
-    expect(isAsrAllowed({ productMode: "clinical", hipaaMode: true, asrExternalAllowed: false })).toBe(false)
+  it("refuses a healthcare, hipaaMode workspace with no confirmed BAA", () => {
+    expect(isAsrAllowed({ industry: "healthcare", hipaaMode: true, asrExternalAllowed: false })).toBe(false)
   })
 
-  it("allows a clinical, hipaaMode workspace once the BAA is confirmed", () => {
-    expect(isAsrAllowed({ productMode: "clinical", hipaaMode: true, asrExternalAllowed: true })).toBe(true)
+  it("allows a healthcare, hipaaMode workspace once the BAA is confirmed", () => {
+    expect(isAsrAllowed({ industry: "healthcare", hipaaMode: true, asrExternalAllowed: true })).toBe(true)
   })
 })

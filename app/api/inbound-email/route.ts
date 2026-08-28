@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
   // Disabled entirely for clinical workspaces, not merely unrouted — see the model's own comment
   // on why a clinical workspace never even has a token to send to. This check exists anyway in
   // case a workspace's mode changed after a token was issued.
-  if (workspace.productMode === "clinical") return Response.json({ error: "disabled_for_clinical" }, { status: 403 })
+  if (workspace.industry === "healthcare") return Response.json({ error: "disabled_for_clinical" }, { status: 403 })
 
   try {
     const result = await processInboundEmail({

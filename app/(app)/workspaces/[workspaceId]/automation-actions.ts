@@ -10,7 +10,7 @@ import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
 async function requireAccountingOwner(workspaceId: string, userId: string) {
   const membership = await requireMember(workspaceId, userId, ["owner"])
   if (!membership) return null
-  if (membership.workspace.productMode !== "accounting") return null
+  if (membership.workspace.industry !== "finance") return null
   return membership
 }
 

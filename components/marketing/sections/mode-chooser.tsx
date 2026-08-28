@@ -19,7 +19,7 @@ const modes = [
 ] as const
 
 /** The homepage's job is to sort a visitor into one of the two positionings this app actually
- * ships under (Workspace.productMode) before it says anything deep about either — a page trying
+ * ships under (Workspace.industry) before it says anything deep about either — a page trying
  * to pitch both an accounting firm and a clinician at once is the thing WP6 exists to fix. */
 export function ModeChooser() {
   return (

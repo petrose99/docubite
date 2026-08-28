@@ -36,7 +36,7 @@ export async function createDictationAction(workspaceId: string, formData: FormD
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   if (!config.asr.enabled) return { success: false, error: "Dictation is not configured on this deployment." }
-  if (membership.workspace.productMode !== "clinical") return { success: false, error: "Dictation is only available in a clinical-mode workspace." }
+  if (membership.workspace.industry !== "healthcare") return { success: false, error: "Dictation is only available in a healthcare workspace." }
   if (!isAsrAllowed(membership.workspace)) return { success: false, error: "Dictation is pending BAA coverage for this workspace's external ASR provider." }
 
   const audio = formData.get("audio")

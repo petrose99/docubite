@@ -7,12 +7,12 @@ import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
 
 /** Tax settings: which region this workspace files in, and the rate/registration facts that
- * follow from it. Accounting-mode only (WP2) — a clinical workspace has no tax profile to set. */
+ * follow from it. Finance-industry only (WP2) — a non-finance workspace has no tax profile to set. */
 export default async function TaxSettingsPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.productMode !== "accounting") notFound()
+  if (membership.workspace.industry !== "finance") notFound()
 
   const profile = await getTaxProfile(workspaceId)
   const owner = membership.role === "owner"

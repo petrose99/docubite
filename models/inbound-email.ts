@@ -10,18 +10,18 @@ import { getWorkspaceMembers } from "@/models/workspaces"
 import crypto from "crypto"
 
 /** Generates (or returns the existing) per-workspace inbound routing token. Refused outright for
- * a clinical workspace — unencrypted email is not an acceptable channel for ePHI, so there is
+ * a healthcare workspace — unencrypted email is not an acceptable channel for ePHI, so there is
  * deliberately no address for one to send to, not just a disabled-looking one. */
 export async function ensureInboundEmailToken(workspaceId: string): Promise<string> {
-  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { inboundEmailToken: true, productMode: true } })
-  if (workspace.productMode === "clinical") throw new Error("inbound_email_disabled_for_clinical")
+  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { inboundEmailToken: true, industry: true } })
+  if (workspace.industry === "healthcare") throw new Error("inbound_email_disabled_for_clinical")
   if (workspace.inboundEmailToken) return workspace.inboundEmailToken
   const token = crypto.randomBytes(16).toString("base64url")
   await prisma.workspace.update({ where: { id: workspaceId }, data: { inboundEmailToken: token } })
   return token
 }
 
-export const resolveWorkspaceByInboundToken = (token: string) => prisma.workspace.findUnique({ where: { inboundEmailToken: token }, select: { id: true, productMode: true } })
+export const resolveWorkspaceByInboundToken = (token: string) => prisma.workspace.findUnique({ where: { inboundEmailToken: token }, select: { id: true, industry: true } })
 
 /** Default allowlist: any address already a member of the workspace. There is no UI yet to widen
  * this to non-member senders (a bookkeeper's own inbox, say) — that is real future scope, not

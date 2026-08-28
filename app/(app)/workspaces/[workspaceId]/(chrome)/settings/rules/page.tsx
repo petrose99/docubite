@@ -16,7 +16,7 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.productMode !== "accounting") notFound()
+  if (membership.workspace.industry !== "finance") notFound()
 
   const rules = await listAutomationRules(workspaceId)
   const owner = membership.role === "owner"

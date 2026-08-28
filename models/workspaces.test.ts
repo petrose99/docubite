@@ -32,7 +32,7 @@ const {
   leaveWorkspace,
   removeWorkspaceMember,
   revokeWorkspaceInvitation,
-  setProductMode,
+  setIndustry,
   transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
 } = await import("@/models/workspaces")
@@ -319,37 +319,37 @@ describe("deleteWorkspace", () => {
   })
 })
 
-describe("setProductMode", () => {
+describe("setIndustry", () => {
   it("does nothing when the workspace is already in that mode", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ productMode: "accounting", hipaaMode: false }) }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ industry: "finance", hipaaMode: false }) }
     db.documentFile = { findFirst: vi.fn() }
 
-    await setProductMode({ workspaceId: "w1", actorId: "u1", mode: "accounting" })
+    await setIndustry({ workspaceId: "w1", actorId: "u1", mode: "finance" })
 
     expect(db.documentFile.findFirst).not.toHaveBeenCalled()
     expect(db.$transaction).not.toHaveBeenCalled()
   })
 
-  it("refuses to switch away from clinical while hipaaMode is on", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ productMode: "clinical", hipaaMode: true }) }
-    await expect(setProductMode({ workspaceId: "w1", actorId: "u1", mode: "accounting" })).rejects.toThrow("hipaa_mode_requires_clinical")
+  it("refuses to switch away from healthcare while hipaaMode is on", async () => {
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ industry: "healthcare", hipaaMode: true }) }
+    await expect(setIndustry({ workspaceId: "w1", actorId: "u1", mode: "finance" })).rejects.toThrow("hipaa_mode_requires_clinical")
   })
 
   it("refuses once the workspace has any files", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ productMode: "accounting", hipaaMode: false }) }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ industry: "finance", hipaaMode: false }) }
     db.documentFile = { findFirst: vi.fn().mockResolvedValue({ id: "f1" }) }
-    await expect(setProductMode({ workspaceId: "w1", actorId: "u1", mode: "clinical" })).rejects.toThrow("product_mode_locked")
+    await expect(setIndustry({ workspaceId: "w1", actorId: "u1", mode: "healthcare" })).rejects.toThrow("product_mode_locked")
     expect(db.$transaction).not.toHaveBeenCalled()
   })
 
   it("switches mode and writes an audit event for an empty workspace", async () => {
-    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ productMode: "accounting", hipaaMode: false }), update: vi.fn().mockReturnValue("update") }
+    db.workspace = { findUniqueOrThrow: vi.fn().mockResolvedValue({ industry: "finance", hipaaMode: false }), update: vi.fn().mockReturnValue("update") }
     db.documentFile = { findFirst: vi.fn().mockResolvedValue(null) }
     db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
 
-    await setProductMode({ workspaceId: "w1", actorId: "u1", mode: "clinical" })
+    await setIndustry({ workspaceId: "w1", actorId: "u1", mode: "healthcare" })
 
-    expect(db.workspace.update).toHaveBeenCalledWith({ where: { id: "w1" }, data: { productMode: "clinical" } })
+    expect(db.workspace.update).toHaveBeenCalledWith({ where: { id: "w1" }, data: { industry: "healthcare" } })
     expect(db.$transaction).toHaveBeenCalledWith(["update", "audit"])
   })
 })

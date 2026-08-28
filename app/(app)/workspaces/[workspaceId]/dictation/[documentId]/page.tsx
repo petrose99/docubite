@@ -26,7 +26,7 @@ export default async function DictationDetailPage({ params }: { params: Promise<
   const { workspaceId, documentId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
+  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
 
   const document = await prisma.document.findFirst({
     where: { id: documentId, workspaceId, source: "dictation" },

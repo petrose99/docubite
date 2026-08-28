@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
  * write an AdminAuditEvent, which next-admin's field editor cannot do (see next-admin-options.ts's
  * header) — this is the one thing about Workspace that needs its own page instead. Only hipaaMode
  * workspaces are listed: asrExternalAllowed is inert for any other workspace (lib/asr/gating.ts
- * only ever consults it once productMode is "clinical" and hipaaMode is on). */
+ * only ever consults it once industry is "healthcare" and hipaaMode is on). */
 export default async function BaaCoveragePage() {
   await requireAdminPage()
 

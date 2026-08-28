@@ -55,7 +55,7 @@ export const options: NextAdminOptions = {
       // No "delete": a cascade here orphans every stored document. See the header.
       permissions: ["edit"],
       list: {
-        display: ["id", "name", "kind", "productMode", "aiEnabled", "hipaaMode", "asrExternalAllowed", "createdAt"],
+        display: ["id", "name", "kind", "industry", "aiEnabled", "hipaaMode", "asrExternalAllowed", "createdAt"],
         search: ["name"],
         defaultSort: { field: "createdAt", direction: "desc" },
       },
@@ -64,7 +64,7 @@ export const options: NextAdminOptions = {
       // field edit here would turn the flag on while leaving existing share links live, which is
       // exactly the invariant this header warns about.
       //
-      // productMode is absent for the same reason setProductMode exists at all: it is locked once
+      // industry is absent for the same reason setIndustry exists at all: it is locked once
       // a workspace has content and coupled to hipaaMode, neither of which a raw field edit knows
       // about. asrExternalAllowed is absent because confirming it must write an AdminAuditEvent —
       // see app/admin-next/baa, which is where it is actually set.

@@ -17,7 +17,7 @@ export default async function ReportTemplatesPage({ params }: { params: Promise<
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
+  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
   await ensureWorkspaceReportTemplates(workspaceId)
   const templates = await listReportTemplates(workspaceId)
 

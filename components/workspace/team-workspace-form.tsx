@@ -3,25 +3,25 @@
 import { createWorkspaceAction } from "@/app/(app)/workspaces/[workspaceId]/workspace-actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { ProductMode } from "@/types/product-mode"
+import type { Industry } from "@/types/industry"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
-const MODES: { value: ProductMode; label: string; description: string }[] = [
-  { value: "accounting", label: "Accounting", description: "Invoices, receipts, and bank statements." },
-  { value: "clinical", label: "Clinical", description: "Dictation-first reporting. Required for HIPAA mode." },
+const MODES: { value: Industry; label: string; description: string }[] = [
+  { value: "finance", label: "Finance", description: "Invoices, receipts, and bank statements." },
+  { value: "healthcare", label: "Healthcare", description: "Dictation-first reporting. Required for HIPAA mode." },
 ]
 
 /** Mode has to be chosen here, at creation — not something you set on an empty workspace
  * afterward. A workspace gets its first file the instant it's created (createWorkspaceForUser),
- * so by the time this form's redirect lands anywhere, setProductMode's "locked once it has
+ * so by the time this form's redirect lands anywhere, setIndustry's "locked once it has
  * content" rule has already engaged. There is no follow-up screen for this. */
 export function TeamWorkspaceForm() {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<ProductMode>("accounting")
+  const [mode, setMode] = useState<Industry>("finance")
 
   return <form className="flex flex-col gap-3" action={(formData) => startTransition(async () => {
     const result = await createWorkspaceAction(String(formData.get("name") || ""), mode)

@@ -22,9 +22,9 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  // 404 rather than a disabled screen: with no ASR backend, or in an accounting-mode workspace,
+  // 404 rather than a disabled screen: with no ASR backend, or in a non-healthcare workspace,
   // there is nothing here to show, and the rail does not link to it either.
-  if (!config.asr.enabled || membership.workspace.productMode !== "clinical") notFound()
+  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
 
   // A confirmed BAA is what makes sending audio to the external ASR backend lawful for a
   // hipaaMode workspace (lib/asr/gating.ts) — a fact an admin has to confirm, not something the
