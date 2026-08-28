@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import { findSupplierDocuments, getDocumentDetails, getInboxSummary, getSupplierRules } from "@/lib/finance/inbox"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { personaAddendumForIndustry } from "@/lib/modules/personas"
 import { findMatchingDocuments, searchDocumentChunks } from "@/lib/retrieval"
@@ -160,14 +161,18 @@ export async function POST(request: Request) {
 
   const google = createGoogleGenerativeAI({ apiKey: config.ai.geminiApiKey })
 
+  // Only on the sheet — the dictation assistant's whole point is to retrieve and quote, never to
+  // propose an action, so finance tools/persona (action-oriented) have no business there.
+  const capabilities = onSheet ? await getWorkspaceCapabilities(workspaceId) : null
+  const financeAgentEnabled = capabilities?.has("finance-agent") ?? false
+
   // The document-search tool is added, with a server `execute`, only when embeddings are
   // configured — the single feature gate. Its result flows back through the stream; the browser's
   // onToolCall is guarded to ignore it (see components/assistant/assistant-panel.tsx). No extra
   // quota: this turn already consumed one AI unit above.
   const gridTools = onSheet ? sheetTools : {}
-  const tools = config.embeddings.enabled
+  const searchTools = config.embeddings.enabled
     ? {
-        ...gridTools,
         search_documents: tool({
           description: "Search the user's uploaded documents (invoices, receipts, bank statements) for text relevant to a question, and get back matching snippets with their filename and page. Use this for questions about what a document says, rather than about the spreadsheet grid.",
           inputSchema: z.object({ query: z.string().min(2).describe("What to look for, in a few words or a short phrase") }),
@@ -202,14 +207,55 @@ export async function POST(request: Request) {
           },
         }),
       }
-    : gridTools
+    : {}
+
+  // Finance agent read tools (Part 5c) — plain data lookups with no side effect, so unlike the
+  // plan's "Act tools" (approve, code, push) these run straight through, no pending-changes
+  // confirmation needed. Gated on the finance-agent module, same as the persona addendum below.
+  const financeTools = financeAgentEnabled
+    ? {
+        get_inbox_summary: tool({
+          description: "Get counts of review-queue tasks by status, how many documents currently have a failing check, and how many have no supplier rule applied. Use this for 'what needs attention' or 'give me a summary' questions.",
+          inputSchema: z.object({}),
+          execute: async () => {
+            try { return await getInboxSummary(workspaceId) } catch { return { error: "inbox_summary_unavailable" } }
+          },
+        }),
+        find_supplier_documents: tool({
+          description: "Find invoices/receipts from a given supplier or merchant name.",
+          inputSchema: z.object({ supplier: z.string().min(1).describe("Supplier or merchant name, or part of one") }),
+          execute: async ({ supplier }) => {
+            try { return { results: await findSupplierDocuments(workspaceId, supplier) } } catch { return { error: "supplier_lookup_unavailable" } }
+          },
+        }),
+        get_document_details: tool({
+          description: "Get one document's extracted fields, per-field confidence, coding, applied rule, check results, and review-task history.",
+          inputSchema: z.object({ documentId: z.string().describe("The document id") }),
+          execute: async ({ documentId }) => {
+            try {
+              const details = await getDocumentDetails(workspaceId, documentId)
+              return details ?? { error: "document_not_found" }
+            } catch { return { error: "document_details_unavailable" } }
+          },
+        }),
+        get_supplier_rules: tool({
+          description: "List this workspace's active supplier coding rules (matcher, coding actions, autopublish, hit count).",
+          inputSchema: z.object({}),
+          execute: async () => {
+            try { return { rules: await getSupplierRules(workspaceId) } } catch { return { error: "rules_unavailable" } }
+          },
+        }),
+      }
+    : {}
+
+  // The three tool groups are each typed by their own conditional (empty-object-or-not) branch,
+  // which TS won't merge structurally on its own — cast to streamText's own tools param type
+  // rather than fight three near-identical narrowed object types.
+  const tools = { ...gridTools, ...searchTools, ...financeTools } as NonNullable<Parameters<typeof streamText>[0]["tools"]>
 
   const base = onSheet ? SYSTEM_PROMPT : DICTATION_SYSTEM_PROMPT
   const withSearch = config.embeddings.enabled ? base + DOCUMENT_SEARCH_PROMPT : base
-  // Only on the sheet — the dictation assistant's whole point is to retrieve and quote, never to
-  // propose an action, so a finance addendum (which is action-oriented) has no business there.
-  const capabilities = onSheet ? await getWorkspaceCapabilities(workspaceId) : null
-  const persona = capabilities?.has("finance-agent") ? personaAddendumForIndustry(capabilities.industry) : null
+  const persona = financeAgentEnabled && capabilities ? personaAddendumForIndustry(capabilities.industry) : null
   const system = persona ? `${withSearch}\n\n${persona}` : withSearch
 
   const result = streamText({
