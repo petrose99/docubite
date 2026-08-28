@@ -344,7 +344,7 @@ export async function deleteFiles(workspaceId: string, fileIds: string[], actorI
   const context = await getRequestAuditContext()
   let deleted = 0
   for (const file of files) {
-    const documents = await prisma.document.findMany({ where: { fileId: file.id }, select: { storageKey: true } })
+    const documents = await prisma.document.findMany({ where: { workspaceId, fileId: file.id }, select: { storageKey: true } })
     for (const document of documents) if (document.storageKey) await deleteDocumentSource(document.storageKey).catch(() => {})
     await prisma.$transaction([
       prisma.documentFile.delete({ where: { id: file.id } }),
