@@ -3,6 +3,7 @@
 import { ActionState } from "@/lib/actions"
 import type { RuleMatcherType } from "@/lib/automation/rules"
 import { getCurrentUser } from "@/lib/auth"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { createAutomationRule, updateAutomationRule } from "@/models/automation-rules"
 import { revalidatePath } from "next/cache"
 import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
@@ -10,7 +11,7 @@ import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
 async function requireAccountingOwner(workspaceId: string, userId: string) {
   const membership = await requireMember(workspaceId, userId, ["owner"])
   if (!membership) return null
-  if (membership.workspace.industry !== "finance") return null
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("supplier-rules")) return null
   return membership
 }
 

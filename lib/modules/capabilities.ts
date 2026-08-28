@@ -90,10 +90,10 @@ export class ModuleNotEnabledError extends Error {
   }
 }
 
-/** Throws unless the module is enabled for this workspace. The module-based successor to
- * lib/industry.ts's assertMode — every assertMode(mode, "finance")/assertMode(mode, "healthcare")
- * call site becomes requireModule(workspaceId, "<specific module>") (Part 4). Delete lib/industry.ts
- * once no call sites of assertMode remain. */
+/** Throws unless the module is enabled for this workspace. The module-based successor to the old
+ * lib/industry.ts's assertMode (deleted — every ad-hoc `workspace.industry !== "finance"` /
+ * `!== "healthcare"` check across the app is now `requireModule`/`getWorkspaceCapabilities(...).has`
+ * instead, one specific module per call site). */
 export async function requireModule(workspaceId: string, key: string): Promise<void> {
   const caps = await getWorkspaceCapabilities(workspaceId)
   if (!caps.has(key)) throw new ModuleNotEnabledError(key)

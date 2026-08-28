@@ -3,48 +3,58 @@
 import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
-import { ClipboardCheck, CreditCard, Files, History, Landmark, Mic, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { MODULES } from "@/lib/modules"
+import { ClipboardCheck, CreditCard, Files, History, Mic, Percent, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+
+/** Maps a ModuleDefinition.navItems[].icon string (lib/modules) to the lucide component it names.
+ * A string in the registry rather than the component itself keeps lib/modules free of a React/UI
+ * dependency — it's read by server code (capabilities, seeds) that has no business importing icons. */
+const ICONS: Record<string, typeof Files> = {
+  inbox: ClipboardCheck,
+  workflow: Wand2,
+  percent: Percent,
+  mic: Mic,
+}
 
 /** Lido's left rail. The repo had no sidebar component at all — the nav was inline in two
  * layout files — so this is the one place the app's top-level destinations are declared.
  *
  * It steps aside for the spreadsheet. Lido gives an open file the whole window and navigates
  * back out through the file bar's "← Files" rather than a persistent rail, and a grid is the
- * one screen where 224px of chrome costs real columns. */
-export function Sidebar({ workspaceId, workspaces, user, dictationEnabled = false, integrationsEnabled = false, taxSettingsEnabled = false, reviewQueueEnabled = false, rulesEnabled = false }: {
+ * one screen where 224px of chrome costs real columns.
+ *
+ * Module nav entries (Review, Supplier rules, Tax, Dictate) come from `enabledModuleKeys` —
+ * the workspace's resolved capability set (lib/modules/capabilities.ts), read once in the layout
+ * server component and passed down as plain strings — rather than from ad-hoc per-feature
+ * booleans. Settings items that aren't modules (Workspace, Activity, Security, Billing,
+ * Integrations, Settings) stay hard-coded below, in the same shape as before. */
+export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, integrationsEnabled = false }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
-  /** config.asr.enabled AND industry === "healthcare". Dictation gets a rail entry only where the
-   * server can actually transcribe and the workspace is positioned for it — a front door onto a
-   * page that answers "not configured" (or belongs to another industry) is worse than no door. */
-  dictationEnabled?: boolean
-  /** The server's config.integrations.enabled. Same omit-if-unconfigured rule as dictation: no
-   * Integrations entry unless the deployment has an encryption key to run webhooks/API keys. */
+  /** Every module key currently enabled for this workspace (getWorkspaceCapabilities(...).enabled),
+   * used to build the nav entries each module registers via ModuleDefinition.navItems. */
+  enabledModuleKeys: string[]
+  /** The server's config.integrations.enabled. Kept as its own prop, not a module lookup: it gates
+   * a settings page, not a module nav item, and is a deployment fact rather than a workspace one. */
   integrationsEnabled?: boolean
-  /** industry === "finance". Tax settings are meaningless for a healthcare workspace, which
-   * has no tax profile to set — see app/(app)/workspaces/[workspaceId]/(chrome)/settings/tax. */
-  taxSettingsEnabled?: boolean
-  /** industry === "finance". The review queue (WP10) has nothing to show a healthcare
-   * workspace — nothing populates it there, and dictation has its own verify screen already. */
-  reviewQueueEnabled?: boolean
-  /** industry === "finance". Supplier rules (WP11) only ever match finance-template
-   * fields (vendor/merchant/supplier) — no healthcare template has an equivalent. */
-  rulesEnabled?: boolean
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
 
   const base = `/workspaces/${workspaceId}`
+  const enabled = new Set(enabledModuleKeys)
+  const moduleNavItems = MODULES
+    .filter((module) => enabled.has(module.key))
+    .flatMap((module) => module.navItems ?? [])
+    .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files }))
+
   const items = [
     { href: `${base}/files`, label: "Files", icon: Files },
-    ...(reviewQueueEnabled ? [{ href: `${base}/review`, label: "Review", icon: ClipboardCheck }] : []),
-    ...(dictationEnabled ? [{ href: `${base}/dictation`, label: "Dictation", icon: Mic }] : []),
+    ...moduleNavItems,
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
-    ...(taxSettingsEnabled ? [{ href: `${base}/settings/tax`, label: "Tax", icon: Landmark }] : []),
-    ...(rulesEnabled ? [{ href: `${base}/settings/rules`, label: "Supplier rules", icon: Wand2 }] : []),
     { href: `${base}/settings/activity`, label: "Activity", icon: History },
     { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },

@@ -1,6 +1,7 @@
 import { TaxRegionPicker } from "@/components/workspace/tax-region-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getCurrentUser } from "@/lib/auth"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { TAX_REGION_LIST } from "@/lib/tax/regions"
 import { getTaxProfile } from "@/models/tax-profiles"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -12,7 +13,7 @@ export default async function TaxSettingsPage({ params }: { params: Promise<{ wo
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.industry !== "finance") notFound()
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("tax-profiles")) notFound()
 
   const profile = await getTaxProfile(workspaceId)
   const owner = membership.role === "owner"

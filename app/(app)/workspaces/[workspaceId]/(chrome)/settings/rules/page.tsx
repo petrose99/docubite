@@ -3,6 +3,7 @@ import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { RuleActions, RuleMatcher } from "@/lib/automation/rules"
 import { getCurrentUser } from "@/lib/auth"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listAutomationRules } from "@/models/automation-rules"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
@@ -16,7 +17,7 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.industry !== "finance") notFound()
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("supplier-rules")) notFound()
 
   const rules = await listAutomationRules(workspaceId)
   const owner = membership.role === "owner"

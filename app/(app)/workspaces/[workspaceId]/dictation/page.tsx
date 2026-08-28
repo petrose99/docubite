@@ -5,6 +5,7 @@ import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { isAsrAllowed } from "@/lib/asr/gating"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { ensureDictationFile, getFileTemplates } from "@/models/files"
 import { ensureWorkspaceReportTemplates } from "@/models/report-templates"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -24,7 +25,7 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   const membership = await requireWorkspaceRole(workspaceId, user.id)
   // 404 rather than a disabled screen: with no ASR backend, or in a non-healthcare workspace,
   // there is nothing here to show, and the rail does not link to it either.
-  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("dictation")) notFound()
 
   // A confirmed BAA is what makes sending audio to the external ASR backend lawful for a
   // hipaaMode workspace (lib/asr/gating.ts) — a fact an admin has to confirm, not something the

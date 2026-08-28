@@ -1,6 +1,7 @@
 import { DocumentPreview } from "@/components/documents/document-preview"
 import { ReviewTaskDetail } from "@/components/workspace/review-task-detail"
 import { getCurrentUser } from "@/lib/auth"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
 import { getReviewTask } from "@/models/review-tasks"
@@ -16,8 +17,8 @@ export const dynamic = "force-dynamic"
 export default async function ReviewTaskDetailPage({ params }: { params: Promise<{ workspaceId: string; taskId: string }> }) {
   const { workspaceId, taskId } = await params
   const user = await getCurrentUser()
-  const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.industry !== "finance") notFound()
+  await requireWorkspaceRole(workspaceId, user.id)
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("review-queue")) notFound()
 
   const task = await getReviewTask(workspaceId, taskId)
   if (!task) notFound()

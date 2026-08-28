@@ -8,6 +8,7 @@ import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
 import { createFile, deleteFiles } from "@/models/files"
+import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import type { Industry } from "@/types/industry"
 import { User } from "@/prisma/client"
 import crypto, { randomBytes } from "crypto"
@@ -60,18 +61,20 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
     data: {
       name: options.name?.trim() || `${user.name || user.email}'s workspace`,
       kind: options.kind || "personal",
-      // "finance" is the primary buyer going forward — see docs on Workspace.industry.
-      // The team-workspace creation form is the picker that passes "healthcare" through here; the
-      // lazily-created personal workspace (first /workspaces visit) never does, so it always
-      // defaults to finance — there is no onboarding step in that path to ask the question.
-      industry: options.industry || "finance",
+      // The industry picker (/workspaces/new, and the team-workspace creation form) is what
+      // normally passes this through. "general" — not "finance" — is the fallback for the one path
+      // that never goes through a picker: getOrCreateWorkspaceForUser's lazy creation on someone's
+      // first /workspaces visit, which the picker itself now intercepts via a redirect for a
+      // brand-new user with zero memberships (see app/(app)/workspaces/page.tsx). This function's
+      // own default only still matters as the safety net behind that redirect.
+      industry: options.industry || "general",
       members: { create: { userId: user.id, role: "owner" } },
       subscription: { create: { trialEndsAt, ...(options.planCode ? { planCode: options.planCode } : {}) } },
     },
     include: { subscription: true },
   })
   // The worksheets a new user starts with now live on their first file, not on the workspace.
-  await createFile({ workspaceId: workspace.id, userId: user.id })
+  await createFile({ workspaceId: workspace.id, userId: user.id, templates: seedTemplatesForIndustry(workspace.industry as Industry) })
   return workspace
 }
 

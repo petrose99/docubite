@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db"
 import { DICTATION_FORMATS } from "@/lib/dictation/formats"
 import { parseDictationRoutingRecord } from "@/lib/dictation/pipeline"
 import { parseTemplateFields } from "@/lib/document-templates"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import type { AudioProvenance } from "@/lib/provenance-audio"
 import type { AsrSegment } from "@/lib/asr/types"
 import type { CompletenessReport } from "@/lib/report-completeness"
@@ -25,8 +26,8 @@ export const dynamic = "force-dynamic"
 export default async function DictationDetailPage({ params }: { params: Promise<{ workspaceId: string; documentId: string }> }) {
   const { workspaceId, documentId } = await params
   const user = await getCurrentUser()
-  const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
+  await requireWorkspaceRole(workspaceId, user.id)
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("dictation")) notFound()
 
   const document = await prisma.document.findFirst({
     where: { id: documentId, workspaceId, source: "dictation" },

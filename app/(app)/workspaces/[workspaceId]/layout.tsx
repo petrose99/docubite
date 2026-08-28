@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/shell/sidebar"
 import { getCurrentUser, getSession } from "@/lib/auth"
 import config from "@/lib/config"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceMembership, getWorkspacesForUser } from "@/models/workspaces"
 import { redirect } from "next/navigation"
@@ -34,18 +35,18 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     }
   }
 
-  const workspaces = await getWorkspacesForUser(user.id)
+  const [workspaces, capabilities] = await Promise.all([
+    getWorkspacesForUser(user.id),
+    getWorkspaceCapabilities(workspaceId),
+  ])
 
   return <div className="flex min-h-screen bg-white text-stone-900">
     <Sidebar
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
       user={{ name: user.name, email: user.email }}
-      dictationEnabled={config.asr.enabled && membership.workspace.industry === "healthcare"}
-      integrationsEnabled={config.integrations.enabled}
-      taxSettingsEnabled={membership.workspace.industry === "finance"}
-      reviewQueueEnabled={membership.workspace.industry === "finance"}
-      rulesEnabled={membership.workspace.industry === "finance"} />
+      enabledModuleKeys={[...capabilities.enabled]}
+      integrationsEnabled={config.integrations.enabled} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

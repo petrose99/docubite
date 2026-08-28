@@ -1,5 +1,6 @@
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import { BLANK_BIAS_TERMS, BLANK_TEMPLATES } from "@/lib/domains/blank"
+import { CONSTRUCTION_BIAS_TERMS, CONSTRUCTION_TEMPLATES } from "@/lib/domains/construction"
 import { FINANCE_BIAS_TERMS, FINANCE_OPTIONAL_TEMPLATES, FINANCE_TEMPLATES } from "@/lib/domains/finance"
 import { LOGISTICS_BIAS_TERMS, LOGISTICS_TEMPLATES } from "@/lib/domains/logistics"
 import { PATHOLOGY_BIAS_TERMS, PATHOLOGY_TEMPLATES } from "@/lib/domains/pathology"
@@ -20,7 +21,7 @@ export type DomainAdapter = {
   name: string
   documentType: string
   /** The domain this template belongs to, for domain-scoped queries and ASR term selection. */
-  domain: "finance" | "pathology" | "logistics" | "general"
+  domain: "finance" | "pathology" | "logistics" | "construction" | "general"
   isSystem: boolean
   multiRow: boolean
   fields: DocumentFieldDefinition[]
@@ -69,6 +70,7 @@ export const DOMAIN_ADAPTERS: DomainAdapter[] = [
   ...pack(FINANCE_OPTIONAL_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
   ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT, false, "soap_note"),
   ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS, null, false, "table"),
+  ...pack(CONSTRUCTION_TEMPLATES, "construction", CONSTRUCTION_BIAS_TERMS, null, false, "table"),
   ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true, "narrative"),
 ]
 
@@ -85,7 +87,7 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
  * file already has them. Adding a pack here is exactly what "ship the domain packs" means:
  * pathology and logistics have been fully built and registered since Stage 3/4, just never
  * reachable from the UI. */
-const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { finance: "Finance (optional)", pathology: "Pathology", logistics: "Logistics" }
+const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { finance: "Finance (optional)", pathology: "Pathology", logistics: "Logistics", construction: "Construction" }
 
 /** Codes already seeded into every new file (models/files.ts) — excluded from every pack so the
  * picker never offers to "add" a worksheet a file already has. Only finance has any overlap. */
@@ -127,4 +129,4 @@ export function biasTermsForTemplate(code: string | null | undefined): string[] 
   return [...(findDomainAdapter(code)?.biasTerms ?? [])]
 }
 
-export { BLANK_TEMPLATES, FINANCE_TEMPLATES, LOGISTICS_TEMPLATES, PATHOLOGY_TEMPLATES }
+export { BLANK_TEMPLATES, CONSTRUCTION_TEMPLATES, FINANCE_TEMPLATES, LOGISTICS_TEMPLATES, PATHOLOGY_TEMPLATES }

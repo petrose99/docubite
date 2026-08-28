@@ -6,6 +6,7 @@ import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import { isAsrAllowed } from "@/lib/asr/gating"
 import config from "@/lib/config"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { prisma } from "@/lib/db"
 import { processDocumentJob } from "@/lib/document-processing"
 import { restructureFromTranscript } from "@/lib/document-transcription"
@@ -36,7 +37,7 @@ export async function createDictationAction(workspaceId: string, formData: FormD
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   if (!config.asr.enabled) return { success: false, error: "Dictation is not configured on this deployment." }
-  if (membership.workspace.industry !== "healthcare") return { success: false, error: "Dictation is only available in a healthcare workspace." }
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("dictation")) return { success: false, error: "Dictation is only available in a healthcare workspace." }
   if (!isAsrAllowed(membership.workspace)) return { success: false, error: "Dictation is pending BAA coverage for this workspace's external ASR provider." }
 
   const audio = formData.get("audio")

@@ -56,7 +56,7 @@ export const MODULES: ModuleDefinition[] = [
   { key: "expense-approvals", name: "Expense approvals", description: "Submit, approve, and publish employee expense claims.", industry: "finance", tier: "optional", activation: "request" },
   { key: "bank-match", name: "Bank matching", description: "Match statement lines to receipts automatically.", industry: "finance", tier: "optional", activation: "request" },
 
-  { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "healthcare", tier: "default", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictate", label: "Dictate", icon: "mic" }] },
+  { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "healthcare", tier: "default", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },
   { key: "clinical-packs", name: "Clinical packs", description: "Pathology report templates.", industry: "healthcare", tier: "default", activation: "enable", domainPack: "pathology" },
   { key: "hipaa-controls", name: "HIPAA controls", description: "BAA-covered ASR and ePHI handling controls.", industry: "healthcare", tier: "optional", activation: "request" },
 

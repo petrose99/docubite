@@ -1,7 +1,7 @@
 import { ReportTemplateForm } from "@/components/dictation/report-template-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getCurrentUser } from "@/lib/auth"
-import config from "@/lib/config"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { parseNarrativeSections } from "@/lib/report-render/narrative"
 import { parseSynopticFields } from "@/lib/report-render/synoptic"
 import { ensureWorkspaceReportTemplates, listReportTemplates } from "@/models/report-templates"
@@ -17,7 +17,7 @@ export default async function ReportTemplatesPage({ params }: { params: Promise<
   const { workspaceId } = await params
   const user = await getCurrentUser()
   const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (!config.asr.enabled || membership.workspace.industry !== "healthcare") notFound()
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("dictation")) notFound()
   await ensureWorkspaceReportTemplates(workspaceId)
   const templates = await listReportTemplates(workspaceId)
 

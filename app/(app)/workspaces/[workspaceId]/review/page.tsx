@@ -1,4 +1,5 @@
 import { ReviewQueueTable } from "@/components/workspace/review-queue-table"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listReviewTasks, parseReviewTaskStatus, type ReviewTaskStatus } from "@/models/review-tasks"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { getCurrentUser } from "@/lib/auth"
@@ -26,8 +27,8 @@ export default async function ReviewQueuePage({ params, searchParams }: {
   const { workspaceId } = await params
   const { status: statusParam } = await searchParams
   const user = await getCurrentUser()
-  const membership = await requireWorkspaceRole(workspaceId, user.id)
-  if (membership.workspace.industry !== "finance") notFound()
+  await requireWorkspaceRole(workspaceId, user.id)
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("review-queue")) notFound()
 
   const status = statusParam && statusParam !== "all" ? parseReviewTaskStatus(statusParam) ?? undefined : undefined
   const tasks = await listReviewTasks(workspaceId, status ? { status } : {})
