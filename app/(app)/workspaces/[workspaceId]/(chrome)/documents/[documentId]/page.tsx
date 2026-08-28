@@ -4,33 +4,35 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { DeleteDocumentButton } from "@/components/documents/delete-document-button"
 import { LineItemsEditor } from "@/components/documents/line-items-editor"
 import { PushToAccountingCard } from "@/components/documents/push-to-accounting-card"
 import { getCurrentUser } from "@/lib/auth"
-import config from "@/lib/config"
 import { parseTemplateFields } from "@/lib/document-templates"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { getWorkspaceDocument } from "@/models/documents"
-import { listWorkspaceIntegrationConnections, listWorkspaceIntegrationPushes, workspaceIntegrationsPlanEnabled } from "@/models/integrations"
+import { listWorkspaceIntegrationConnections, listWorkspaceIntegrationPushes } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6
-const PUSHABLE_TEMPLATE_CODES = new Set(["invoice", "receipt"])
 
 export default async function DocumentPage({ params }: { params: Promise<{ workspaceId: string; documentId: string }> }) {
   const { workspaceId, documentId } = await params
   const user = await getCurrentUser()
-  await requireWorkspaceRole(workspaceId, user.id)
+  const membership = await requireWorkspaceRole(workspaceId, user.id)
   const document = await getWorkspaceDocument(workspaceId, documentId)
   if (!document) notFound()
 
-  // Accounting push affordance: only for a reviewed invoice/receipt, and only when the deployment
-  // and plan both allow integrations at all — cheap checks first so the two extra queries below
-  // are skipped for the common case (a document that never qualifies).
-  const canPush = document.status === "reviewed" && PUSHABLE_TEMPLATE_CODES.has(document.template?.code ?? "")
-    && config.integrations.enabled && (await workspaceIntegrationsPlanEnabled(workspaceId))
+  // Accounting push affordance: only for a reviewed document of a pushable type, and only when the
+  // accounting-push module itself is on — that module already folds in "deployment configured" and
+  // "plan allows integrations" (requiresConfig/requiresPlanFlag in lib/modules), so this is the one
+  // check rather than three separate ones.
+  const capabilities = await getWorkspaceCapabilities(workspaceId)
+  const canPush = document.status === "reviewed" && capabilities.has("accounting-push")
+    && capabilities.pushableTemplateCodes.includes(document.template?.code ?? "")
   const [connections, pushes] = canPush
     ? await Promise.all([listWorkspaceIntegrationConnections(workspaceId), listWorkspaceIntegrationPushes(workspaceId, documentId)])
     : [[], []]
@@ -41,6 +43,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
   const conflictingLabels = (confidence?.conflictingFields || []).map((key) => fields.find((field) => field.key === key)?.label || key)
   const data = (document.reviewedData || document.rawExtraction || {}) as Record<string, unknown>
   const saveReview = async (formData: FormData) => { "use server"; await saveDocumentReviewAction(workspaceId, documentId, formData) }
+  const supplierValue = data.vendor ?? data.merchant
+  const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
+  const canCreateRule = capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0
 
   return <main className="mx-auto max-w-3xl space-y-6">
     <Link className="text-sm underline" href={`/workspaces/${workspaceId}/files/${document.fileId}/sheet`}>Back to sheet</Link>
@@ -70,5 +75,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
         pushes={pushes}
       />
     )}
+    {canCreateRule && <Card>
+      <CardHeader><CardTitle>Create a rule from this document</CardTitle><CardDescription>Matches this supplier automatically on future documents.</CardDescription></CardHeader>
+      <CardContent><AutomationRuleForm workspaceId={workspaceId} defaultSupplier={supplier} /></CardContent>
+    </Card>}
   </main>
 }

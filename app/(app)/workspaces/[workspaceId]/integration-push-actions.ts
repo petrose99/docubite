@@ -11,13 +11,12 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { BillMappingError, normalizeBillFromDocument } from "@/lib/integration-bill-mapping"
 import { attemptIntegrationPush, kickIntegrationPushDrain } from "@/lib/integration-push"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { getWorkspaceDocument } from "@/models/documents"
 import { upsertWorkspaceIntegrationPush, workspaceIntegrationsPlanEnabled } from "@/models/integrations"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { errorMessage, NO_ACCESS, requireMember } from "./action-helpers"
-
-const PUSHABLE_TEMPLATE_CODES = new Set(["invoice", "receipt"])
 
 export async function pushDocumentToAccountingAction(
   workspaceId: string,
@@ -34,8 +33,9 @@ export async function pushDocumentToAccountingAction(
     if (!document) return { success: false, error: "Document not found" }
     if (document.status !== "reviewed") return { success: false, error: "Only reviewed documents can be pushed" }
     const templateCode = document.template?.code ?? null
-    if (!templateCode || !PUSHABLE_TEMPLATE_CODES.has(templateCode)) {
-      return { success: false, error: "Only invoices and receipts can be pushed to accounting" }
+    const { pushableTemplateCodes } = await getWorkspaceCapabilities(workspaceId)
+    if (!templateCode || !pushableTemplateCodes.includes(templateCode)) {
+      return { success: false, error: "This document's type can't be pushed to accounting" }
     }
     const connection = await prisma.integrationConnection.findFirst({ where: { id: connectionId, workspaceId }, select: { id: true, provider: true } })
     if (!connection) return { success: false, error: "That connection no longer exists" }

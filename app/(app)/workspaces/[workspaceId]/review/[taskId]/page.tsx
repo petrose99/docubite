@@ -1,3 +1,4 @@
+import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { DocumentPreview } from "@/components/documents/document-preview"
 import { ReviewTaskDetail } from "@/components/workspace/review-task-detail"
 import { getCurrentUser } from "@/lib/auth"
@@ -17,8 +18,9 @@ export const dynamic = "force-dynamic"
 export default async function ReviewTaskDetailPage({ params }: { params: Promise<{ workspaceId: string; taskId: string }> }) {
   const { workspaceId, taskId } = await params
   const user = await getCurrentUser()
-  await requireWorkspaceRole(workspaceId, user.id)
-  if (!(await getWorkspaceCapabilities(workspaceId)).has("review-queue")) notFound()
+  const membership = await requireWorkspaceRole(workspaceId, user.id)
+  const capabilities = await getWorkspaceCapabilities(workspaceId)
+  if (!capabilities.has("review-queue")) notFound()
 
   const task = await getReviewTask(workspaceId, taskId)
   if (!task) notFound()
@@ -27,6 +29,9 @@ export default async function ReviewTaskDetailPage({ params }: { params: Promise
   const values = (task.document.reviewedData ?? task.document.rawExtraction ?? {}) as Record<string, unknown>
   const members = await getWorkspaceMembers(workspaceId)
   const checkResults = await prisma.documentCheckResult.findMany({ where: { workspaceId, documentId: task.document.id }, orderBy: { checkCode: "asc" } })
+  const supplierValue = values.vendor ?? values.merchant
+  const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
+  const canCreateRule = capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0
 
   return <main className="mx-auto grid w-full max-w-6xl gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
     <div className="space-y-4">
@@ -71,6 +76,14 @@ export default async function ReviewTaskDetailPage({ params }: { params: Promise
           ))}
         </dl>
       </div>
+
+      {canCreateRule && <details className="rounded border p-4">
+        <summary className="cursor-pointer text-sm font-bold text-stone-900">Create a rule from this document</summary>
+        <p className="mt-1 text-xs text-stone-500">Matches this supplier automatically on future documents.</p>
+        <div className="mt-3">
+          <AutomationRuleForm workspaceId={workspaceId} defaultSupplier={supplier} />
+        </div>
+      </details>}
     </div>
   </main>
 }

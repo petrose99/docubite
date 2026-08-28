@@ -4,13 +4,6 @@ import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { prisma } from "@/lib/db"
 import { upsertWorkspaceIntegrationPush } from "@/models/integrations"
 
-/** The template codes accounting-push can push — kept in one place rather than duplicated between
- * this and integration-push-actions.ts's manual path would be tidier, but the two were built at
- * different times against slightly different sets (this one matches the module registry's
- * pushableTemplateCodes; the manual action's own set is narrower and is a known drift to reconcile
- * — see HANDOFF-INDUSTRY-WORKSPACES.md). */
-const PUSHABLE_TEMPLATE_CODES = new Set(["invoice", "receipt", "expense_receipt"])
-
 /** Pushes a document to its workspace's connected accounting provider automatically, when the rule
  * that coded it has autopublish=true. Called from two places: right after a rule applies to a
  * document with no review required (models/automation-rules.ts), and right after a reviewer
@@ -29,13 +22,13 @@ export async function maybeAutopublish(workspaceId: string, documentId: string, 
     })
     if (!document?.appliedRuleId) return
     const templateCode = document.template?.code
-    if (!templateCode || !PUSHABLE_TEMPLATE_CODES.has(templateCode)) return
 
     const rule = await prisma.automationRule.findFirst({ where: { id: document.appliedRuleId, workspaceId }, select: { autopublish: true } })
     if (!rule?.autopublish) return
 
     const caps = await getWorkspaceCapabilities(workspaceId)
     if (!caps.has("accounting-push")) return
+    if (!templateCode || !caps.pushableTemplateCodes.includes(templateCode)) return
 
     // The oldest active connection: a workspace with more than one connected provider has no rule
     // for which one autopublish should prefer, so this is a placeholder until that's a real
