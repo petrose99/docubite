@@ -19,13 +19,7 @@ import {
 import { parseIndustry } from "@/types/industry"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
-
-/** The switcher's workspace list is rendered by the segment *layout*
- * (app/(app)/workspaces/[workspaceId]/layout.tsx), and revalidatePath on a concrete path only
- * invalidates the page segment. Without the "layout" variant a rename updates the settings page
- * and leaves a stale name in the sidebar until a hard reload. */
-const revalidateWorkspaceLayout = () => revalidatePath("/workspaces/[workspaceId]", "layout")
+import { errorMessage, NO_ACCESS, paths, requireMember, revalidateWorkspaceLayout } from "./action-helpers"
 
 const inviteUrlFor = (token: string) => `${config.app.baseURL}/invite/${token}`
 
@@ -50,7 +44,7 @@ async function deliverInvitation(input: { email: string; workspaceName: string; 
 export async function createWorkspaceAction(name: string, industry?: string): Promise<ActionState<{ workspaceId: string }>> {
   const user = await getCurrentUser()
   if (!name.trim()) return { success: false, error: "Enter a workspace name" }
-  // Absent/unrecognised falls through to createWorkspaceForUser's own "finance" default —
+  // Absent/unrecognised falls through to createWorkspaceForUser's own "general" default —
   // this is the one chance to set it, not a value worth hard-failing the whole creation over.
   const parsedMode = parseIndustry(industry) ?? undefined
   try {

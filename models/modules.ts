@@ -18,4 +18,10 @@ export async function setModuleState(input: { workspaceId: string; moduleKey: st
   })
 }
 
-export const getWorkspaceModuleOverrides = (workspaceId: string) => prisma.workspaceModule.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" } })
+/** Includes the requester's name/email so the catalog page can badge a "requested" row with who
+ * asked and when, without a second query per row. */
+export const getWorkspaceModuleOverrides = (workspaceId: string) => prisma.workspaceModule.findMany({
+  where: { workspaceId },
+  include: { requestedBy: { select: { name: true, email: true } } },
+  orderBy: { createdAt: "asc" },
+})

@@ -39,7 +39,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: Promis
       <CardContent className="space-y-4">
         {owner ? <WorkspaceAiToggle workspaceId={workspaceId} enabled={membership.workspace.aiEnabled} /> : <p className="text-sm">AI extraction is {membership.workspace.aiEnabled ? "enabled" : "disabled"} by the workspace owner.</p>}
         {owner
-          ? <WorkspaceIndustryToggle workspaceId={workspaceId} mode={parseIndustry(membership.workspace.industry) || "finance"} />
+          ? <WorkspaceIndustryToggle workspaceId={workspaceId} mode={parseIndustry(membership.workspace.industry) || "general"} />
           : <p className="text-sm">This workspace is set up for {membership.workspace.industry} by the workspace owner.</p>}
         {owner
           ? <WorkspaceHipaaModeToggle workspaceId={workspaceId} enabled={membership.workspace.hipaaMode} />
