@@ -3,8 +3,11 @@
 import { ActionState } from "@/lib/actions"
 import { maybeAutopublish } from "@/lib/automation/autopublish"
 import { getCurrentUser } from "@/lib/auth"
+import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
-import { assignReviewTask, bulkUpdateReviewTaskStatus, createReviewTask, parseReviewTaskStatus, updateReviewTaskStatus } from "@/models/review-tasks"
+import { prisma } from "@/lib/db"
+import { listWorkspaceIntegrationConnections } from "@/models/integrations"
+import { assignReviewTask, bulkUpdateReviewTaskStatus, createReviewTask, getReviewTask, parseReviewTaskStatus, updateReviewTaskStatus } from "@/models/review-tasks"
 import { revalidatePath } from "next/cache"
 import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
 
@@ -54,6 +57,48 @@ export async function bulkUpdateReviewTaskStatusAction(workspaceId: string, task
     revalidatePath(paths(workspaceId).review)
     return { success: true, data: { updated: result.updated } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not update the selected review tasks") } }
+}
+
+/** Everything the split-view detail pane (components/workspace/review-inbox.tsx) needs for one
+ * task, in a single round trip: the source preview info, extracted fields/values, non-passing
+ * checks, and whether/where this document can be pushed — so the client doesn't have to fetch a
+ * document, its checks, and its connections separately every time the selection changes. */
+export async function getReviewTaskDetailAction(workspaceId: string, taskId: string) {
+  const user = await getCurrentUser()
+  const membership = await requireAccountingMember(workspaceId, user.id)
+  if (!membership) return null
+  const task = await getReviewTask(workspaceId, taskId)
+  if (!task) return null
+
+  const capabilities = await getWorkspaceCapabilities(workspaceId)
+  const fields = parseTemplateFields(task.document.fieldSnapshot)
+  const values = (task.document.reviewedData ?? task.document.rawExtraction ?? {}) as Record<string, unknown>
+  const [checkResults, connections, appliedRule, template] = await Promise.all([
+    prisma.documentCheckResult.findMany({ where: { workspaceId, documentId: task.document.id }, orderBy: { checkCode: "asc" } }),
+    capabilities.has("accounting-push") ? listWorkspaceIntegrationConnections(workspaceId) : Promise.resolve([]),
+    task.document.appliedRuleId ? prisma.automationRule.findUnique({ where: { id: task.document.appliedRuleId }, select: { name: true } }) : Promise.resolve(null),
+    task.document.templateId ? prisma.documentTemplate.findUnique({ where: { id: task.document.templateId }, select: { code: true } }) : Promise.resolve(null),
+  ])
+  const activeConnection = connections.find((connection) => connection.status === "active") ?? null
+  const canPush = task.document.status === "reviewed" && Boolean(activeConnection)
+    && Boolean(template?.code) && capabilities.pushableTemplateCodes.includes(template!.code)
+  const supplierValue = values.vendor ?? values.merchant
+  const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
+  return {
+    id: task.id, status: task.status, assigneeId: task.assigneeId, detail: task.detail,
+    document: {
+      id: task.document.id, filename: task.document.filename, mimeType: task.document.mimeType,
+      storageKey: task.document.storageKey, status: task.document.status,
+      fields: fields.filter((field) => field.type !== "array"),
+      values,
+      supplier,
+    },
+    checkResults: checkResults.map((check) => ({ id: check.id, checkCode: check.checkCode, status: check.status, message: check.message })),
+    appliedRuleName: appliedRule?.name ?? null,
+    canPush,
+    activeConnectionId: activeConnection?.id ?? null,
+    canCreateRule: capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0,
+  }
 }
 
 export async function assignReviewTaskAction(workspaceId: string, taskId: string, assigneeId: string | null): Promise<ActionState<null>> {
