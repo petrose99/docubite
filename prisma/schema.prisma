@@ -1001,6 +1001,11 @@ model AutomationRule {
   /// matching a rule is exactly the case a person should glance at before trusting the coding.
   minConfidence  Float?    @map("min_confidence")
   requireReview  Boolean   @default(false) @map("require_review")
+  /// Part 5b (autopublish): when true, a document this rule codes with requireReview=false is
+  /// pushed to the workspace's connected accounting provider automatically — see
+  /// lib/automation/autopublish.ts. False by default: autopublish is something a supplier rule
+  /// opts into, not a surprise a rule silently starts doing.
+  autopublish    Boolean   @default(false)
   isActive       Boolean   @default(true) @map("is_active")
   hitCount       Int       @default(0) @map("hit_count")
   createdById    String?   @map("created_by_id") @db.Uuid

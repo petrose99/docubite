@@ -1,6 +1,7 @@
 "use server"
 
 import { ActionState } from "@/lib/actions"
+import { maybeAutopublish } from "@/lib/automation/autopublish"
 import { getCurrentUser } from "@/lib/auth"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { assignReviewTask, bulkUpdateReviewTaskStatus, createReviewTask, parseReviewTaskStatus, updateReviewTaskStatus } from "@/models/review-tasks"
@@ -34,7 +35,8 @@ export async function updateReviewTaskStatusAction(workspaceId: string, taskId: 
   const parsed = parseReviewTaskStatus(status)
   if (!parsed) return { success: false, error: "Invalid status" }
   try {
-    await updateReviewTaskStatus({ workspaceId, taskId, status: parsed, actorId: user.id })
+    const task = await updateReviewTaskStatus({ workspaceId, taskId, status: parsed, actorId: user.id })
+    if (parsed === "approved") await maybeAutopublish(workspaceId, task.documentId, user.id)
     revalidatePath(paths(workspaceId).review)
     return { success: true, data: null }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not update the review task") } }
@@ -48,8 +50,9 @@ export async function bulkUpdateReviewTaskStatusAction(workspaceId: string, task
   if (!taskIds.length) return { success: false, error: "Nothing selected" }
   try {
     const result = await bulkUpdateReviewTaskStatus({ workspaceId, taskIds, status: parsed, actorId: user.id })
+    if (parsed === "approved") await Promise.all(result.documentIds.map((documentId) => maybeAutopublish(workspaceId, documentId, user.id)))
     revalidatePath(paths(workspaceId).review)
-    return { success: true, data: result }
+    return { success: true, data: { updated: result.updated } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not update the selected review tasks") } }
 }
 

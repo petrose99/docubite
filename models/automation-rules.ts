@@ -2,6 +2,7 @@
 // these helpers trust the workspaceId they are handed. Server actions live in
 // app/(app)/workspaces/[workspaceId]/automation-actions.ts and do the auth.
 import { track } from "@/lib/analytics"
+import { maybeAutopublish } from "@/lib/automation/autopublish"
 import { applyRules, type AutomationRuleInput, type ExtractionForMatch, type RuleActions, type RuleMatcher } from "@/lib/automation/rules"
 import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { prisma } from "@/lib/db"
@@ -87,6 +88,11 @@ export async function applyAutomationRules(input: { workspaceId: string; documen
           ? "The matched rule's supplier field was read at low confidence."
           : "The matched rule requires manual review."
       await createReviewTask({ workspaceId: input.workspaceId, documentId: input.documentId, reason: "rule_required", detail, createdById: null })
+    } else if (result.ruleId) {
+      // No review needed: this is the "high-confidence, rule-coded" moment autopublish acts on.
+      // A document that landed in review instead (the branch above) waits for a person to approve
+      // it — see review-actions.ts's updateReviewTaskStatusAction for that trigger.
+      await maybeAutopublish(input.workspaceId, input.documentId, null)
     }
   } catch (error) {
     console.error("[automation] failed to apply rules:", error instanceof Error ? error.message : error)

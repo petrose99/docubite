@@ -259,7 +259,7 @@ export async function listWorkspaceIntegrationPushes(workspaceId: string, docume
  * behind stale state. */
 export async function upsertWorkspaceIntegrationPush(
   workspaceId: string,
-  input: { connectionId: string; documentId: string; provider: "quickbooks" | "xero"; payload: object; createdById: string }
+  input: { connectionId: string; documentId: string; provider: "quickbooks" | "xero"; payload: object; createdById: string | null }
 ) {
   return prisma.integrationPush.upsert({
     where: { documentId_connectionId: { documentId: input.documentId, connectionId: input.connectionId } },

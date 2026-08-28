@@ -84,14 +84,14 @@ export async function updateReviewTaskStatus(input: { workspaceId: string; taskI
  * answer "who approved this specific document" later, not just "a bulk approval happened". */
 export async function bulkUpdateReviewTaskStatus(input: { workspaceId: string; taskIds: string[]; status: ReviewTaskStatus; actorId: string }) {
   const tasks = await prisma.reviewTask.findMany({ where: { id: { in: input.taskIds.slice(0, 200) }, workspaceId: input.workspaceId }, select: { id: true, documentId: true, status: true } })
-  if (!tasks.length) return { updated: 0 }
+  if (!tasks.length) return { updated: 0, documentIds: [] as string[] }
   const context = await getRequestAuditContext()
   const resolvedAt = RESOLVED_STATUSES.has(input.status) ? new Date() : null
   await prisma.$transaction([
     prisma.reviewTask.updateMany({ where: { id: { in: tasks.map((task) => task.id) }, workspaceId: input.workspaceId }, data: { status: input.status, resolvedAt } }),
     ...tasks.map((task) => prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, documentId: task.documentId, actorId: input.actorId, type: "review_task_status_changed", detail: { from: task.status, to: input.status, bulk: true } }, context) })),
   ])
-  return { updated: tasks.length }
+  return { updated: tasks.length, documentIds: tasks.map((task) => task.documentId) }
 }
 
 /** Assignment is its own audit event, distinct from a status change — "who is responsible" and

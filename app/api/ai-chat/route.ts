@@ -1,6 +1,8 @@
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
+import { personaAddendumForIndustry } from "@/lib/modules/personas"
 import { findMatchingDocuments, searchDocumentChunks } from "@/lib/retrieval"
 import { getWorkspaceMembership, consumeWorkspaceQuota } from "@/models/workspaces"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -203,10 +205,16 @@ export async function POST(request: Request) {
     : gridTools
 
   const base = onSheet ? SYSTEM_PROMPT : DICTATION_SYSTEM_PROMPT
+  const withSearch = config.embeddings.enabled ? base + DOCUMENT_SEARCH_PROMPT : base
+  // Only on the sheet — the dictation assistant's whole point is to retrieve and quote, never to
+  // propose an action, so a finance addendum (which is action-oriented) has no business there.
+  const capabilities = onSheet ? await getWorkspaceCapabilities(workspaceId) : null
+  const persona = capabilities?.has("finance-agent") ? personaAddendumForIndustry(capabilities.industry) : null
+  const system = persona ? `${withSearch}\n\n${persona}` : withSearch
 
   const result = streamText({
     model: google(config.ai.geminiModelName),
-    system: config.embeddings.enabled ? base + DOCUMENT_SEARCH_PROMPT : base,
+    system,
     messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(MAX_STEPS),

@@ -4,6 +4,7 @@ import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import { findModule } from "@/lib/modules"
 import { revalidatePath } from "next/cache"
+import { addDomainPackToWorkspace } from "@/models/files"
 import { setModuleState } from "@/models/modules"
 import { errorMessage, NO_ACCESS, paths, requireMember, revalidateWorkspaceLayout } from "./action-helpers"
 
@@ -19,6 +20,9 @@ export async function enableModuleAction(workspaceId: string, moduleKey: string)
   if (!mod || mod.tier === "always") return { success: false, error: "That module can't be toggled." }
   try {
     await setModuleState({ workspaceId, moduleKey, status: "enabled", actorId: user.id })
+    // A domainPack module (statement-packs today) materializes its worksheets into every existing
+    // file the instant it's enabled, rather than only on the next file someone creates.
+    if (mod.domainPack) await addDomainPackToWorkspace(workspaceId, mod.domainPack)
     revalidatePath(paths(workspaceId).modules)
     revalidateWorkspaceLayout()
     return { success: true, data: null }

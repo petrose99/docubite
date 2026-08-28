@@ -1,4 +1,4 @@
-import { FileText, FlaskConical, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, Truck, type LucideIcon } from "lucide-react"
+import { FileText, FlaskConical, HardHat, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, Truck, type LucideIcon } from "lucide-react"
 
 /** The Solutions mega-menu and the /solutions/[slug] pages read from this one list, so a new
  * solution is a single entry here rather than a page plus a nav edit that can drift apart.
@@ -178,6 +178,22 @@ export const INDUSTRIES: Industry[] = [
       "Photograph the signed POD or drop the BOL PDF",
       "Line items come out as rows — quantities and refs structured, not a blob",
       "Ask the assistant to flag mismatches across the whole shipment folder, and diff this month's paperwork against last month's",
+    ],
+  },
+  {
+    icon: HardHat,
+    name: "Construction",
+    tagline: "Job-cost paperwork shouldn't lag the job by a month.",
+    tags: ["Subcontractor invoices", "Lien waivers", "Delivery tickets", "Timesheets", "Change orders"],
+    before: [
+      "Re-key subcontractor invoices against the wrong job or cost code",
+      "Chase down which lien waivers are conditional versus unconditional before releasing payment",
+      "Total timesheets and delivery tickets by hand at the end of the period",
+    ],
+    after: [
+      "Drop subcontractor invoices, waivers, tickets and timesheets in together",
+      "Retention, cost codes and waiver type land as their own fields, not buried in a scan",
+      "Ask the assistant which change orders are still pending approval, across every job",
     ],
   },
 ]

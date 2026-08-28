@@ -139,6 +139,18 @@ export async function addDomainPackToFile(workspaceId: string, fileId: string, d
   return { added: missing.length }
 }
 
+/** Adds a domain pack to every file already in the workspace, at once — what makes enabling an
+ * optional module (lib/modules) with a domainPack (statement-packs today) materialize its
+ * worksheets immediately rather than only on the next file someone creates. Reuses
+ * addDomainPackToFile's own idempotency per file, so re-enabling after a disable never duplicates
+ * a worksheet that's still there. */
+export async function addDomainPackToWorkspace(workspaceId: string, domain: string) {
+  const files = await prisma.documentFile.findMany({ where: { workspaceId }, select: { id: true } })
+  let added = 0
+  for (const file of files) added += (await addDomainPackToFile(workspaceId, file.id, domain)).added
+  return { added, files: files.length }
+}
+
 /** Slugifies a name into a template code, appending -2, -3, … on collision within the file. Codes
  * are the join key DocumentTemplate is @@unique on ([fileId, code]), so this has to actually avoid
  * a collision rather than just look tidy. */
