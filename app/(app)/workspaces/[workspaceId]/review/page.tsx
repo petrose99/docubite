@@ -51,11 +51,20 @@ export default async function ReviewQueuePage({ params, searchParams }: {
 
     <ReviewQueueTable
       workspaceId={workspaceId}
-      tasks={tasks.map((task) => ({
-        id: task.id, status: task.status, reason: task.reason, priority: task.priority,
-        dueAt: task.dueAt?.toISOString() ?? null,
-        document: { id: task.document.id, filename: task.document.filename, templateName: task.document.template?.name ?? null },
-        assignee: task.assignee ? { id: task.assignee.id, name: task.assignee.name } : null,
-      }))} />
+      tasks={tasks.map((task) => {
+        const confidence = (task.document.confidence as Record<string, number> | null) ?? null
+        const scores = confidence ? Object.values(confidence) : []
+        return {
+          id: task.id, status: task.status, reason: task.reason, priority: task.priority,
+          dueAt: task.dueAt?.toISOString() ?? null,
+          document: {
+            id: task.document.id, filename: task.document.filename, templateName: task.document.template?.name ?? null,
+            minConfidence: scores.length ? Math.min(...scores) : null,
+            appliedRuleName: task.document.appliedRule?.name ?? null,
+            checks: task.document.checkResults.map((check) => ({ code: check.checkCode, status: check.status as "warn" | "fail", message: check.message })),
+          },
+          assignee: task.assignee ? { id: task.assignee.id, name: task.assignee.name } : null,
+        }
+      })} />
   </main>
 }

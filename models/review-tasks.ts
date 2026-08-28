@@ -49,7 +49,14 @@ export const listReviewTasks = cache(async (workspaceId: string, filters: Review
     ...(filters.assigneeId !== undefined ? { assigneeId: filters.assigneeId } : {}),
   },
   include: {
-    document: { select: { id: true, filename: true, status: true, receivedAt: true, template: { select: { name: true, code: true } } } },
+    document: {
+      select: {
+        id: true, filename: true, status: true, receivedAt: true, confidence: true,
+        template: { select: { name: true, code: true } },
+        appliedRule: { select: { name: true } },
+        checkResults: { select: { checkCode: true, status: true, message: true }, where: { status: { not: "pass" } } },
+      },
+    },
     assignee: { select: { id: true, name: true, email: true } },
   },
   orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
