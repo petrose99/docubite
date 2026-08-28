@@ -2,8 +2,11 @@
 
 import { assignReviewTaskAction, bulkUpdateReviewTaskStatusAction, getReviewTaskDetailAction, updateReviewTaskStatusAction } from "@/app/(app)/workspaces/[workspaceId]/review-actions"
 import { pushDocumentToAccountingAction } from "@/app/(app)/workspaces/[workspaceId]/integration-push-actions"
+import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import { DocumentPreview } from "@/components/documents/document-preview"
 import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
+import type { FUniver } from "@univerjs/presets"
+import { Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -53,15 +56,24 @@ function formatValue(value: unknown): string {
  * the push button reflects "Pushed", immediately) with an undo toast backing out the server change
  * if the person didn't mean it. Shortcuts are ignored while any form control has focus, so they
  * never fight with the create-rule form or a text field. */
-export function ReviewInbox({ workspaceId, tasks, currentStatus, members }: {
+export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financeAgentEnabled, documentSearchEnabled }: {
   workspaceId: string
   tasks: ReviewQueueRow[]
   /** The active status tab ("open" by default) — undefined/"all" means no client-side filtering
    * on top of what the server already returned. */
   currentStatus: string | undefined
   members: { id: string; name: string }[]
+  /** Whether the finance-agent module is on — gates the Assistant button entirely, since without
+   * it /api/ai-chat registers none of the finance tools and the panel would have nothing to do. */
+  financeAgentEnabled: boolean
+  documentSearchEnabled: boolean
 }) {
   const router = useRouter()
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  // The assistant is shared with the spreadsheet, where it drives a live Univer grid through this
+  // ref. There is no grid here — surface="finance-inbox" stops the server registering the tools
+  // that would need one — so this stays null for the page's whole life.
+  const noGrid = useRef<FUniver | null>(null)
   const [optimisticStatus, setOptimisticStatus] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(tasks[0]?.id ?? null)
   const [detail, setDetail] = useState<TaskDetail>(null)
@@ -199,13 +211,39 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members }: {
     router.refresh()
   }
 
-  if (!tasks.length) return <div className="rounded-md border border-dashed p-8 text-center text-sm text-stone-500">
-    Nothing here. Documents land in this queue when a supplier rule needs confirmation, a field is read at low
-    confidence, or a document check (duplicate, arithmetic, tax, or a gap) fires — or when someone adds one manually
-    from a document&apos;s page.
+  const assistantButton = financeAgentEnabled && <button
+    type="button"
+    onClick={() => setAssistantOpen((open) => !open)}
+    aria-pressed={assistantOpen}
+    className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${assistantOpen ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-stone-200 text-stone-600 hover:bg-stone-50"}`}>
+    <Sparkles className="h-3.5 w-3.5" />Assistant
+  </button>
+
+  if (!tasks.length) return <div className="space-y-3">
+    <div className="flex">{assistantButton}</div>
+    <div className="flex gap-4">
+      <div className="flex-1 rounded-md border border-dashed p-8 text-center text-sm text-stone-500">
+        Nothing here. Documents land in this queue when a supplier rule needs confirmation, a field is read at low
+        confidence, or a document check (duplicate, arithmetic, tax, or a gap) fires — or when someone adds one
+        manually from a document&apos;s page.
+      </div>
+      {assistantOpen && <AssistantPanel
+        workspaceId={workspaceId}
+        apiRef={noGrid}
+        surface="finance-inbox"
+        title="Finance assistant"
+        className="flex w-80 shrink-0 flex-col rounded-md border bg-stone-50"
+        documentSearchEnabled={documentSearchEnabled}
+        emptyHint="Ask about the review inbox, a document's coding, or supplier rules."
+        intents={["Summarize what needs attention", "List the active supplier rules"]}
+        onClose={() => setAssistantOpen(false)} />}
+    </div>
   </div>
 
-  return <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+  return <div className="space-y-3">
+    <div className="flex">{assistantButton}</div>
+    <div className="flex gap-4">
+    <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
     <div>
       {bulkSelected.size > 0 && <div className="sticky top-2 z-10 mb-2 flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm shadow-sm">
         <span className="font-medium text-emerald-900">{bulkSelected.size} selected</span>
@@ -325,6 +363,18 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members }: {
           </details>}
         </div>
       )}
+    </div>
+    </div>
+    {assistantOpen && <AssistantPanel
+      workspaceId={workspaceId}
+      apiRef={noGrid}
+      surface="finance-inbox"
+      title="Finance assistant"
+      className="flex w-80 shrink-0 flex-col rounded-md border bg-stone-50"
+      documentSearchEnabled={documentSearchEnabled}
+      emptyHint="Ask about the review inbox, a document's coding, or supplier rules."
+      intents={["Summarize what needs attention", "List the active supplier rules"]}
+      onClose={() => setAssistantOpen(false)} />}
     </div>
   </div>
 }

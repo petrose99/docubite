@@ -1,6 +1,10 @@
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
+import {
+  describeApproveReviewTasks, describeCreateSupplierRule, describePushToAccounting,
+  describeRejectReviewTask, describeSetDocumentCoding,
+} from "@/lib/finance/actions"
 import { findSupplierDocuments, getDocumentDetails, getInboxSummary, getSupplierRules } from "@/lib/finance/inbox"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { personaAddendumForIndustry } from "@/lib/modules/personas"
@@ -47,6 +51,18 @@ How to work:
 - Quote what a document says. Never paraphrase a diagnosis, grade, stage, or measurement — give the wording as recorded.
 - NEVER offer a diagnosis, an interpretation, or a clinical opinion of your own, and never suggest what a finding "is consistent with". You retrieve and quote what is on record; the clinician decides what it means.
 - If the record does not contain what was asked, say so plainly rather than filling the gap.`
+
+/** The finance review-inbox page's assistant. No grid, no dictation transcript — just the queue,
+ * documents, and supplier rules for this workspace. Only reachable when finance-agent is on
+ * (surface "finance-inbox" is otherwise identical to "sheet" for tool-registration purposes, see
+ * `financeAgentEnabled` below), so this prompt can assume every finance tool actually exists. */
+const FINANCE_INBOX_SYSTEM_PROMPT = `You are the DocuBite finance assistant, helping someone work through their review inbox and supplier rules. There is no spreadsheet grid here — work only through your tools.
+
+How to work:
+- Use get_inbox_summary, find_supplier_documents, get_document_details, and get_supplier_rules to answer questions and find what's being asked about. Look things up rather than guessing at ids or numbers.
+- Answer in plain prose, briefly. No preamble, no restating the question.
+- To take an action — approve or reject a review task, set a document's coding, create a supplier rule, or push a document to accounting — call the matching tool (approve_review_tasks, reject_review_task, set_document_coding, create_supplier_rule, push_to_accounting). Every one of these PROPOSES the action; it does not perform it. The tool's result is a summary of what would happen — say what you're proposing and that it's waiting for their confirmation in the panel below. Never claim an action happened, or that a document was pushed, coded, or a task approved, until you see the person confirm it landed.
+- If a tool returns an error, explain what it means in plain terms rather than repeating the error code, and suggest what to check (e.g. "no active accounting connection" means Settings → Integrations needs a connected provider first).`
 
 /** Appended to the system prompt only when the document-search tool is registered (i.e. embeddings
  * are configured). Kept separate so the model is never told about a tool it does not have. */
@@ -132,9 +148,12 @@ export async function POST(request: Request) {
   // `surface` says which page is asking. The dictation page has no Univer grid, so registering the
   // sheet tools there would offer the model seven tools whose every call comes back "the
   // spreadsheet is still loading" — burning steps to reach the same answer it could have given
-  // straight away. Unknown or absent means the sheet, so every existing caller is unaffected.
+  // straight away. "finance-inbox" (the review queue's assistant panel) has no grid either, but
+  // — unlike dictation — is exactly where the finance tools/persona belong. Unknown or absent
+  // means the sheet, so every existing caller is unaffected.
   const { messages, workspaceId, surface }: { messages: UIMessage[]; workspaceId: string; surface?: string } = await request.json()
-  const onSheet = surface !== "dictation"
+  const hasGrid = surface !== "dictation" && surface !== "finance-inbox"
+  const financeSurfaceAllowed = surface !== "dictation"
 
   if (!workspaceId || !(await getWorkspaceMembership(workspaceId, user.id))) return Response.json({ error: "forbidden" }, { status: 403 })
 
@@ -161,16 +180,16 @@ export async function POST(request: Request) {
 
   const google = createGoogleGenerativeAI({ apiKey: config.ai.geminiApiKey })
 
-  // Only on the sheet — the dictation assistant's whole point is to retrieve and quote, never to
-  // propose an action, so finance tools/persona (action-oriented) have no business there.
-  const capabilities = onSheet ? await getWorkspaceCapabilities(workspaceId) : null
+  // Not on dictation — its whole point is to retrieve and quote, never to propose an action, so
+  // finance tools/persona (action-oriented) have no business there.
+  const capabilities = financeSurfaceAllowed ? await getWorkspaceCapabilities(workspaceId) : null
   const financeAgentEnabled = capabilities?.has("finance-agent") ?? false
 
   // The document-search tool is added, with a server `execute`, only when embeddings are
   // configured — the single feature gate. Its result flows back through the stream; the browser's
   // onToolCall is guarded to ignore it (see components/assistant/assistant-panel.tsx). No extra
   // quota: this turn already consumed one AI unit above.
-  const gridTools = onSheet ? sheetTools : {}
+  const gridTools = hasGrid ? sheetTools : {}
   const searchTools = config.embeddings.enabled
     ? {
         search_documents: tool({
@@ -209,9 +228,14 @@ export async function POST(request: Request) {
       }
     : {}
 
-  // Finance agent read tools (Part 5c) — plain data lookups with no side effect, so unlike the
-  // plan's "Act tools" (approve, code, push) these run straight through, no pending-changes
-  // confirmation needed. Gated on the finance-agent module, same as the persona addendum below.
+  // Finance agent tools (Part 5c). Gated on the finance-agent module, same as the persona
+  // addendum below. Read tools are plain data lookups with no side effect and run straight
+  // through. Act tools (approve/reject/code/create-rule/push) never mutate here — each one
+  // validates the request and returns a proposal (lib/finance/actions.ts); the ai-chat message
+  // renderer (components/assistant/finance-proposal.tsx) shows it with Accept/Dismiss, and only
+  // Accept calls the real server action. That is what "agent proposes, human confirms" means for
+  // actions with a real side effect, as distinct from the sheet's write-then-undo cell tools —
+  // see lib/finance/actions.ts's header comment for why the ordering has to be this way round.
   const financeTools = financeAgentEnabled
     ? {
         get_inbox_summary: tool({
@@ -245,6 +269,51 @@ export async function POST(request: Request) {
             try { return { rules: await getSupplierRules(workspaceId) } } catch { return { error: "rules_unavailable" } }
           },
         }),
+        approve_review_tasks: tool({
+          description: "Propose approving one or more review tasks, by review-task id (from get_document_details' reviewTasks list, not a document id). Does not approve them — returns a proposal for the person to confirm.",
+          inputSchema: z.object({ taskIds: z.array(z.string()).min(1).describe("Review task ids to approve") }),
+          execute: async ({ taskIds }) => {
+            try { return await describeApproveReviewTasks(workspaceId, taskIds) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        reject_review_task: tool({
+          description: "Propose rejecting one review task, by review-task id. Does not reject it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({ taskId: z.string().describe("The review task id") }),
+          execute: async ({ taskId }) => {
+            try { return await describeRejectReviewTask(workspaceId, taskId) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        set_document_coding: tool({
+          description: "Propose setting a document's coding (account, tax code, cost centre — whatever keys this workspace's rules use) directly, bypassing rule matching. Does not write it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({
+            documentId: z.string().describe("The document id"),
+            codingData: z.record(z.string(), z.union([z.string(), z.number()])).describe('Keys the workspace already uses, e.g. { "account": "6000" }'),
+          }),
+          execute: async ({ documentId, codingData }) => {
+            try { return await describeSetDocumentCoding(workspaceId, documentId, codingData) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        create_supplier_rule: tool({
+          description: "Propose a new supplier coding rule. Does not create it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({
+            name: z.string().optional().describe("Rule name; defaults to the matcher text"),
+            matcherType: z.enum(["exact", "contains"]).describe("Whether the supplier must match exactly or just contain this text"),
+            matcherValue: z.string().min(1).describe("The supplier name (or part of it) to match"),
+            account: z.string().min(1).describe("The account/code to assign on a match"),
+            requireReview: z.boolean().optional().describe("Always send a match to the review queue even though the rule applied"),
+            autopublish: z.boolean().optional().describe("Push a match to the connected accounting system automatically"),
+          }),
+          execute: async (input) => {
+            try { return await describeCreateSupplierRule(workspaceId, input) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        push_to_accounting: tool({
+          description: "Propose pushing a reviewed document to the workspace's connected accounting provider. Does not push it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({ documentId: z.string().describe("The document id") }),
+          execute: async ({ documentId }) => {
+            try { return await describePushToAccounting(workspaceId, documentId) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
       }
     : {}
 
@@ -253,7 +322,7 @@ export async function POST(request: Request) {
   // rather than fight three near-identical narrowed object types.
   const tools = { ...gridTools, ...searchTools, ...financeTools } as NonNullable<Parameters<typeof streamText>[0]["tools"]>
 
-  const base = onSheet ? SYSTEM_PROMPT : DICTATION_SYSTEM_PROMPT
+  const base = surface === "dictation" ? DICTATION_SYSTEM_PROMPT : surface === "finance-inbox" ? FINANCE_INBOX_SYSTEM_PROMPT : SYSTEM_PROMPT
   const withSearch = config.embeddings.enabled ? base + DOCUMENT_SEARCH_PROMPT : base
   const persona = financeAgentEnabled && capabilities ? personaAddendumForIndustry(capabilities.industry) : null
   const system = persona ? `${withSearch}\n\n${persona}` : withSearch

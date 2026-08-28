@@ -1,6 +1,8 @@
 "use client"
 
 import { DocumentSearchPart, type SourceHit } from "@/components/assistant/document-sources"
+import { FinanceProposalPart } from "@/components/assistant/finance-proposal"
+import type { FinanceProposalResult } from "@/lib/finance/actions"
 import { PendingChangesBar } from "@/components/assistant/pending-changes-bar"
 import { PendingChanges } from "@/components/assistant/pending-changes"
 import { focusRange, runSheetTool, SHEET_TOOL_NAMES, WRITE_TOOLS } from "@/components/assistant/sheet-tools"
@@ -30,7 +32,15 @@ const TOOL_LABELS: Record<string, string> = {
   write_range: "Writing data",
   add_column: "Adding a column",
   search_documents: "Searching documents",
+  get_inbox_summary: "Reading the review inbox",
+  find_supplier_documents: "Finding supplier documents",
+  get_document_details: "Reading a document",
+  get_supplier_rules: "Reading supplier rules",
 }
+
+/** Finance agent Act tools (Part 5c) — every one only ever proposes an action (lib/finance/actions.ts),
+ * so they all render through the same Accept/Dismiss card rather than a one-line "doing X" label. */
+const FINANCE_PROPOSAL_TOOLS = new Set(["approve_review_tasks", "reject_review_task", "set_document_coding", "create_supplier_rule", "push_to_accounting"])
 
 /** The AI assistant, docked to the left of the grid.
  *
@@ -50,8 +60,9 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   onOpenSource?: (hit: SourceHit) => void
   /** Which page is asking. Sent to /api/ai-chat, which registers the spreadsheet tools only for
    * "sheet" — offering the model seven tools that can only answer "the spreadsheet is still
-   * loading" wastes its step budget on the way to the same answer. */
-  surface?: "sheet" | "dictation"
+   * loading" wastes its step budget on the way to the same answer. "finance-inbox" (the review
+   * queue) has no grid either, but is where the finance agent's tools/persona are meant to be. */
+  surface?: "sheet" | "dictation" | "finance-inbox"
   /** Starter prompts for the empty state. Defaults to the spreadsheet's. */
   intents?: string[]
   emptyHint?: string
@@ -148,6 +159,14 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
               if (part.type === "tool-search_documents") {
                 const p = part as { state: "input-streaming" | "input-available" | "output-available" | "output-error"; input?: { query?: unknown }; output?: { results?: unknown; error?: unknown; pendingIndexing?: unknown } }
                 return <DocumentSearchPart key={index} state={p.state} input={p.input} output={p.output} onOpenSource={onOpenSource} />
+              }
+              // Finance Act tools also run on the server (they only validate and describe a
+              // proposal — see lib/finance/actions.ts), so their result arrives the same way
+              // search_documents' does; the Accept/Dismiss card is what turns that into a decision
+              // instead of a fact.
+              if (part.type.startsWith("tool-") && FINANCE_PROPOSAL_TOOLS.has(part.type.slice("tool-".length))) {
+                const p = part as { state: "input-streaming" | "input-available" | "output-available" | "output-error"; output?: FinanceProposalResult }
+                return <FinanceProposalPart key={index} workspaceId={workspaceId} state={p.state} output={p.output} />
               }
               if (part.type.startsWith("tool-")) {
                 const name = part.type.slice("tool-".length)

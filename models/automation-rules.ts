@@ -15,13 +15,14 @@ export const listAutomationRules = cache(async (workspaceId: string) => prisma.a
   orderBy: [{ isActive: "desc" }, { hitCount: "desc" }, { createdAt: "asc" }],
 }))
 
-export async function createAutomationRule(input: { workspaceId: string; name: string; matcher: RuleMatcher; actions: RuleActions; minConfidence?: number | null; requireReview?: boolean; createdById: string | null }) {
+export async function createAutomationRule(input: { workspaceId: string; name: string; matcher: RuleMatcher; actions: RuleActions; minConfidence?: number | null; requireReview?: boolean; autopublish?: boolean; createdById: string | null }) {
   if (!input.matcher.value.trim()) throw new Error("matcher_value_required")
   return prisma.automationRule.create({
     data: {
       workspaceId: input.workspaceId, name: input.name.trim() || "Untitled rule",
       matcher: input.matcher as unknown as Prisma.InputJsonValue, actions: input.actions as unknown as Prisma.InputJsonValue,
-      minConfidence: input.minConfidence ?? null, requireReview: input.requireReview ?? false, createdById: input.createdById,
+      minConfidence: input.minConfidence ?? null, requireReview: input.requireReview ?? false,
+      autopublish: input.autopublish ?? false, createdById: input.createdById,
     },
   })
 }

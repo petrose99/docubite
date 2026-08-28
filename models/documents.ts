@@ -209,6 +209,25 @@ export async function updateDocumentField(input: { workspaceId: string; document
   return { document: updated, missingRequiredFields: missing }
 }
 
+/** Sets a document's coding (account/tax code/cost centre — whatever keys the workspace's
+ * supplier rules use) directly, bypassing rule matching. Written by the finance agent's
+ * set_document_coding act tool (Part 5c) when a person accepts the proposed coding, and available
+ * to any future manual-coding UI. Deliberately touches ONLY `codingData` — never reviewedData,
+ * confidence, or provenance, which is what `updateDocumentField` guards; coding is classification
+ * metadata layered on top of extraction, not a value read off the document, so it has none of
+ * that machinery to keep in sync. `appliedRuleId` is left untouched: this is coding a person (or
+ * the agent, on their behalf) chose, not a rule matching, so it must not look like one did. */
+export async function setDocumentCoding(input: { workspaceId: string; documentId: string; codingData: Record<string, string | number>; actorId: string }) {
+  const document = await prisma.document.findFirst({ where: { id: input.documentId, workspaceId: input.workspaceId }, select: { id: true } })
+  if (!document) throw new Error("document_not_found")
+  const updated = await prisma.$transaction(async (tx) => {
+    const document_ = await tx.document.update({ where: { id: document.id }, data: { codingData: input.codingData as Prisma.InputJsonValue } })
+    await recordDocumentAudit({ workspaceId: input.workspaceId, documentId: document.id, actorId: input.actorId, type: "document_coding_set", detail: { codingData: input.codingData } }, tx)
+    return document_
+  })
+  return updated
+}
+
 export async function markDocumentsReviewed(workspaceId: string, documentIds: string[], actorId: string) {
   const capped = documentIds.slice(0, 100)
   let reviewed = 0

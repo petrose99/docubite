@@ -1,4 +1,5 @@
 import { ReviewInbox } from "@/components/workspace/review-inbox"
+import config from "@/lib/config"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listReviewTasks, parseReviewTaskStatus, type ReviewTaskStatus } from "@/models/review-tasks"
 import { getWorkspaceMembers, requireWorkspaceRole } from "@/models/workspaces"
@@ -27,7 +28,8 @@ export default async function ReviewQueuePage({ params, searchParams }: {
   const { status: statusParam } = await searchParams
   const user = await getCurrentUser()
   await requireWorkspaceRole(workspaceId, user.id)
-  if (!(await getWorkspaceCapabilities(workspaceId)).has("review-queue")) notFound()
+  const capabilities = await getWorkspaceCapabilities(workspaceId)
+  if (!capabilities.has("review-queue")) notFound()
 
   const status = statusParam && statusParam !== "all" ? parseReviewTaskStatus(statusParam) ?? undefined : undefined
   const [tasks, members] = await Promise.all([
@@ -54,6 +56,8 @@ export default async function ReviewQueuePage({ params, searchParams }: {
     <ReviewInbox
       workspaceId={workspaceId}
       currentStatus={statusParam ?? "open"}
+      financeAgentEnabled={capabilities.has("finance-agent")}
+      documentSearchEnabled={config.embeddings.enabled}
       members={members.map((member) => ({ id: member.userId, name: member.user.name }))}
       tasks={tasks.map((task) => {
         const confidence = (task.document.confidence as Record<string, number> | null) ?? null
