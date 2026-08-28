@@ -57,6 +57,8 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "AutomationRule",
   // Accounting core (WP12).
   "DocumentCheckResult",
+  // Industry workspaces + modules, Part 2.
+  "WorkspaceModule",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.

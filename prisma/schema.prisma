@@ -53,6 +53,7 @@ model User {
   assignedReviewTasks   ReviewTask[]          @relation("ReviewTaskAssignee")
   createdReviewTasks    ReviewTask[]          @relation("ReviewTaskCreator")
   createdAutomationRules AutomationRule[]     @relation("AutomationRuleCreator")
+  requestedWorkspaceModules WorkspaceModule[] @relation("ModuleRequester")
 
   @@map("users")
 }
@@ -120,6 +121,7 @@ model Workspace {
   reviewTasks     ReviewTask[]
   automationRules AutomationRule[]
   checkResults    DocumentCheckResult[]
+  modules         WorkspaceModule[]
 
   @@map("workspaces")
 }
@@ -1010,6 +1012,36 @@ model AutomationRule {
 
   @@index([workspaceId, isActive])
   @@map("automation_rules")
+}
+
+/** One row per module a workspace has ever touched (lib/modules) — "always"-tier core modules
+ * never need a row (they're on for every workspace of their industry unconditionally); this table
+ * only exists to record deviations from a module's default state, plus optional-tier requests.
+ *
+ * status: "enabled" | "disabled" | "requested" (lib/modules/capabilities.ts's resolveModules reads
+ * these as overrides against the industry's default set — a "requested" row adds no capability by
+ * itself, it just gives the catalog page something to show an owner). source distinguishes an
+ * owner's own toggle ("user") from a support/admin override ("admin") for the catalog's audit trail;
+ * "default" is unused today (reserved for a future explicit-seed row) but kept in the type union
+ * documented at the call site in lib/modules/capabilities.ts.
+ *
+ * requestedById is nullable/SetNull rather than Cascade: a member who requested a module and later
+ * left the workspace shouldn't take the request's provenance with them. */
+model WorkspaceModule {
+  id            String    @id @default(uuid()) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  moduleKey     String    @map("module_key")
+  status        String
+  source        String    @default("user")
+  requestedById String?   @map("requested_by_id") @db.Uuid
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requestedBy   User?     @relation("ModuleRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, moduleKey])
+  @@map("workspace_modules")
 }
 
 /** One item of work in the accounting review queue (WP10): a document that needs a person to
