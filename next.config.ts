@@ -2,6 +2,14 @@ import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  // Pins Turbopack's workspace root to this checkout, silencing (and pre-empting) the
+  // multiple-lockfiles warning Turbopack prints when this project lives inside a git worktree:
+  // its root-inference walks up looking for a lockfile and can find this repo's outer, non-
+  // worktree checkout too (a package-lock.json exists in both). Not confirmed to be the cause of
+  // any specific observed bug — the one dev-server mismatch found in this session traced to a
+  // different cause (the terminal tool's cwd, not Turbopack) — but Next's own docs are explicit
+  // that an ambiguous root changes what gets resolved, so pinning it is worth doing regardless.
+  turbopack: { root: import.meta.dirname },
   async headers() {
     // Baseline browser protections. The Content-Security-Policy itself lives in proxy.ts now, not
     // here: an enforced, nonce-based script-src has to be generated per-request (a fresh nonce
