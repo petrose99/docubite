@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 
 /** `documents` is only the detail-page prefix — there is no document list page; the sheet is
  * the view of that data, so document mutations revalidate the file's `sheet`. */
-export const paths = (workspaceId: string) => ({ documents: `/workspaces/${workspaceId}/documents`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, billing: `/workspaces/${workspaceId}/settings/billing`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules` })
+export const paths = (workspaceId: string) => ({ documents: `/workspaces/${workspaceId}/documents`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, billing: `/workspaces/${workspaceId}/settings/billing`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules`, settingsEmail: `/workspaces/${workspaceId}/settings/email` })
 
 /** Revalidates the whole workspace segment layout, not just one page — needed whenever a change
  * (module toggle, rename, ownership transfer) should update the persistent sidebar, which the
@@ -42,6 +42,11 @@ const BILLING_MESSAGES: Record<string, string> = {
   // Accounting connectors (P2).
   integration_connection_not_found: "That connection no longer exists.",
   bill_missing_total: "This document has no total to push.",
+  ledger_duplicate: "A bill with this reference number already exists in your accounting ledger.",
+  bank_match_not_found: "That match no longer exists.",
+  inbound_email_disabled_for_clinical: "Inbound email intake isn't available for a healthcare workspace.",
+  pattern_invalid: "Enter a full email address (name@domain.com) or a domain (@domain.com).",
+  allowed_sender_not_found: "That sender no longer exists.",
 }
 
 export const errorMessage = (error: unknown, fallback: string) => {

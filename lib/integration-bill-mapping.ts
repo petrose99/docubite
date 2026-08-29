@@ -23,6 +23,7 @@ export type NormalizedBill = {
   dueDate: string | null
   total: number
   lineItems: NormalizedLineItem[]
+  currencyCode: string | null
 }
 
 export class BillMappingError extends Error {}
@@ -35,6 +36,11 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function asCurrencyCode(value: unknown): string | null {
+  const code = asString(value)?.toUpperCase() ?? null
+  return code && /^[A-Z]{3}$/.test(code) ? code : null
 }
 
 function normalizeLineItems(raw: unknown, total: number): NormalizedLineItem[] {
@@ -73,6 +79,7 @@ export function normalizeBillFromDocument(input: {
   const total = asNumber(data.total)
   if (total === null) throw new BillMappingError("bill_missing_total")
   const lineItems = normalizeLineItems(data.line_items, total)
+  const currencyCode = asCurrencyCode(data.currency_code)
   return {
     documentId: input.documentId,
     filename: input.filename,
@@ -82,5 +89,6 @@ export function normalizeBillFromDocument(input: {
     dueDate,
     total,
     lineItems,
+    currencyCode,
   }
 }

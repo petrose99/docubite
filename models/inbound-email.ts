@@ -1,6 +1,7 @@
 // Deliberately NOT a "use server" module, matching every other models/*.ts helper here: this
 // trusts the token/sender it is handed. app/api/inbound-email/route.ts does the signature check
 // and is the only caller.
+import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { createIngestionItem } from "@/lib/ingestion"
 import { isSupportedDocumentBuffer } from "@/models/documents"
 import { EXTENSION_MIME_TYPES } from "@/lib/zip-ingestion"
@@ -8,6 +9,7 @@ import { prisma } from "@/lib/db"
 import { createFile, getFileTemplates } from "@/models/files"
 import { getWorkspaceMembers } from "@/models/workspaces"
 import crypto from "crypto"
+import { cache } from "react"
 
 /** Generates (or returns the existing) per-workspace inbound routing token. Refused outright for
  * a healthcare workspace — unencrypted email is not an acceptable channel for ePHI, so there is
@@ -23,14 +25,62 @@ export async function ensureInboundEmailToken(workspaceId: string): Promise<stri
 
 export const resolveWorkspaceByInboundToken = (token: string) => prisma.workspace.findUnique({ where: { inboundEmailToken: token }, select: { id: true, industry: true } })
 
-/** Default allowlist: any address already a member of the workspace. There is no UI yet to widen
- * this to non-member senders (a bookkeeper's own inbox, say) — that is real future scope, not
- * something to half-build unrequested while this channel is still dark. */
+/** Matches one lowercased sender email against one allowlist pattern: either an exact email, or a
+ * "@domain.tld" suffix matching only that exact domain — "@corp.com" must not match
+ * "x@sub.corp.com", so this compares the sender's domain for exact equality, not a suffix scan. */
+export function matchesAllowPattern(pattern: string, email: string): boolean {
+  const normalizedPattern = pattern.trim().toLowerCase()
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedPattern || !normalizedEmail) return false
+  if (normalizedPattern.startsWith("@")) {
+    const domain = normalizedEmail.split("@")[1]
+    return domain === normalizedPattern.slice(1)
+  }
+  return normalizedEmail === normalizedPattern
+}
+
+/** Allowlist: any address already a member of the workspace, OR one matching an explicitly added
+ * InboundEmailAllowedSender pattern (a bookkeeper's own inbox, or a whole domain). */
 export async function isSenderAllowed(workspaceId: string, senderEmail: string): Promise<boolean> {
   const normalized = senderEmail.trim().toLowerCase()
   if (!normalized) return false
   const members = await getWorkspaceMembers(workspaceId)
-  return members.some((member) => member.user.email.toLowerCase() === normalized)
+  if (members.some((member) => member.user.email.toLowerCase() === normalized)) return true
+  const allowed = await prisma.inboundEmailAllowedSender.findMany({ where: { workspaceId }, select: { pattern: true } })
+  return allowed.some((row) => matchesAllowPattern(row.pattern, normalized))
+}
+
+export const listAllowedSenders = cache(async (workspaceId: string) => prisma.inboundEmailAllowedSender.findMany({
+  where: { workspaceId },
+  orderBy: { createdAt: "desc" },
+}))
+
+export async function addAllowedSender(input: { workspaceId: string; pattern: string; createdById: string }) {
+  const pattern = input.pattern.trim().toLowerCase()
+  if (!pattern) throw new Error("pattern_required")
+  const isDomainPattern = /^@[^\s@]+\.[^\s@]+$/.test(pattern)
+  const isEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pattern)
+  if (!isDomainPattern && !isEmailPattern) throw new Error("pattern_invalid")
+  const context = await getRequestAuditContext()
+  const [created] = await prisma.$transaction([
+    prisma.inboundEmailAllowedSender.upsert({
+      where: { workspaceId_pattern: { workspaceId: input.workspaceId, pattern } },
+      create: { workspaceId: input.workspaceId, pattern, createdById: input.createdById },
+      update: {},
+    }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, actorId: input.createdById, type: "inbound_email_allowed_sender.added", detail: { pattern } }, context) }),
+  ])
+  return created
+}
+
+export async function removeAllowedSender(input: { workspaceId: string; id: string; actorId: string }) {
+  const row = await prisma.inboundEmailAllowedSender.findFirst({ where: { id: input.id, workspaceId: input.workspaceId } })
+  if (!row) throw new Error("allowed_sender_not_found")
+  const context = await getRequestAuditContext()
+  await prisma.$transaction([
+    prisma.inboundEmailAllowedSender.delete({ where: { id: row.id } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, actorId: input.actorId, type: "inbound_email_allowed_sender.removed", detail: { pattern: row.pattern } }, context) }),
+  ])
 }
 
 async function ensureEmailIntakeFile(workspaceId: string) {

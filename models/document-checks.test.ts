@@ -96,4 +96,41 @@ describe("runDeterministicChecks", () => {
     db.document = { findFirst: vi.fn().mockRejectedValue(new Error("db down")) }
     await expect(runDeterministicChecks({ workspaceId: "w1", documentId: "d1" })).resolves.toBeUndefined()
   })
+
+  it("warns when the supplier VAT number does not match the workspace's tax region format", async () => {
+    const { getTaxProfile } = await import("@/models/tax-profiles")
+    vi.mocked(getTaxProfile).mockResolvedValue({
+      id: "tp1", region: "gb", currentVersion: 1,
+      config: { region: "gb", name: "United Kingdom", currency: "GBP", taxType: "vat", rates: [], registrationNumberLabel: "VAT number", registrationNumberPattern: "^GB\\d{9}$", mtdReady: false, form1099Fields: [] },
+    })
+    db.document = {
+      findFirst: vi.fn().mockResolvedValue(invoiceDocument({ vendor: "Acme", invoice_number: "INV-1", subtotal: 100, tax_total: 20, total: 120, currency_code: "GBP", supplier_vat_number: "FR123456789" })),
+      findMany: vi.fn().mockResolvedValue([]),
+    }
+
+    await runDeterministicChecks({ workspaceId: "w1", documentId: "d1" })
+
+    expect(db.documentCheckResult.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { documentId_checkCode: { documentId: "d1", checkCode: "vat_number_format" } },
+      create: expect.objectContaining({ status: "warn" }),
+    }))
+  })
+
+  it("does not run the VAT check when the field is absent", async () => {
+    const { getTaxProfile } = await import("@/models/tax-profiles")
+    vi.mocked(getTaxProfile).mockResolvedValue({
+      id: "tp1", region: "gb", currentVersion: 1,
+      config: { region: "gb", name: "United Kingdom", currency: "GBP", taxType: "vat", rates: [], registrationNumberLabel: "VAT number", registrationNumberPattern: "^GB\\d{9}$", mtdReady: false, form1099Fields: [] },
+    })
+    db.document = {
+      findFirst: vi.fn().mockResolvedValue(invoiceDocument({ vendor: "Acme", invoice_number: "INV-1", subtotal: 100, tax_total: 20, total: 120, currency_code: "GBP" })),
+      findMany: vi.fn().mockResolvedValue([]),
+    }
+
+    await runDeterministicChecks({ workspaceId: "w1", documentId: "d1" })
+
+    expect(db.documentCheckResult.upsert).not.toHaveBeenCalledWith(expect.objectContaining({
+      where: { documentId_checkCode: { documentId: "d1", checkCode: "vat_number_format" } },
+    }))
+  })
 })

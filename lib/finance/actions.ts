@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
+import { listAccountingEntities } from "@/models/accounting-entities"
 
 /** Validates and describes the finance agent's proposed write actions — never performs one.
  *
@@ -50,12 +51,39 @@ export async function describeSetDocumentCoding(workspaceId: string, documentId:
   return { kind: "set_document_coding", documentId, codingData, summary: `Code "${document.filename}" as ${coding}` }
 }
 
+/** Normalizes an account string for fuzzy comparison: lowercase, trimmed, punctuation collapsed
+ * to spaces — "6000 - Printing" and "6000 Printing" should compare equal. */
+function normalizeAccountText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+}
+
+/** Snaps a freehand account string onto this workspace's synced chart of accounts (WP1.5), when
+ * one exists and a confident match is found — an exact normalized match, or the freehand text
+ * appearing wholly inside exactly one synced account's code+name (never the reverse: a short
+ * freehand string like "6000" matching many accounts is not confident). Returns the original
+ * string unchanged when there is nothing to snap to, so a workspace with no connection (or the
+ * agent describing a brand-new account) is unaffected. */
+export function snapAccountToSyncedList(account: string, syncedAccounts: { code: string | null; name: string }[]): string {
+  if (!syncedAccounts.length) return account
+  const needle = normalizeAccountText(account)
+  if (!needle) return account
+  const labelFor = (entity: { code: string | null; name: string }) => entity.code ? `${entity.code} — ${entity.name}` : entity.name
+
+  const exact = syncedAccounts.find((entity) => normalizeAccountText(labelFor(entity)) === needle || normalizeAccountText(entity.name) === needle || (entity.code && normalizeAccountText(entity.code) === needle))
+  if (exact) return labelFor(exact)
+
+  const containing = syncedAccounts.filter((entity) => normalizeAccountText(labelFor(entity)).includes(needle))
+  return containing.length === 1 ? labelFor(containing[0]) : account
+}
+
 export async function describeCreateSupplierRule(workspaceId: string, input: { name?: string; matcherType: "exact" | "contains"; matcherValue: string; account: string; requireReview?: boolean; autopublish?: boolean }): Promise<FinanceProposalResult> {
   if (!(await getWorkspaceCapabilities(workspaceId)).has("supplier-rules")) return { error: "supplier_rules_not_enabled" }
   const matcherValue = input.matcherValue.trim()
-  const account = input.account.trim()
+  const rawAccount = input.account.trim()
   if (!matcherValue) return { error: "matcher_value_required" }
-  if (!account) return { error: "account_required" }
+  if (!rawAccount) return { error: "account_required" }
+  const syncedAccounts = await listAccountingEntities(workspaceId, "account")
+  const account = snapAccountToSyncedList(rawAccount, syncedAccounts)
   const match = input.matcherType === "contains" ? `contains "${matcherValue}"` : `is exactly "${matcherValue}"`
   const parts = [`Create a rule: when the supplier ${match}, code it to ${account}`]
   if (input.requireReview) parts.push("always send it to review")

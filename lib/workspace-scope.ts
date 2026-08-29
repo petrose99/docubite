@@ -59,6 +59,14 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "DocumentCheckResult",
   // Industry workspaces + modules, Part 2.
   "WorkspaceModule",
+  // Dext-parity WP1.4: inbound-email sender allowlist.
+  "InboundEmailAllowedSender",
+  // Dext-parity WP1.3: few-shot correction memory.
+  "FieldCorrection",
+  // Dext-parity WP1.5: chart-of-accounts/vendor/tax-rate sync.
+  "AccountingEntity",
+  // Dext-parity WP2.1/WP2.3: bank + supplier statement reconciliation.
+  "BankMatch",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.

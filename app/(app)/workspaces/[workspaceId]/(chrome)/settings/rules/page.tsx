@@ -1,9 +1,11 @@
 import { AutomationRuleActiveToggle } from "@/components/workspace/automation-rule-row"
 import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { resolveAccountOptions } from "@/lib/automation/account-options"
 import type { RuleActions, RuleMatcher } from "@/lib/automation/rules"
 import { getCurrentUser } from "@/lib/auth"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
+import { listAccountingEntities } from "@/models/accounting-entities"
 import { listAutomationRules } from "@/models/automation-rules"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
@@ -19,7 +21,11 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
   const membership = await requireWorkspaceRole(workspaceId, user.id)
   if (!(await getWorkspaceCapabilities(workspaceId)).has("supplier-rules")) notFound()
 
-  const rules = await listAutomationRules(workspaceId)
+  const [rules, accountingEntities] = await Promise.all([
+    listAutomationRules(workspaceId),
+    listAccountingEntities(workspaceId, "account"),
+  ])
+  const accountOptions = resolveAccountOptions(accountingEntities)
   const owner = membership.role === "owner"
 
   return <main className="space-y-6">
@@ -30,7 +36,7 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
 
     {owner && <Card>
       <CardHeader><CardTitle>Add a rule</CardTitle></CardHeader>
-      <CardContent><AutomationRuleForm workspaceId={workspaceId} /></CardContent>
+      <CardContent><AutomationRuleForm workspaceId={workspaceId} accountOptions={accountOptions} /></CardContent>
     </Card>}
 
     <Card>

@@ -1,6 +1,7 @@
 import { SUPPORTED_AUDIO_TYPES, isSupportedAudioBuffer } from "@/lib/asr/types"
 import { track } from "@/lib/analytics"
 import { auditEventData, getRequestAuditContext, recordDocumentAudit } from "@/lib/audit"
+import { SUPPLIER_FIELD_BY_TEMPLATE } from "@/lib/automation/rules"
 import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
@@ -8,6 +9,7 @@ import { projectDocumentFields } from "@/lib/field-projection"
 import { LOW_CONFIDENCE } from "@/lib/sheet-seed"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
+import { recordFieldCorrection } from "@/models/field-corrections"
 import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { emitWorkspaceEvent } from "@/lib/webhooks"
 import { kickWebhookDrain } from "@/lib/webhook-delivery"
@@ -130,6 +132,33 @@ export async function listWorkspaceDocuments(workspaceId: string, filters: { sta
 
 export const getWorkspaceDocument = (workspaceId: string, documentId: string) => prisma.document.findFirst({ where: { id: documentId, workspaceId }, include: { template: true, templateVersion: true } })
 
+/** Fire-and-forget: diffs old vs new field values and records each real scalar correction (WP1.3's
+ * few-shot memory). Only scalar (string/number/boolean) values are recorded — an array field like
+ * line_items is not a "wrong value, corrected value" pair in any useful sense for a prompt example.
+ * Never awaited by callers past the point their own write already committed: a missed correction
+ * costs future prompt quality, never correctness of the write it rode in on. */
+function recordFieldCorrectionsFromDiff(input: { workspaceId: string; templateCode: string | null; oldValues: Record<string, unknown>; newValues: Record<string, unknown> }): void {
+  if (!input.templateCode) return
+  const templateCode = input.templateCode
+  const supplierField = SUPPLIER_FIELD_BY_TEMPLATE[templateCode]
+  const supplier = supplierField ? asScalarString(input.newValues[supplierField]) ?? asScalarString(input.oldValues[supplierField]) : null
+
+  for (const [fieldKey, oldValue] of Object.entries(input.oldValues)) {
+    const wrongValue = asScalarString(oldValue)
+    if (wrongValue === null) continue
+    const newValue = asScalarString(input.newValues[fieldKey])
+    if (newValue === null || newValue === wrongValue) continue
+    recordFieldCorrection({ workspaceId: input.workspaceId, templateCode, fieldKey, supplier, wrongValue, correctedValue: newValue })
+      .catch((error) => console.error("[documents] failed to record field correction:", error instanceof Error ? error.message : error))
+  }
+}
+
+function asScalarString(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return null
+}
+
 export async function updateDocumentReview(input: { workspaceId: string; documentId: string; reviewedData: Record<string, unknown>; actorId: string }) {
   const document = await getWorkspaceDocument(input.workspaceId, input.documentId)
   if (!document) throw new Error("document_not_found")
@@ -154,6 +183,11 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
     webhookQueued = emitted.queued > 0
     return updated
   }, { timeout: 20_000 })
+  recordFieldCorrectionsFromDiff({
+    workspaceId: input.workspaceId, templateCode: document.template?.code ?? null,
+    oldValues: (document.reviewedData as Record<string, unknown> | null) ?? (document.rawExtraction as Record<string, unknown> | null) ?? {},
+    newValues: reviewedData,
+  })
   // Human review is the key integration trigger — a reviewed document is what a connector pushes.
   if (webhookQueued) await kickWebhookDrain()
   return result
@@ -205,6 +239,7 @@ export async function updateDocumentField(input: { workspaceId: string; document
     await replaceDocumentFieldValues({ workspaceId: input.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows }, tx)
     return document_
   }, { timeout: 20_000 })
+  recordFieldCorrectionsFromDiff({ workspaceId: input.workspaceId, templateCode: document.template?.code ?? null, oldValues: current, newValues: reviewedData })
   await track("document_correction_saved", { documentId: document.id, fieldCount: 1 }, { workspaceId: input.workspaceId, actorId: input.actorId })
   return { document: updated, missingRequiredFields: missing }
 }

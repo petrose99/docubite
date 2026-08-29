@@ -3,6 +3,9 @@ import { track } from "@/lib/analytics"
 import { SUPPLIER_FIELD_BY_TEMPLATE } from "@/lib/automation/rules"
 import { applyAutomationRules } from "@/models/automation-rules"
 import { runDeterministicChecks } from "@/models/document-checks"
+import { getFewShotExamples } from "@/models/field-corrections"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
+import { regenerateBankMatchSuggestions, regenerateSupplierStatementMatches } from "@/models/bank-matches"
 import config from "@/lib/config"
 import { buildDocumentJsonSchema, buildDocumentPrompt, DocumentClassification, DocumentFieldDefinition, extractClassification, extractFieldConfidence, extractFieldProvenance, FieldProvenanceHints, findMissingRequiredFields, parseTemplateFields, ProvenanceHint, validateDocumentValues } from "@/lib/document-templates"
 import { documentBlocksKey, putDocumentSource, readDocumentSource } from "@/lib/document-storage"
@@ -330,7 +333,8 @@ export async function processDocumentJob(jobId: string) {
     // actually exist in `contents`.
     const collectedPages = contents.map((content) => content.page)
     const batches = pageBatches(contents.length, config.documents.pagesPerBatch).map((batch) => batch.map((position) => collectedPages[position - 1]))
-    const prompt = buildDocumentPrompt(document.template?.name || "document", fields, document.templateVersion?.prompt)
+    const fewShotExamples = document.template?.code ? await getFewShotExamples(document.workspaceId, document.template.code).catch(() => []) : []
+    const prompt = buildDocumentPrompt(document.template?.name || "document", fields, document.templateVersion?.prompt, fewShotExamples)
     const schema = buildDocumentJsonSchema(fields)
     const passes: Array<Record<string, unknown>> = []
     const confidencePasses: Array<Record<string, number>> = []
@@ -419,6 +423,14 @@ export async function processDocumentJob(jobId: string) {
     // Runs after rules, per the roadmap — a check comparing against codingData (or a future check
     // that does) needs the rule's coding to already be on the document.
     await runDeterministicChecks({ workspaceId: document.workspaceId, documentId: document.id })
+    if (templateCode === "bank_statement" || templateCode === "supplier_statement") {
+      const capabilities = await getWorkspaceCapabilities(document.workspaceId)
+      if (templateCode === "bank_statement" && capabilities.has("bank-match")) {
+        await regenerateBankMatchSuggestions(document.workspaceId, document.id)
+      } else if (templateCode === "supplier_statement" && capabilities.has("statement-packs")) {
+        await regenerateSupplierStatementMatches(document.workspaceId, document.id)
+      }
+    }
   } catch (error) {
     await failDocumentJob({ jobId: job.id, attempts: job.attempts, scheduledAt: job.scheduledAt, documentId: document.id, workspaceId: document.workspaceId }, error)
     // Rethrown below, after the embed job is kicked — a document that OCR'd successfully is

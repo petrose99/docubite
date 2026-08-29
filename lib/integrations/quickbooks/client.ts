@@ -74,6 +74,45 @@ export async function listExpenseAccounts(realmId: string, accessToken: string):
   return (result.QueryResponse?.Account ?? []).map((a) => ({ id: a.Id, name: a.Name }))
 }
 
+const QUERY_PAGE_SIZE = 200
+
+/** Pages through a QuickBooks query with `startposition`/`maxresults` until a page comes back
+ * short of a full page — QuickBooks has no total-count or next-cursor field, so "fewer than asked
+ * for" is the only end-of-results signal the API gives. */
+async function paginatedQuery<Row>(realmId: string, accessToken: string, queryWithoutPaging: string, entityKey: string): Promise<Row[]> {
+  const rows: Row[] = []
+  let startPosition = 1
+  for (;;) {
+    const query = `${queryWithoutPaging} startposition ${startPosition} maxresults ${QUERY_PAGE_SIZE}`
+    const result = await apiRequest<{ QueryResponse?: Record<string, Row[] | undefined> }>(realmId, accessToken, `/query?query=${encodeURIComponent(query)}`)
+    const page = result.QueryResponse?.[entityKey] ?? []
+    rows.push(...page)
+    if (page.length < QUERY_PAGE_SIZE) return rows
+    startPosition += QUERY_PAGE_SIZE
+  }
+}
+
+export type QuickBooksSyncedAccount = { id: string; name: string; active: boolean }
+export type QuickBooksSyncedVendor = { id: string; name: string; active: boolean }
+export type QuickBooksSyncedTaxCode = { id: string; name: string; active: boolean }
+
+/** All active accounts of any type, for WP1.5's chart-of-accounts sync — distinct from
+ * listExpenseAccounts above, which stays scoped to the default-account picker's narrower need. */
+export async function listAccounts(realmId: string, accessToken: string): Promise<QuickBooksSyncedAccount[]> {
+  const rows = await paginatedQuery<{ Id: string; Name: string; Active: boolean }>(realmId, accessToken, "select Id, Name, Active from Account where Active = true", "Account")
+  return rows.map((row) => ({ id: row.Id, name: row.Name, active: row.Active }))
+}
+
+export async function listVendors(realmId: string, accessToken: string): Promise<QuickBooksSyncedVendor[]> {
+  const rows = await paginatedQuery<{ Id: string; DisplayName: string; Active: boolean }>(realmId, accessToken, "select Id, DisplayName, Active from Vendor where Active = true", "Vendor")
+  return rows.map((row) => ({ id: row.Id, name: row.DisplayName, active: row.Active }))
+}
+
+export async function listTaxCodes(realmId: string, accessToken: string): Promise<QuickBooksSyncedTaxCode[]> {
+  const rows = await paginatedQuery<{ Id: string; Name: string; Active: boolean }>(realmId, accessToken, "select Id, Name, Active from TaxCode where Active = true", "TaxCode")
+  return rows.map((row) => ({ id: row.Id, name: row.Name, active: row.Active }))
+}
+
 /** Finds a vendor by exact DisplayName, or creates one. No fuzzy dedup — an exact match or a new
  * vendor, per scope. */
 export async function findOrCreateVendor(realmId: string, accessToken: string, name: string): Promise<string> {
@@ -88,6 +127,16 @@ export async function findOrCreateVendor(realmId: string, accessToken: string, n
     body: JSON.stringify({ DisplayName: name }),
   })
   return created.Vendor.Id
+}
+
+/** WP2.4: true when a bill with this exact DocNumber already exists at QuickBooks — the
+ * ledger-side duplicate guard checked in lib/integration-push.ts before every push, independent
+ * of this app's own duplicate detection (lib/checks/duplicates.ts), which only ever sees documents
+ * this app itself has processed. */
+export async function findBillByDocNumber(realmId: string, accessToken: string, docNumber: string): Promise<boolean> {
+  const query = `select Id from Bill where DocNumber = '${escapeQbQuery(docNumber)}'`
+  const result = await apiRequest<{ QueryResponse?: { Bill?: Array<{ Id: string }> } }>(realmId, accessToken, `/query?query=${encodeURIComponent(query)}`)
+  return Boolean(result.QueryResponse?.Bill?.length)
 }
 
 /** Creates the bill. `body` is the exact shape from lib/integrations/quickbooks/bill-mapper.ts. */

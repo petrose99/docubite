@@ -54,6 +54,8 @@ model User {
   createdReviewTasks    ReviewTask[]          @relation("ReviewTaskCreator")
   createdAutomationRules AutomationRule[]     @relation("AutomationRuleCreator")
   requestedWorkspaceModules WorkspaceModule[] @relation("ModuleRequester")
+  createdInboundEmailAllowedSenders InboundEmailAllowedSender[] @relation("InboundEmailAllowedSenderCreator")
+  decidedBankMatches BankMatch[] @relation("BankMatchDecider")
 
   @@map("users")
 }
@@ -122,6 +124,10 @@ model Workspace {
   automationRules AutomationRule[]
   checkResults    DocumentCheckResult[]
   modules         WorkspaceModule[]
+  inboundEmailAllowedSenders InboundEmailAllowedSender[]
+  fieldCorrections FieldCorrection[]
+  accountingEntities AccountingEntity[]
+  bankMatches BankMatch[]
 
   @@map("workspaces")
 }
@@ -470,6 +476,8 @@ model Document {
   integrationPushes IntegrationPush[]
   ingestionItems    IngestionItem[]
   reviewTasks       ReviewTask[]
+  bankMatchesAsStatement BankMatch[] @relation("BankMatchStatement")
+  bankMatchesAsMatched   BankMatch[] @relation("BankMatchMatched")
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -874,6 +882,7 @@ model IntegrationConnection {
   workspace                 Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy                 User?             @relation("IntegrationConnectionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   pushes                    IntegrationPush[]
+  accountingEntities        AccountingEntity[]
 
   @@unique([workspaceId, provider])
   @@map("integration_connections")
@@ -960,7 +969,7 @@ model DocumentCheckResult {
   workspaceId String    @map("workspace_id") @db.Uuid
   documentId  String    @map("document_id") @db.Uuid
   /// invoice_arithmetic | statement_balance | duplicate | missing_statement_period |
-  /// tax_consistency | suspicious_resubmission
+  /// tax_consistency | suspicious_resubmission | vat_number_format
   checkCode   String    @map("check_code")
   /// pass | warn | fail
   status      String
@@ -1201,4 +1210,107 @@ model AuthRateLimit {
   @@unique([key, windowStart])
   @@index([windowStart])
   @@map("auth_rate_limits")
+}
+
+/// WP1.4: widens the inbound-email sender allowlist (models/inbound-email.ts's isSenderAllowed)
+/// beyond "already a workspace member" to explicitly-added addresses or whole domains — a
+/// bookkeeper's own inbox, say. `pattern` is either a lowercased exact email or a lowercased
+/// "@domain.tld" suffix; matching is done in application code (matchesAllowPattern), not SQL.
+model InboundEmailAllowedSender {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  pattern     String
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?     @relation("InboundEmailAllowedSenderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, pattern])
+  @@map("inbound_email_allowed_senders")
+}
+
+/// WP1.3: the few-shot correction memory — every time a reviewer overrides an extracted value, the
+/// (wrong, corrected) pair is remembered per (workspace, template, field) and fed back into future
+/// extraction prompts as format guidance (lib/document-templates.ts's buildDocumentPrompt). A repeat
+/// of the exact same correction bumps hitCount rather than creating a new row — the same "the
+/// LATEST/most-reinforced state is what matters, not the whole history" shape as DocumentCheckResult.
+model FieldCorrection {
+  id            String    @id @default(uuid()) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  templateCode  String    @map("template_code")
+  fieldKey      String    @map("field_key")
+  /// The document's supplier/merchant/payee at the time of correction (lib/automation/rules.ts's
+  /// SUPPLIER_FIELD_BY_TEMPLATE), kept for future supplier-scoped retrieval — not used by
+  /// getFewShotExamples's current top-N-by-hitCount selection.
+  supplier      String?
+  wrongValue    String    @map("wrong_value")
+  correctedValue String   @map("corrected_value")
+  hitCount      Int       @default(1) @map("hit_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, templateCode, fieldKey, wrongValue, correctedValue])
+  @@index([workspaceId, templateCode, fieldKey, updatedAt])
+  @@map("field_corrections")
+}
+
+/// WP1.5: a synced snapshot of one QuickBooks/Xero entity (account, vendor, or tax rate) — powers
+/// the rules UI's account picker (WP1.6) without a live provider round-trip on every page render.
+/// `externalId` is the provider's id (QuickBooks Account.Id / Xero Account.Code, etc.); `active`
+/// tracks the provider's own active flag so a deactivated account drops out of pickers without
+/// losing the sync history. `raw` is the provider's row as fetched, for fields not worth a column yet.
+model AccountingEntity {
+  id           String              @id @default(uuid()) @db.Uuid
+  workspaceId  String              @map("workspace_id") @db.Uuid
+  connectionId String              @map("connection_id") @db.Uuid
+  /// "account" | "vendor" | "tax_rate"
+  entityType   String              @map("entity_type")
+  externalId   String              @map("external_id")
+  code         String?
+  name         String
+  active       Boolean             @default(true)
+  raw          Json?
+  syncedAt     DateTime            @map("synced_at")
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection   IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, entityType, externalId])
+  @@index([workspaceId, entityType, name])
+  @@map("accounting_entities")
+}
+
+/// WP2.1/WP2.3: one suggested-or-decided match between a line inside a bank/supplier statement
+/// document (`transactionIndex` into its reviewedData.transactions array — no projected transaction
+/// table; the statement's Document.reviewedData stays the canonical source) and another document in
+/// the workspace (an invoice/receipt for `kind: "bank"`, or the statement itself for
+/// `kind: "supplier_statement"` matching against invoices). Regenerating suggestions for a statement
+/// deletes only its non-accepted rows (models/bank-matches.ts) — an accepted match is a person's
+/// decision and survives a re-run.
+model BankMatch {
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspaceId         String    @map("workspace_id") @db.Uuid
+  statementDocumentId String    @map("statement_document_id") @db.Uuid
+  transactionIndex    Int       @map("transaction_index")
+  matchedDocumentId   String    @map("matched_document_id") @db.Uuid
+  /// "bank" | "supplier_statement"
+  kind                String    @default("bank")
+  dateDeltaDays       Int?      @map("date_delta_days")
+  confidence          Float
+  /// "suggested" | "accepted" | "rejected"
+  status              String    @default("suggested")
+  decidedById         String?   @map("decided_by_id") @db.Uuid
+  decidedAt           DateTime? @map("decided_at")
+  detail              Json?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  statementDocument    Document @relation("BankMatchStatement", fields: [statementDocumentId], references: [id], onDelete: Cascade)
+  matchedDocument      Document @relation("BankMatchMatched", fields: [matchedDocumentId], references: [id], onDelete: Cascade)
+  decidedBy           User?     @relation("BankMatchDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, kind, statementDocumentId, transactionIndex, matchedDocumentId])
+  @@index([workspaceId, statementDocumentId])
+  @@index([workspaceId, matchedDocumentId])
+  @@map("bank_matches")
 }

@@ -252,7 +252,26 @@ export function buildDocumentJsonSchema(fields: DocumentFieldDefinition[]) {
   }
 }
 
-export function buildDocumentPrompt(templateName: string, fields: DocumentFieldDefinition[], customPrompt?: string | null) {
+/** WP1.3's few-shot correction block: a bounded, format-guidance-only rendering of this
+ * workspace's most-reinforced past corrections. Capped at ~2KB total on top of the 8-example/
+ * 200-char-value caps already applied by getFewShotExamples, so a pathological workspace can never
+ * blow out the prompt — examples are dropped from the end once the cap is hit, not truncated
+ * mid-line. Phrased as "never reuse the values" deliberately: these are prior DOCUMENTS' answers,
+ * and the model must not anchor on them as if this document repeats the same facts. */
+const FEW_SHOT_BLOCK_CHAR_CAP = 2000
+
+function buildFewShotBlock(examples: { fieldKey: string; wrongValue: string; correctedValue: string }[]): string {
+  if (!examples.length) return ""
+  const lines: string[] = ["Common corrections in this workspace (these show the expected format — never reuse the values):"]
+  for (const example of examples) {
+    const line = `- ${example.fieldKey}: "${example.wrongValue}" was corrected to "${example.correctedValue}"`
+    if (lines.join("\n").length + line.length + 1 > FEW_SHOT_BLOCK_CHAR_CAP) break
+    lines.push(line)
+  }
+  return lines.length > 1 ? lines.join("\n") : ""
+}
+
+export function buildDocumentPrompt(templateName: string, fields: DocumentFieldDefinition[], customPrompt?: string | null, fewShotExamples?: { fieldKey: string; wrongValue: string; correctedValue: string }[]) {
   return [
     `Extract factual values from this ${templateName}.`,
     "Return only values supported by the schema. Do not invent values; omit unreadable values.",
@@ -269,6 +288,7 @@ export function buildDocumentPrompt(templateName: string, fields: DocumentFieldD
     "Also return a `_provenance` object: for each field, the 1-based page number the value appears on and a short verbatim quote (under 120 characters) of the text around it. For array fields, give one entry per row in the same order as the rows.",
     "Also return a `_classification` object: doc_type (a generic 2-4 word label for this kind of document), entity (the issuing organization or person as printed), and period (the YYYY-MM this document covers, if any).",
     customPrompt?.trim() ? `Workspace instructions:\n${customPrompt.trim()}` : "",
+    fewShotExamples?.length ? buildFewShotBlock(fewShotExamples) : "",
   ].filter(Boolean).join("\n")
 }
 

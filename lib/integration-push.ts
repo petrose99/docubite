@@ -34,6 +34,24 @@ export async function claimNextIntegrationPush(now = new Date()): Promise<string
   return claimed.count ? candidate.id : null
 }
 
+/** WP2.4: checks the provider's own ledger for a bill/invoice already carrying this document's
+ * reference number, before ever creating one — a duplicate this app's own detection can't see
+ * (e.g. the same invoice pushed once from here and once entered by hand at the provider). Never
+ * throws: a lookup failure (network blip, transient provider error) must not block a push that
+ * would otherwise succeed, so this swallows any error and reports "not a duplicate" rather than
+ * risk false-blocking every push whenever the lookup itself is flaky. */
+async function ledgerHasDuplicate(provider: string, externalTenantId: string | null, accessToken: string, referenceNumber: string): Promise<boolean> {
+  if (!externalTenantId) return false
+  try {
+    return provider === "quickbooks"
+      ? await quickbooks.findBillByDocNumber(externalTenantId, accessToken, referenceNumber)
+      : await xero.findBillByInvoiceNumber(externalTenantId, accessToken, referenceNumber)
+  } catch (error) {
+    console.error("[integration-push] ledger duplicate lookup failed, proceeding with push:", error instanceof Error ? error.message : error)
+    return false
+  }
+}
+
 async function pushToQuickbooks(realmId: string, accessToken: string, bill: NormalizedBill, accountId: string): Promise<{ id: string }> {
   const vendorRef = await quickbooks.findOrCreateVendor(realmId, accessToken, bill.vendorName)
   const body = toQuickBooksBillBody(bill, vendorRef, accountId)
@@ -75,8 +93,10 @@ export async function attemptIntegrationPush(pushId: string, now = new Date()): 
     forceTerminal = true
   } else {
     try {
-      const bill = push.payload as unknown as NormalizedBill
+      const bill = { ...(push.payload as unknown as NormalizedBill), currencyCode: (push.payload as unknown as NormalizedBill).currencyCode ?? null }
       const accessToken = await getValidAccessToken(connection.id, now)
+      const isDuplicate = bill.referenceNumber ? await ledgerHasDuplicate(connection.provider, connection.externalTenantId, accessToken, bill.referenceNumber) : false
+      if (isDuplicate) throw new IntegrationPermanentError("ledger_duplicate")
       const created = connection.provider === "quickbooks"
         ? await pushToQuickbooks(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
         : await pushToXero(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)

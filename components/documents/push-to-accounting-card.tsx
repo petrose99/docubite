@@ -32,10 +32,14 @@ export type DocumentPush = {
   errorCode: string | null
 }
 
+const ERROR_CODE_LABELS: Record<string, string> = {
+  ledger_duplicate: "already in your ledger",
+}
+
 function StatusLabel({ push }: { push: DocumentPush | undefined }) {
   if (!push) return null
   if (push.status === "succeeded") return <span className="text-xs text-emerald-700">Pushed{push.externalBillId ? ` — ${push.externalBillId}` : ""}</span>
-  if (push.status === "failed") return <span className="text-xs text-red-600">Failed{push.errorCode ? ` (${push.errorCode.replaceAll("_", " ")})` : ""}</span>
+  if (push.status === "failed") return <span className="text-xs text-red-600">Failed{push.errorCode ? ` (${ERROR_CODE_LABELS[push.errorCode] ?? push.errorCode.replaceAll("_", " ")})` : ""}</span>
   return <span className="text-xs text-amber-700">Pending</span>
 }
 

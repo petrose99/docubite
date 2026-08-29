@@ -1,6 +1,7 @@
 import config from "@/lib/config"
 import { verifyOAuthState } from "@/lib/integration-oauth-state"
 import { exchangeCodeForTokens, fetchConnections } from "@/lib/integrations/xero/client"
+import { syncAccountingEntities } from "@/lib/integrations/sync"
 import { encryptSecret } from "@/lib/secret-crypto"
 import { upsertWorkspaceIntegrationConnection } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   if (!tenant) return new Response("No Xero organisation was authorized", { status: 400 })
 
   const now = new Date()
-  await upsertWorkspaceIntegrationConnection(state.workspaceId, {
+  const connection = await upsertWorkspaceIntegrationConnection(state.workspaceId, {
     provider: "xero",
     externalTenantId: tenant.tenantId,
     tenantName: tenant.tenantName,
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
     scope: null,
     createdById: state.userId,
   })
+  await syncAccountingEntities(connection.id).catch((error) => console.error("[xero] initial account sync failed:", error instanceof Error ? error.message : error))
 
   return Response.redirect(`${config.app.baseURL}/workspaces/${state.workspaceId}/settings/integrations`)
 }

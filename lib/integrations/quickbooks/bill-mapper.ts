@@ -11,6 +11,7 @@ export function toQuickBooksBillBody(bill: NormalizedBill, vendorRef: string, ac
     ...(bill.dueDate ? { DueDate: bill.dueDate } : {}),
     ...(bill.issueDate ? { TxnDate: bill.issueDate } : {}),
     ...(bill.referenceNumber ? { DocNumber: bill.referenceNumber.slice(0, 21) } : {}),
+    ...(bill.currencyCode ? { CurrencyRef: { value: bill.currencyCode } } : {}),
     TotalAmt: bill.total,
     Line: bill.lineItems.map((item) => ({
       Amount: item.amount,

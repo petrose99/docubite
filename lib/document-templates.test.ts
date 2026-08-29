@@ -47,6 +47,28 @@ describe("document templates", () => {
     expect(buildDocumentPrompt("Invoice", custom)).toContain("Never convert currencies")
   })
 
+  describe("few-shot correction examples", () => {
+    it("omits the block entirely when there are no examples", () => {
+      expect(buildDocumentPrompt("Invoice", fields, null, [])).not.toContain("Common corrections")
+      expect(buildDocumentPrompt("Invoice", fields)).not.toContain("Common corrections")
+    })
+
+    it("renders each example as format guidance, not as values to reuse", () => {
+      const prompt = buildDocumentPrompt("Invoice", fields, null, [{ fieldKey: "supplier", wrongValue: "Acme In", correctedValue: "Acme Inc" }])
+      expect(prompt).toContain("Common corrections in this workspace")
+      expect(prompt).toContain("never reuse the values")
+      expect(prompt).toContain('supplier: "Acme In" was corrected to "Acme Inc"')
+    })
+
+    it("stops adding examples once the block would exceed its character cap", () => {
+      const many = Array.from({ length: 200 }, (_, i) => ({ fieldKey: "supplier", wrongValue: `wrong-${i}`, correctedValue: `corrected-${i}` }))
+      const prompt = buildDocumentPrompt("Invoice", fields, null, many)
+      const block = prompt.split("Common corrections in this workspace")[1]
+      expect(block.length).toBeLessThan(2000)
+      expect(prompt).not.toContain("wrong-199")
+    })
+  })
+
   describe("structured line items", () => {
     const lineItemFields = parseTemplateFields([
       { key: "vendor", label: "Vendor", type: "string", required: true, instruction: "" },

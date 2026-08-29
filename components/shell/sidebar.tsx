@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { Blocks, ClipboardCheck, CreditCard, Files, History, Mic, Percent, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { Blocks, ClipboardCheck, CreditCard, Files, History, Mail, Mic, Percent, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -57,6 +57,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
     { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
     { href: `${base}/settings/modules`, label: "Modules", icon: Blocks },
     { href: `${base}/settings/activity`, label: "Activity", icon: History },
+    { href: `${base}/settings/email`, label: "Email intake", icon: Mail },
     { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck },
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
     ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook }] : []),

@@ -8,6 +8,7 @@ import { findNearDuplicate, type DocumentIdentity } from "@/lib/checks/duplicate
 import { findMissingStatementPeriods } from "@/lib/checks/statement-periods"
 import { checkTaxConsistency } from "@/lib/checks/tax-consistency"
 import type { CheckResult } from "@/lib/checks/types"
+import { checkVatNumber } from "@/lib/checks/vat-number"
 import { prisma } from "@/lib/db"
 import { createReviewTask } from "@/models/review-tasks"
 import { getTaxProfile } from "@/models/tax-profiles"
@@ -22,10 +23,11 @@ type CheckFieldMap = {
   supplier?: string; invoiceNumber?: string; date?: string
   subtotal?: string; taxTotal?: string; total?: string; currency?: string; lineItems?: string
   accountNumber?: string; openingBalance?: string; closingBalance?: string; periodStart?: string; periodEnd?: string; transactions?: string
+  supplierVatNumber?: string
 }
 
 const CHECK_FIELD_MAPS: Record<string, CheckFieldMap> = {
-  invoice: { supplier: "vendor", invoiceNumber: "invoice_number", date: "issue_date", subtotal: "subtotal", taxTotal: "tax_total", total: "total", currency: "currency_code", lineItems: "line_items" },
+  invoice: { supplier: "vendor", invoiceNumber: "invoice_number", date: "issue_date", subtotal: "subtotal", taxTotal: "tax_total", total: "total", currency: "currency_code", lineItems: "line_items", supplierVatNumber: "supplier_vat_number" },
   receipt: { supplier: "merchant", invoiceNumber: "receipt_number", date: "purchase_date", taxTotal: "tax_total", total: "total", currency: "currency_code", lineItems: "line_items" },
   expense_receipt: { supplier: "merchant", invoiceNumber: "receipt_number", date: "purchase_date", taxTotal: "tax_total", total: "total", currency: "currency_code" },
   purchase_order: { supplier: "supplier", invoiceNumber: "po_number", date: "order_date", total: "total", currency: "currency_code", lineItems: "line_items" },
@@ -83,15 +85,19 @@ export async function runDeterministicChecks(input: { workspaceId: string; docum
       if (balance) results.push(balance)
     }
 
-    if (map.taxTotal) {
+    const taxProfile = map.taxTotal || map.supplierVatNumber ? await getTaxProfile(input.workspaceId) : null
+
+    if (map.taxTotal && taxProfile) {
       // expense_receipt has no subtotal field; derive it from total - tax when both are present,
       // since "subtotal" here means only "the base the rate applies to", not a printed field.
       const subtotal = asNumber(get("subtotal")) ?? (asNumber(get("total")) !== null && asNumber(get("taxTotal")) !== null ? (asNumber(get("total")) as number) - (asNumber(get("taxTotal")) as number) : null)
-      const taxProfile = await getTaxProfile(input.workspaceId)
-      if (taxProfile) {
-        const taxConsistency = checkTaxConsistency({ currencyCode, documentDate: asDate(get("date")), subtotal, taxTotal: asNumber(get("taxTotal")), rates: taxProfile.config.rates })
-        if (taxConsistency) results.push(taxConsistency)
-      }
+      const taxConsistency = checkTaxConsistency({ currencyCode, documentDate: asDate(get("date")), subtotal, taxTotal: asNumber(get("taxTotal")), rates: taxProfile.config.rates })
+      if (taxConsistency) results.push(taxConsistency)
+    }
+
+    if (map.supplierVatNumber && taxProfile?.config.registrationNumberPattern) {
+      const vatNumber = checkVatNumber({ vatNumber: asString(get("supplierVatNumber")), registrationNumberPattern: taxProfile.config.registrationNumberPattern })
+      if (vatNumber) results.push(vatNumber)
     }
 
     if (map.supplier && map.invoiceNumber && map.total) {

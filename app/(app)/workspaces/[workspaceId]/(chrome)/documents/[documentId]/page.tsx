@@ -8,9 +8,11 @@ import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { DeleteDocumentButton } from "@/components/documents/delete-document-button"
 import { LineItemsEditor } from "@/components/documents/line-items-editor"
 import { PushToAccountingCard } from "@/components/documents/push-to-accounting-card"
+import { MatchPanel } from "@/components/bank-match/match-panel"
 import { getCurrentUser } from "@/lib/auth"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
+import { listBankMatches } from "@/models/bank-matches"
 import { getWorkspaceDocument } from "@/models/documents"
 import { listWorkspaceIntegrationConnections, listWorkspaceIntegrationPushes } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
@@ -47,6 +49,14 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
   const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
   const canCreateRule = capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0
 
+  // WP2.1/WP2.3: the reconciliation panel surfaces only on the statement document itself, one
+  // panel kind per template code — a document is never both a bank_statement and a
+  // supplier_statement, so there is no case needing both panels at once.
+  const matchKind = document.template?.code === "bank_statement" && capabilities.has("bank-match") ? "bank"
+    : document.template?.code === "supplier_statement" && capabilities.has("statement-packs") ? "supplier_statement"
+    : null
+  const bankMatches = matchKind ? await listBankMatches(workspaceId, documentId) : []
+
   return <main className="mx-auto max-w-3xl space-y-6">
     <Link className="text-sm underline" href={`/workspaces/${workspaceId}/files/${document.fileId}/sheet`}>Back to sheet</Link>
     <header><div className="flex items-start justify-between gap-4"><h1 className="text-3xl font-bold">{document.filename}</h1><DeleteDocumentButton workspaceId={workspaceId} fileId={document.fileId} documentId={document.id} filename={document.filename} /></div><div className="mt-2 flex gap-2"><Badge>{document.status.replaceAll("_", " ")}</Badge>{document.storageKey && <a className="text-sm underline" href={`/api/documents/${document.id}/source`}>View source</a>}</div>{confidence?.missingRequiredFields?.length ? <p className="mt-3 text-sm text-amber-700">Missing required fields: {confidence.missingRequiredFields.join(", ")}</p> : null}{conflictingLabels.length ? <p className="mt-1 text-sm text-amber-700">Pages of this document disagreed on: {conflictingLabels.join(", ")} — please confirm against the source.</p> : null}</header>
@@ -79,5 +89,17 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
       <CardHeader><CardTitle>Create a rule from this document</CardTitle><CardDescription>Matches this supplier automatically on future documents.</CardDescription></CardHeader>
       <CardContent><AutomationRuleForm workspaceId={workspaceId} defaultSupplier={supplier} /></CardContent>
     </Card>}
+    {matchKind && (
+      <MatchPanel
+        workspaceId={workspaceId}
+        statementDocumentId={documentId}
+        kind={matchKind}
+        matches={bankMatches.map((match) => ({
+          id: match.id, transactionIndex: match.transactionIndex, kind: match.kind, confidence: match.confidence,
+          dateDeltaDays: match.dateDeltaDays, status: match.status,
+          matchedDocument: { id: match.matchedDocument.id, filename: match.matchedDocument.filename },
+        }))}
+      />
+    )}
   </main>
 }
