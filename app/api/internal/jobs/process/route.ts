@@ -2,6 +2,7 @@ import config from "@/lib/config"
 import { processDocumentJob, processNextQueuedDocumentJob } from "@/lib/document-processing"
 import { drainWebhookDeliveries } from "@/lib/webhook-delivery"
 import { drainIntegrationPushes } from "@/lib/integration-push"
+import { sendDueReminders } from "@/models/reminders"
 import crypto from "crypto"
 
 function authorized(request: Request) {
@@ -20,10 +21,14 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({})) as { jobId?: string; drainWebhooks?: boolean; drainIntegrationPushes?: boolean }
     const webhookDeliveries = await drainWebhookDeliveries()
     const integrationPushes = await drainIntegrationPushes()
+    // Dext-parity Phase 3 WP3.4: reminders are cheap and self-rate-limiting (isReminderDue is what
+    // actually decides whether anything sends), so this drains on every hit exactly like the two
+    // queues above — no separate cron wiring needed for reminders to start going out.
+    const reminders = await sendDueReminders()
     let jobId: string | null = null
     if (body.jobId) { await processDocumentJob(body.jobId); jobId = body.jobId }
     else if (!body.drainWebhooks && !body.drainIntegrationPushes) jobId = await processNextQueuedDocumentJob()
-    return Response.json({ processed: Boolean(jobId), jobId, webhookDeliveries, integrationPushes })
+    return Response.json({ processed: Boolean(jobId), jobId, webhookDeliveries, integrationPushes, reminders })
   } catch (error) {
     // Logged rather than swallowed: this route has no caller watching stdout except the drain
     // cron, so without this the only visibility into a failure is Vercel's function logs — and

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/db", () => ({ prisma: {} }))
 
-const { assignReviewTask, bulkUpdateReviewTaskStatus, createReviewTask, parseReviewTaskStatus, updateReviewTaskStatus } = await import("@/models/review-tasks")
+const { assignReviewTask, bulkUpdateReviewTaskStatus, createReviewTask, decideReviewTaskStage, parseReviewTaskStatus, updateReviewTaskStatus } = await import("@/models/review-tasks")
 const { prisma } = await import("@/lib/db")
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,6 +43,18 @@ describe("createReviewTask", () => {
     }))
     expect(db.$transaction).toHaveBeenCalledWith(["create-task", "audit"])
   })
+
+  it("starts at stage 0 and status in_review when a workflowId is given", async () => {
+    db.document = { findFirst: vi.fn().mockResolvedValue({ id: "d1" }) }
+    db.reviewTask = { create: vi.fn().mockReturnValue("create-task") }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
+
+    await createReviewTask({ workspaceId: "w1", documentId: "d1", createdById: "u1", workflowId: "wf1" })
+
+    expect(db.reviewTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ workflowId: "wf1", currentStageIndex: 0, status: "in_review" }),
+    }))
+  })
 })
 
 describe("updateReviewTaskStatus", () => {
@@ -67,6 +79,68 @@ describe("updateReviewTaskStatus", () => {
     await updateReviewTaskStatus({ workspaceId: "w1", taskId: "t1", status: "in_review", actorId: "u1" })
 
     expect(db.reviewTask.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { status: "in_review", resolvedAt: null } })
+  })
+})
+
+describe("decideReviewTaskStage", () => {
+  it("refuses a task with no workflow attached", async () => {
+    db.reviewTask = { findFirst: vi.fn().mockResolvedValue({ id: "t1", documentId: "d1", workflowId: null, currentStageIndex: null, workflow: null }) }
+    await expect(decideReviewTaskStage({ workspaceId: "w1", taskId: "t1", decision: "approve", actorId: "u1", actorRole: "member" })).rejects.toThrow("review_task_has_no_workflow")
+  })
+
+  it("refuses a member deciding a stage that requires an owner", async () => {
+    db.reviewTask = {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "t1", documentId: "d1", currentStageIndex: 0,
+        workflow: { stages: [{ stageIndex: 0, requireOwner: true, name: "Finance sign-off" }] },
+      }),
+    }
+    await expect(decideReviewTaskStage({ workspaceId: "w1", taskId: "t1", decision: "approve", actorId: "u1", actorRole: "member" })).rejects.toThrow("stage_requires_owner")
+  })
+
+  it("advances to the next stage and keeps status in_review", async () => {
+    db.reviewTask = {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "t1", documentId: "d1", currentStageIndex: 0,
+        workflow: { stages: [{ stageIndex: 0, requireOwner: false, name: "First pass" }, { stageIndex: 1, requireOwner: false, name: "Second pass" }] },
+      }),
+      update: vi.fn().mockReturnValue("update"),
+    }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
+
+    await decideReviewTaskStage({ workspaceId: "w1", taskId: "t1", decision: "approve", actorId: "u1", actorRole: "member" })
+
+    expect(db.reviewTask.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { status: "in_review", currentStageIndex: 1, resolvedAt: null } })
+  })
+
+  it("resolves as approved once the last stage clears", async () => {
+    db.reviewTask = {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "t1", documentId: "d1", currentStageIndex: 0,
+        workflow: { stages: [{ stageIndex: 0, requireOwner: false, name: "Only stage" }] },
+      }),
+      update: vi.fn().mockReturnValue("update"),
+    }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
+
+    await decideReviewTaskStage({ workspaceId: "w1", taskId: "t1", decision: "approve", actorId: "u1", actorRole: "owner" })
+
+    expect(db.reviewTask.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { status: "approved", currentStageIndex: 0, resolvedAt: expect.any(Date) } })
+  })
+
+  it("rejects immediately regardless of remaining stages", async () => {
+    db.reviewTask = {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "t1", documentId: "d1", currentStageIndex: 0,
+        workflow: { stages: [{ stageIndex: 0, requireOwner: false, name: "First" }, { stageIndex: 1, requireOwner: false, name: "Second" }] },
+      }),
+      update: vi.fn().mockReturnValue("update"),
+    }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
+
+    await decideReviewTaskStage({ workspaceId: "w1", taskId: "t1", decision: "reject", actorId: "u1", actorRole: "member" })
+
+    expect(db.reviewTask.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { status: "rejected", currentStageIndex: 0, resolvedAt: expect.any(Date) } })
   })
 })
 

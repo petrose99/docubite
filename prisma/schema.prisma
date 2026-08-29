@@ -56,6 +56,8 @@ model User {
   requestedWorkspaceModules WorkspaceModule[] @relation("ModuleRequester")
   createdInboundEmailAllowedSenders InboundEmailAllowedSender[] @relation("InboundEmailAllowedSenderCreator")
   decidedBankMatches BankMatch[] @relation("BankMatchDecider")
+  createdApprovalWorkflows ApprovalWorkflow[] @relation("ApprovalWorkflowCreator")
+  submittedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimSubmitter")
 
   @@map("users")
 }
@@ -128,6 +130,10 @@ model Workspace {
   fieldCorrections FieldCorrection[]
   accountingEntities AccountingEntity[]
   bankMatches BankMatch[]
+  approvalWorkflows ApprovalWorkflow[]
+  approvalWorkflowStages ApprovalWorkflowStage[]
+  expenseClaims ExpenseClaim[]
+  expenseClaimItems ExpenseClaimItem[]
 
   @@map("workspaces")
 }
@@ -478,6 +484,7 @@ model Document {
   reviewTasks       ReviewTask[]
   bankMatchesAsStatement BankMatch[] @relation("BankMatchStatement")
   bankMatchesAsMatched   BankMatch[] @relation("BankMatchMatched")
+  expenseClaimItems ExpenseClaimItem[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -1082,6 +1089,17 @@ model ReviewTask {
   priority     Int       @default(0)
   dueAt        DateTime? @map("due_at")
   createdById  String?   @map("created_by_id") @db.Uuid
+  /// Dext-parity Phase 3 WP3.1: null for a plain single-decision task (the pre-existing behavior —
+  /// approve/reject settles it immediately). Set when the task was created against an
+  /// ApprovalWorkflow, in which case `status` only reaches "approved" once `currentStageIndex` has
+  /// cleared every stage — see lib/approvals/engine.ts and models/review-tasks.ts.
+  workflowId   String?   @map("workflow_id") @db.Uuid
+  /// Index into the workflow's stages, 0-based. Null whenever workflowId is null. Advances by one
+  /// on each stage approval; a rejection at any stage is terminal regardless of index.
+  currentStageIndex Int? @map("current_stage_index")
+  /// Dext-parity Phase 3 WP3.4: when a reminder email was last sent for this task, so
+  /// lib/reminders.ts never re-sends inside its repeat window. Null until the first one goes out.
+  lastReminderAt DateTime? @map("last_reminder_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   resolvedAt   DateTime? @map("resolved_at")
@@ -1089,11 +1107,133 @@ model ReviewTask {
   document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   assignee     User?     @relation("ReviewTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy    User?     @relation("ReviewTaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  workflow     ApprovalWorkflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assigneeId, status])
   @@index([documentId])
+  @@index([workflowId])
   @@map("review_tasks")
+}
+
+/// Dext-parity Phase 3 WP3.1: a named, ordered sequence of approval stages a workspace can attach
+/// to a ReviewTask (via ReviewTask.workflowId) instead of the plain single-decision default. Stage
+/// gating is a role check, not a per-stage approver list — there is no "reviewer" role distinct
+/// from plain membership in this app (models/workspaces.ts's WorkspaceRole is just "owner" |
+/// "member"), so a stage that needs to be sensitive marks itself ApprovalWorkflowStage.requireOwner
+/// rather than naming specific approvers. `active: false` retires a workflow without deleting it —
+/// existing ReviewTask rows still pointing at it keep working (workflowId is a plain FK, not
+/// filtered by active), it just stops being offered for new tasks.
+model ApprovalWorkflow {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  active      Boolean   @default(true)
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?     @relation("ApprovalWorkflowCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  stages      ApprovalWorkflowStage[]
+  reviewTasks ReviewTask[]
+  expenseClaims ExpenseClaim[]
+
+  @@index([workspaceId, active])
+  @@map("approval_workflows")
+}
+
+/// One stage of an ApprovalWorkflow, in `stageIndex` order (0-based, unique per workflow). The
+/// engine (lib/approvals/engine.ts) only ever reads a stage by its workflow + index, never by id,
+/// so there is deliberately no separate "current stage" foreign key on ReviewTask — just the index.
+model ApprovalWorkflowStage {
+  id          String   @id @default(uuid()) @db.Uuid
+  workflowId  String   @map("workflow_id") @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  stageIndex  Int      @map("stage_index")
+  name        String
+  /// When true, only a workspace "owner" (not a plain "member") can approve this stage — see
+  /// models/workspaces.ts's WorkspaceRole. False means any workspace member can.
+  requireOwner Boolean @default(false) @map("require_owner")
+  createdAt   DateTime @default(now()) @map("created_at")
+  workflow    ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, stageIndex])
+  @@index([workspaceId])
+  @@map("approval_workflow_stages")
+}
+
+/// Dext-parity Phase 3 WP3.3: an employee's expense claim, grouping one or more `expense_receipt`
+/// Documents (via ExpenseClaimItem) under one submitter/status/total. Deliberately its own
+/// top-level entity rather than a ReviewTask: `ReviewTask.documentId` is a required, non-nullable
+/// FK to a single `Document`, and a Document is always the product of one uploaded file going
+/// through OCR/extraction (`Document.fileId` is required — see models/documents.ts) — there is no
+/// way to make a claim's own metadata (submitter, title, claim date) itself a Document without
+/// fighting that invariant everywhere else in the codebase. Instead this reuses only the
+/// lower-level ApprovalWorkflow/ApprovalWorkflowStage tables and lib/approvals/engine.ts's pure
+/// decideStage/canDecideStage functions directly, via its own workflowId/currentStageIndex pair —
+/// the exact same shape ReviewTask.workflowId/currentStageIndex already use, just on a claim
+/// instead of a review task.
+///
+/// `submitterId` is nullable with ON DELETE SET NULL, not the `WorkspaceInvitation.sentById`-style
+/// required-Cascade some other "who did this" FKs use: an expense claim is a financial record that
+/// should survive a departed employee's account being removed, the same reasoning ReviewTask's
+/// assigneeId/createdById are SetNull rather than Cascade.
+model ExpenseClaim {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  submitterId String?   @map("submitter_id") @db.Uuid
+  title       String?
+  /// draft | submitted | approved | rejected — same shape as ReviewTask.status, "draft" standing
+  /// in for ReviewTask's "open" (not yet sent for a decision) and "submitted" for "in_review".
+  status      String    @default("draft")
+  /// The sum of each linked receipt's own `total` (from Document.reviewedData), frozen at the
+  /// moment the claim was submitted — not a live recompute. Null while still a draft. A snapshot
+  /// so approving a claim later never silently changes what it says a person is owed just because
+  /// a linked receipt's extracted total got corrected afterward — same freeze-at-the-moment
+  /// philosophy as Document.fieldSnapshot. Stored as Float: this codebase has no Decimal/cents
+  /// convention anywhere (every other amount is a plain JSON number inside Document.reviewedData),
+  /// so this matches the ambient practice rather than introducing a new one.
+  total       Float?
+  currencyCode String?  @map("currency_code")
+  workflowId  String?   @map("workflow_id") @db.Uuid
+  currentStageIndex Int? @map("current_stage_index")
+  submittedAt DateTime? @map("submitted_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  /// Dext-parity Phase 3 WP3.4: mirrors ReviewTask.lastReminderAt — when a reminder email was
+  /// last sent for this claim, so lib/reminders.ts never re-sends inside its repeat window.
+  lastReminderAt DateTime? @map("last_reminder_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  submitter   User?     @relation("ExpenseClaimSubmitter", fields: [submitterId], references: [id], onDelete: SetNull)
+  workflow    ApprovalWorkflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  items       ExpenseClaimItem[]
+
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, submitterId])
+  @@index([workflowId])
+  @@map("expense_claims")
+}
+
+/// Join row linking one ExpenseClaim to one of its receipt Documents. A plain join table, not a
+/// richer relation, because there is nothing claim-item-specific to store beyond the link itself —
+/// the amount lives on the Document's own reviewedData, and ExpenseClaim.total is the frozen sum
+/// computed from those at submission (see its own doc-comment).
+model ExpenseClaimItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  claimId     String   @map("claim_id") @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  claim       ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, documentId])
+  @@index([workspaceId])
+  @@index([documentId])
+  @@map("expense_claim_items")
 }
 
 /** A durable record of one accepted upload, independent of the Document it produces (WP9).

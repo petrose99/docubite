@@ -1,6 +1,6 @@
 "use client"
 
-import { assignReviewTaskAction, bulkUpdateReviewTaskStatusAction, getReviewTaskDetailAction, updateReviewTaskStatusAction } from "@/app/(app)/workspaces/[workspaceId]/review-actions"
+import { assignReviewTaskAction, bulkUpdateReviewTaskStatusAction, decideReviewTaskStageAction, getReviewTaskDetailAction, startWorkflowOnReviewTaskAction, updateReviewTaskStatusAction } from "@/app/(app)/workspaces/[workspaceId]/review-actions"
 import { pushDocumentToAccountingAction } from "@/app/(app)/workspaces/[workspaceId]/integration-push-actions"
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import { DocumentPreview } from "@/components/documents/document-preview"
@@ -115,6 +115,15 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
     })
   }, [effectiveSelectedId, workspaceId])
 
+  // router.refresh() only re-renders the server-rendered list (`tasks`) — the detail pane is
+  // client state fetched once per selection change (the effect above), so a workflow decision or
+  // a fresh workflow start has to explicitly re-fetch it or the pane just keeps showing the stage
+  // it was on before the click, forever, since effectiveSelectedId never changes underneath it.
+  const refetchDetail = useCallback(async (taskId: string) => {
+    const result = await getReviewTaskDetailAction(workspaceId, taskId)
+    if (detailTaskIdRef.current === taskId) setDetail(result)
+  }, [workspaceId])
+
   const changeStatus = useCallback(async (taskId: string, status: string, previousStatus: string) => {
     setOptimisticStatus((previous) => ({ ...previous, [taskId]: status }))
     try {
@@ -139,6 +148,33 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
       toast.error("Could not reach the server")
     }
   }, [workspaceId, router])
+
+  const decideStage = useCallback(async (taskId: string, decision: "approve" | "reject") => {
+    setPending(true)
+    try {
+      const result = await decideReviewTaskStageAction(workspaceId, taskId, decision)
+      if (!result.success) { toast.error(result.error || "Could not record that decision"); return }
+      toast.success(decision === "approve" ? "Stage approved" : "Rejected")
+      await refetchDetail(taskId)
+      router.refresh()
+    } catch {
+      toast.error("Could not reach the server")
+    } finally { setPending(false) }
+  }, [workspaceId, router, refetchDetail])
+
+  const startWorkflow = async (taskId: string, workflowId: string) => {
+    if (!workflowId) return
+    setPending(true)
+    try {
+      const result = await startWorkflowOnReviewTaskAction(workspaceId, taskId, workflowId)
+      if (!result.success) { toast.error(result.error || "Could not start that workflow"); return }
+      toast.success("Workflow started")
+      await refetchDetail(taskId)
+      router.refresh()
+    } catch {
+      toast.error("Could not reach the server")
+    } finally { setPending(false) }
+  }
 
   const pushSelected = useCallback(async () => {
     if (!detail?.canPush || !detail.activeConnectionId || pushed.has(detail.id)) return
@@ -172,7 +208,14 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
       } else if (event.key === "e" && effectiveSelectedId) {
         event.preventDefault()
         const task = visibleTasks.find((t) => t.id === effectiveSelectedId)
-        if (task) void changeStatus(task.id, "approved", optimisticStatus[task.id] ?? task.status)
+        if (!task) return
+        // A task on a workflow needs its current stage decided, not a direct status write — and
+        // that requires the loaded detail (for canDecideCurrentStage), not just the list row.
+        if (detail && detail.id === task.id && detail.workflow) {
+          if (detail.workflow.canDecideCurrentStage) void decideStage(task.id, "approve")
+        } else if (!detail?.workflow) {
+          void changeStatus(task.id, "approved", optimisticStatus[task.id] ?? task.status)
+        }
       } else if (event.key === "p") {
         event.preventDefault()
         void pushSelected()
@@ -180,7 +223,7 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [visibleTasks, effectiveSelectedId, detail, optimisticStatus, changeStatus, pushSelected])
+  }, [visibleTasks, effectiveSelectedId, detail, optimisticStatus, changeStatus, decideStage, pushSelected])
 
   const toggleBulk = (id: string) => setBulkSelected((previous) => {
     const next = new Set(previous)
@@ -313,19 +356,45 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
             </select>
           </div>
 
-          <div className="mt-3">
-            <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">Status</label>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {STATUS_OPTIONS.map((option) => {
-                const current = optimisticStatus[detail.id] ?? detail.status
-                return <button key={option} type="button" disabled={current === option}
-                  className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold capitalize transition-colors ${current === option ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-stone-50"}`}
-                  onClick={() => void changeStatus(detail.id, option, current)}>
-                  {option.replace("_", " ")}
-                </button>
-              })}
+          {detail.workflow ? (
+            <div className="mt-3">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">{detail.workflow.name}</label>
+              <p className="mt-1 text-xs text-stone-500">
+                Stage {detail.workflow.currentStageIndex + 1} of {detail.workflow.stages.length}: {detail.workflow.stages[detail.workflow.currentStageIndex]?.name}
+                {detail.workflow.stages[detail.workflow.currentStageIndex]?.requireOwner ? " (owner only)" : ""}
+              </p>
+              {detail.status === "in_review" ? (
+                detail.workflow.canDecideCurrentStage ? (
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <button type="button" disabled={pending} className="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" onClick={() => void decideStage(detail.id, "approve")}>Approve stage</button>
+                    <button type="button" disabled={pending} className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50" onClick={() => void decideStage(detail.id, "reject")}>Reject</button>
+                  </div>
+                ) : <p className="mt-1.5 text-xs text-amber-700">Only a workspace owner can decide this stage.</p>
+              ) : <p className="mt-1.5 text-xs font-medium capitalize text-stone-600">{detail.status.replace("_", " ")}</p>}
             </div>
-          </div>
+          ) : (
+            <div className="mt-3">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">Status</label>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map((option) => {
+                  const current = optimisticStatus[detail.id] ?? detail.status
+                  return <button key={option} type="button" disabled={current === option}
+                    className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold capitalize transition-colors ${current === option ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-stone-50"}`}
+                    onClick={() => void changeStatus(detail.id, option, current)}>
+                    {option.replace("_", " ")}
+                  </button>
+                })}
+              </div>
+              {detail.availableWorkflows.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <select className="flex-1 rounded-md border px-2.5 py-1.5 text-xs" defaultValue="" onChange={(event) => void startWorkflow(detail.id, event.target.value)}>
+                    <option value="" disabled>Start an approval workflow…</option>
+                    {detail.availableWorkflows.map((wf) => <option key={wf.id} value={wf.id}>{wf.name} ({wf.stageCount} stage{wf.stageCount === 1 ? "" : "s"})</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
 
           {detail.canPush && <button type="button" disabled={pushed.has(detail.id)}
             className="mt-3 w-full rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"

@@ -1,6 +1,7 @@
 import { DemoRequestEmail, type DemoRequestEmailProps } from "@/components/emails/demo-request-email"
 import { InvitationEmail } from "@/components/emails/invitation-email"
 import { PasswordResetEmail } from "@/components/emails/password-reset-email"
+import { ReminderEmail } from "@/components/emails/reminder-email"
 import React from "react"
 import { Resend } from "resend"
 import config from "./config"
@@ -33,6 +34,17 @@ export async function sendPasswordResetEmail({ email, resetUrl }: { email: strin
     subject: `Reset your ${config.app.title} password`,
     react: html,
   })
+}
+
+/** Dext-parity Phase 3 WP3.4: a review task or expense claim that's been waiting on someone.
+ * `to` is a single address — models/reminders.ts sends one call per recipient rather than one
+ * call with multiple `to`s, so a bounced/invalid address for one owner never blocks the others. */
+export async function sendReminderEmail({ to, subject, heading, body, actionUrl, actionLabel }: {
+  to: string; subject: string; heading: string; body: string; actionUrl: string; actionLabel: string
+}) {
+  const html = React.createElement(ReminderEmail, { heading, body, actionUrl, actionLabel })
+
+  return await resend.emails.send({ from: config.email.from, to, subject, react: html })
 }
 
 /** Goes to the support inbox, not to the requester. `replyTo` is the requester's address so a

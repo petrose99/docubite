@@ -1,10 +1,12 @@
 import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
 import { DocumentPreview } from "@/components/documents/document-preview"
 import { ReviewTaskDetail } from "@/components/workspace/review-task-detail"
+import { canDecideStage, findCurrentStage } from "@/lib/approvals/engine"
 import { getCurrentUser } from "@/lib/auth"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
+import { listApprovalWorkflows } from "@/models/approval-workflows"
 import { getReviewTask } from "@/models/review-tasks"
 import { getWorkspaceMembers, requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
@@ -33,6 +35,16 @@ export default async function ReviewTaskDetailPage({ params }: { params: Promise
   const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
   const canCreateRule = capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0
 
+  const workflowsEnabled = capabilities.has("approval-workflows")
+  const availableWorkflows = workflowsEnabled && task.status === "open" && !task.workflowId
+    ? (await listApprovalWorkflows(workspaceId, { activeOnly: true })).map((wf) => ({ id: wf.id, name: wf.name, stageCount: wf.stages.length }))
+    : []
+  const workflow = task.workflow && task.currentStageIndex !== null ? (() => {
+    const stages = task.workflow!.stages.map((stage) => ({ stageIndex: stage.stageIndex, name: stage.name, requireOwner: stage.requireOwner }))
+    const currentStage = findCurrentStage(stages, task.currentStageIndex!)
+    return { id: task.workflow!.id, name: task.workflow!.name, currentStageIndex: task.currentStageIndex!, stages, canDecideCurrentStage: currentStage ? canDecideStage({ stage: currentStage, actorRole: membership.role === "owner" ? "owner" : "member" }) : false }
+  })() : null
+
   return <main className="mx-auto grid w-full max-w-6xl gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
     <div className="space-y-4">
       <header>
@@ -51,7 +63,9 @@ export default async function ReviewTaskDetailPage({ params }: { params: Promise
         taskId={task.id}
         status={task.status}
         assigneeId={task.assigneeId}
-        members={members.map((member) => ({ id: member.userId, name: member.user.name }))} />
+        members={members.map((member) => ({ id: member.userId, name: member.user.name }))}
+        workflow={workflow}
+        availableWorkflows={availableWorkflows} />
 
       {checkResults.length > 0 && <div className="rounded border p-4">
         <h2 className="text-sm font-bold text-stone-900">Deterministic checks</h2>

@@ -2,7 +2,7 @@
 
 **Branch:** `claude/docubite-dext-parity-plan-547153`
 **Date:** 2026-08-29
-**Status:** Code-complete for Phase 1 (all 6 work packages) and Phase 2 WP2.1–WP2.4 — `npx tsc --noEmit` clean, `npx vitest run` 1020/1020 pass (105 files), `npx prisma validate` clean. **No live-browser verification** and **no `npm run build`** this session (see Verification below). **Nothing deployed.**
+**Status:** Code-complete for Phase 1 (all 6 work packages) and Phase 2 WP2.1–WP2.4 — `npx tsc --noEmit` clean, `npx vitest run` 1020/1020 pass (105 files), `npx prisma validate` clean, `npm run build` clean, migrations applied to a real Postgres instance, and a live-browser walkthrough of the reachable flows passed (see "Verification update" below). **Nothing deployed.**
 
 This continues the four-phase Dext-parity roadmap approved earlier in this conversation (see the plan text in the conversation history — not written to a file). Phases 3 (approvals/claims) and 4 (practice mode/analytics/UK tax) are **entirely unstarted**.
 
@@ -23,6 +23,25 @@ This continues the four-phase Dext-parity roadmap approved earlier in this conve
 2. **WP2.2 — bank-match UI + actions.** New `app/.../bank-match-actions.ts` (`decideBankMatchAction`, `regenerateBankMatchesAction`, `regenerateSupplierStatementMatchesAction`); new `components/bank-match/match-panel.tsx` (kind-aware labels, accept/reject/re-scan), wired into the document detail page (`app/.../documents/[documentId]/page.tsx`) gated on template code + capability.
 3. **WP2.3 — supplier-statement reconciliation.** Reuses `BankMatch` with `kind: "supplier_statement"` and the same panel/actions. New pure `lib/reconciliation/supplier-statement.ts::matchSupplierStatementEntries` — primary pass matches an invoice number cited as a whole token in the entry description (confidence 0.9), fallback pass is amount+date within a 30-day window (confidence 0.6). `models/bank-matches.ts::regenerateSupplierStatementMatches` pre-filters candidates to invoices whose vendor fuzzy-matches the statement's own supplier before matching. Gated on `statement-packs`.
 4. **WP2.4 — ledger-side duplicate check.** QuickBooks client gained `findBillByDocNumber` (query, single-quote-escaped), Xero client gained `findBillByInvoiceNumber` (where-clause, double-quote-escaped, URL-encoded). `lib/integration-push.ts::attemptIntegrationPush` calls a new `ledgerHasDuplicate` helper before creating a bill (only when the bill has a reference number) — a hit throws `IntegrationPermanentError("ledger_duplicate")`, which the existing catch chain already turns into a terminal failure (no new forceTerminal branch needed — it reuses the existing `IntegrationPermanentError` handling). A lookup failure is swallowed and the push proceeds normally (never blocks a push on its own failure). Readable message added to `push-to-accounting-card.tsx`'s `StatusLabel` and `action-helpers.ts`'s `BILLING_MESSAGES`.
+
+## Verification update (2026-08-29, later session)
+
+Closed out the two deferred items from the section above:
+
+- **Migrations applied for real.** Started `docubite-dev-pg` (Docker pgvector, :55432) and ran `prisma migrate deploy` with `DATABASE_URL` exported explicitly — all 4 pending migrations applied cleanly to a fresh copy of the schema (47 total, no errors).
+- **`npm run build` now passes.** First attempt failed type-checking on `bankMatches.map(...)` in the document detail page — root cause was a stale generated Prisma client (the worktree's `node_modules/@prisma/client` predated the `BankMatch` model), not a real bug. `npx prisma generate` fixed it; no code changes needed. Build also needs `SUPABASE_SERVICE_ROLE_KEY` set to pass its production-secrets guard (`lib/config.ts`) — expected per existing Vercel-preview behavior, not new.
+- **Live-browser walkthrough performed**, logged in against the shared dev Supabase project (this worktree's `.env` had a placeholder project; swapped in the main checkout's real dev keys for the session) with a seeded `admin@docubite.local` account, on a new Finance-industry workspace with `bank-match` and `statement-packs` enabled:
+  - **WP1.1/1.2** — uploaded a synthetic invoice PDF; Gemini extracted `Supplier VAT number` (`GB123456789`) and `Currency shown` (`GBP`) correctly, both new template fields.
+  - **WP1.3** — not exercised (would need a second, similar invoice with a deliberately-corrected field to observe the few-shot prompt block; skipped for time).
+  - **WP1.4** — Email intake settings page renders the inbound address and allowlist; added and removed `bookkeeper@example.com` successfully end to end.
+  - **WP1.5** — not exercised; no `QUICKBOOKS_CLIENT_ID`/`XERO_CLIENT_ID` configured in this environment, so OAuth connect (and therefore account sync) can't be driven without a real sandbox app registration. Out of scope to set up this session.
+  - **WP1.6** — Rules page's account picker correctly falls back to free text with zero synced accounts (expected — no integration connected).
+  - **WP2.1/2.2** — uploaded a synthetic bank statement PDF with a transaction matching the invoice above; the engine suggested a match at 98% confidence, 1 day apart; accepted it through the UI and it persisted as `accepted`.
+  - **WP2.3/WP2.4** — not exercised; would need a supplier-statement document and a configured accounting connector respectively.
+
+Two things found during the walkthrough, both **pre-existing and out of scope** for Dext-parity (unrelated code paths, not touched this session or the last):
+  1. **Sheet tab / Extract-panel desync**: clicking a different worksheet tab in the Univer grid (e.g. Invoice → Bank statement) doesn't update the Extract Data panel, which stays bound to whichever template the page loaded with (`?template=` query param, read once server-side in `app/(app)/workspaces/[workspaceId]/files/[fileId]/sheet/page.tsx`). Uploading through the panel while it shows the wrong template would extract with the wrong column set. Workaround: navigate with the `?template=<code>` query param directly. Belongs to the older Lido-parity sheet code (`components/sheet/sheet-view.tsx`), not part of Phase 1/2.
+  2. **Noisy `[workspace-scope]` warnings**: nearly every page load logs several `Document.findMany()/.count()`, `DocumentProcessingJob.updateMany()`, `WorkspaceUsagePeriod.updateMany()`, and `IngestionItem.updateMany()` calls flagged by `lib/workspace-scope.ts`'s Prisma middleware for running without an explicit `workspaceId` filter. None of these caused a request to fail (everything returned 200), so it reads as a very broad, pre-existing dev-time instrumentation gap rather than a live bug — but the volume suggests the workspace-scoping middleware itself, or a lot of call sites, may be misconfigured. Worth a dedicated look outside this effort.
 
 ## What's NOT done here
 
