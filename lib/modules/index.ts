@@ -47,13 +47,20 @@ export const MODULES: ModuleDefinition[] = [
   { key: "reports", name: "Reports", description: "Draft and export reports from extracted data.", industry: "core", tier: "always", activation: "enable" },
 
   { key: "review-queue", name: "Review queue", description: "Triage incoming documents that need a person to look at them.", industry: "finance", tier: "default", activation: "enable", navItems: [{ href: "review", label: "Review", icon: "inbox" }] },
+  // Dext-parity Phase 3 WP3.1/WP3.2: multi-stage approval workflows on top of the review queue.
+  // Flipped to "enable" now that WP3.2 ships the settings UI to build/edit workflows — same
+  // precedent as bank-match going "request" -> "enable" once WP2.2 shipped its UI.
+  { key: "approval-workflows", name: "Approval workflows", description: "Route a document through multiple approval stages before it's marked approved.", industry: "finance", tier: "optional", activation: "enable", navItems: [{ href: "settings/approvals", label: "Approvals", icon: "check-circle" }] },
   { key: "supplier-rules", name: "Supplier rules", description: "Auto-code recurring suppliers and, optionally, auto-publish them.", industry: "finance", tier: "default", activation: "enable", navItems: [{ href: "settings/rules", label: "Rules", icon: "workflow" }] },
   { key: "document-checks", name: "Document checks", description: "Deterministic duplicate, arithmetic, tax, and gap checks on every document.", industry: "finance", tier: "default", activation: "enable" },
   { key: "tax-profiles", name: "Tax profiles", description: "Per-workspace tax rate and jurisdiction settings.", industry: "finance", tier: "default", activation: "enable", navItems: [{ href: "settings/tax", label: "Tax", icon: "percent" }] },
   { key: "accounting-push", name: "Accounting push", description: "Push invoices, receipts, and expenses to QuickBooks or Xero.", industry: "finance", tier: "default", activation: "enable", requiresConfig: "integrations", requiresPlanFlag: "integrations", pushableTemplateCodes: ["invoice", "receipt", "expense_receipt"] },
   { key: "finance-agent", name: "Finance agent", description: "An AI assistant with finance-specific tools: coding, rules, and pushes.", industry: "finance", tier: "default", activation: "enable" },
   { key: "statement-packs", name: "Statement packs", description: "Bank statements, purchase orders, remittance advice, and supplier statements.", industry: "finance", tier: "optional", activation: "enable", domainPack: "finance", optionalTemplateCodes: ["bank_statement", "purchase_order", "remittance_advice", "supplier_statement"] },
-  { key: "expense-approvals", name: "Expense approvals", description: "Submit, approve, and publish employee expense claims.", industry: "finance", tier: "optional", activation: "request" },
+  // Dext-parity Phase 3 WP3.3: flipped to "enable" now that a real settings/expenses surface
+  // exists — same request-until-there's-a-UI precedent as bank-match and approval-workflows.
+  // "Publish" in the description still refers to a future accounting push, not built here.
+  { key: "expense-approvals", name: "Expense approvals", description: "Submit, approve, and publish employee expense claims.", industry: "finance", tier: "optional", activation: "enable", navItems: [{ href: "expenses", label: "Expenses", icon: "receipt" }] },
   { key: "bank-match", name: "Bank matching", description: "Match statement lines to receipts automatically.", industry: "finance", tier: "optional", activation: "enable" },
 
   { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "healthcare", tier: "default", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },

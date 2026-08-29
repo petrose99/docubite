@@ -67,6 +67,12 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "AccountingEntity",
   // Dext-parity WP2.1/WP2.3: bank + supplier statement reconciliation.
   "BankMatch",
+  // Dext-parity Phase 3 WP3.1: multi-stage approval workflows.
+  "ApprovalWorkflow",
+  "ApprovalWorkflowStage",
+  // Dext-parity Phase 3 WP3.3: expense claims.
+  "ExpenseClaim",
+  "ExpenseClaimItem",
 ])
 
 /** Operations that read or mutate an existing row set through a `where`, and so must be scoped.

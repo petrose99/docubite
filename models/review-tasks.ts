@@ -1,6 +1,7 @@
 // Deliberately NOT a "use server" module, matching models/documents.ts and models/workspaces.ts:
 // these helpers trust the workspaceId they are handed. Server actions live in
 // app/(app)/workspaces/[workspaceId]/review-actions.ts and do the auth.
+import { canDecideStage, decideStage, findCurrentStage } from "@/lib/approvals/engine"
 import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { prisma } from "@/lib/db"
 import { cache } from "react"
@@ -18,10 +19,18 @@ export function parseReviewTaskStatus(value: unknown): ReviewTaskStatus | null {
 
 /** Manual creation is the only path a person can trigger today — WP11 (automation rules) and
  * WP12 (deterministic checks) are what will call this with "low_confidence"/"rule_required"/
- * "check_failed" once they land. */
+ * "check_failed" once they land.
+ *
+ * `workflowId` (Dext-parity Phase 3 WP3.1) is optional: passing one starts the task at stage 0
+ * (status "in_review") instead of the plain "open" default. It is the caller's job to have already
+ * confirmed the workflow belongs to this workspace — this function does not re-validate it, since
+ * every current caller already has the workflow row in hand (e.g. from a workspace's configured
+ * default). Attaching a workflow to a task that already exists uses
+ * models/approval-workflows.ts's startWorkflowOnReviewTask instead. */
 export async function createReviewTask(input: {
   workspaceId: string; documentId: string; reason?: ReviewTaskReason; detail?: string | null
   priority?: number; dueAt?: Date | null; assigneeId?: string | null; createdById: string | null
+  workflowId?: string | null
 }) {
   const document = await prisma.document.findFirst({ where: { id: input.documentId, workspaceId: input.workspaceId }, select: { id: true } })
   if (!document) throw new Error("document_not_found")
@@ -32,6 +41,7 @@ export async function createReviewTask(input: {
         workspaceId: input.workspaceId, documentId: input.documentId, reason: input.reason ?? "manual",
         detail: input.detail ?? null, priority: input.priority ?? 0, dueAt: input.dueAt ?? null,
         assigneeId: input.assigneeId ?? null, createdById: input.createdById,
+        ...(input.workflowId ? { workflowId: input.workflowId, currentStageIndex: 0, status: "in_review" } : {}),
       },
     }),
     prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, documentId: input.documentId, actorId: input.createdById, type: "review_task_created" }, context) }),
@@ -69,6 +79,7 @@ export const getReviewTask = cache(async (workspaceId: string, taskId: string) =
     document: true,
     assignee: { select: { id: true, name: true, email: true } },
     createdBy: { select: { id: true, name: true, email: true } },
+    workflow: { include: { stages: { orderBy: { stageIndex: "asc" } } } },
   },
 }))
 
@@ -82,6 +93,37 @@ export async function updateReviewTaskStatus(input: { workspaceId: string; taskI
   const [updated] = await prisma.$transaction([
     prisma.reviewTask.update({ where: { id: task.id }, data: { status: input.status, resolvedAt } }),
     prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, documentId: task.documentId, actorId: input.actorId, type: "review_task_status_changed", detail: { from: task.status, to: input.status } }, context) }),
+  ])
+  return updated
+}
+
+/** The workflow-aware counterpart to updateReviewTaskStatus (Dext-parity Phase 3 WP3.1): for a
+ * task with a workflow attached, a single "approve"/"reject" decision on its *current* stage,
+ * never a direct status write — approving mid-workflow only ever advances currentStageIndex and
+ * keeps status "in_review" until the last stage clears. Throws review_task_has_no_workflow for a
+ * plain task; callers (WP3.2's actions layer) are expected to branch on task.workflowId and call
+ * updateReviewTaskStatus for the plain case instead of routing everything through here. */
+export async function decideReviewTaskStage(input: { workspaceId: string; taskId: string; decision: "approve" | "reject"; actorId: string; actorRole: "owner" | "member" }) {
+  const task = await prisma.reviewTask.findFirst({
+    where: { id: input.taskId, workspaceId: input.workspaceId },
+    include: { workflow: { include: { stages: { orderBy: { stageIndex: "asc" } } } } },
+  })
+  if (!task) throw new Error("review_task_not_found")
+  if (!task.workflow || task.currentStageIndex === null) throw new Error("review_task_has_no_workflow")
+
+  const currentStage = findCurrentStage(task.workflow.stages, task.currentStageIndex)
+  if (!currentStage) throw new Error("workflow_stage_not_found")
+  if (!canDecideStage({ stage: currentStage, actorRole: input.actorRole })) throw new Error("stage_requires_owner")
+
+  const result = decideStage({ stages: task.workflow.stages, currentStageIndex: task.currentStageIndex, decision: input.decision })
+  const nextStatus = result.outcome === "advance" ? "in_review" : result.outcome
+  const nextStageIndex = result.outcome === "advance" ? result.nextStageIndex : task.currentStageIndex
+  const resolvedAt = result.outcome === "advance" ? null : new Date()
+
+  const context = await getRequestAuditContext()
+  const [updated] = await prisma.$transaction([
+    prisma.reviewTask.update({ where: { id: task.id }, data: { status: nextStatus, currentStageIndex: nextStageIndex, resolvedAt } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId: input.workspaceId, documentId: task.documentId, actorId: input.actorId, type: "review_task_stage_decided", detail: { stageIndex: currentStage.stageIndex, stageName: currentStage.name, decision: input.decision, outcome: result.outcome } }, context) }),
   ])
   return updated
 }

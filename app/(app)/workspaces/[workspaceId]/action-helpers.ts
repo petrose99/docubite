@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 
 /** `documents` is only the detail-page prefix — there is no document list page; the sheet is
  * the view of that data, so document mutations revalidate the file's `sheet`. */
-export const paths = (workspaceId: string) => ({ documents: `/workspaces/${workspaceId}/documents`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, billing: `/workspaces/${workspaceId}/settings/billing`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules`, settingsEmail: `/workspaces/${workspaceId}/settings/email` })
+export const paths = (workspaceId: string) => ({ documents: `/workspaces/${workspaceId}/documents`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, billing: `/workspaces/${workspaceId}/settings/billing`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules`, settingsEmail: `/workspaces/${workspaceId}/settings/email`, approvals: `/workspaces/${workspaceId}/settings/approvals`, expenses: `/workspaces/${workspaceId}/expenses` })
 
 /** Revalidates the whole workspace segment layout, not just one page — needed whenever a change
  * (module toggle, rename, ownership transfer) should update the persistent sidebar, which the
@@ -47,6 +47,23 @@ const BILLING_MESSAGES: Record<string, string> = {
   inbound_email_disabled_for_clinical: "Inbound email intake isn't available for a healthcare workspace.",
   pattern_invalid: "Enter a full email address (name@domain.com) or a domain (@domain.com).",
   allowed_sender_not_found: "That sender no longer exists.",
+  // Dext-parity Phase 3 WP3.1/WP3.2: approval workflows.
+  approval_workflow_not_found: "That approval workflow no longer exists.",
+  workflow_needs_at_least_one_stage: "Add at least one stage.",
+  review_task_has_no_workflow: "This review task has no workflow attached.",
+  workflow_stage_not_found: "That workflow stage no longer exists.",
+  stage_requires_owner: "Only a workspace owner can decide this stage.",
+  review_task_already_has_workflow: "This review task already has a workflow attached.",
+  review_task_not_open: "This review task has already moved past open — a workflow can only be started while it's open.",
+  // Dext-parity Phase 3 WP3.3: expense claims.
+  expense_claim_not_found: "That expense claim no longer exists.",
+  expense_claim_needs_at_least_one_receipt: "Add at least one receipt to this claim.",
+  document_not_an_expense_receipt: "Only expense receipt documents can be added to a claim.",
+  document_already_claimed: "One of these receipts is already on another claim.",
+  expense_claim_not_draft: "This claim has already been submitted and can no longer be edited.",
+  expense_claim_not_submitted: "This claim isn't awaiting a decision.",
+  expense_claim_has_workflow: "This claim is on a workflow — decide its current stage instead.",
+  expense_claim_has_no_workflow: "This claim has no workflow attached.",
 }
 
 export const errorMessage = (error: unknown, fallback: string) => {
