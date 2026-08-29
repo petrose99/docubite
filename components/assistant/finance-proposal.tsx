@@ -1,7 +1,8 @@
 "use client"
 
-import { bulkUpdateReviewTaskStatusAction, updateReviewTaskStatusAction } from "@/app/(app)/workspaces/[workspaceId]/review-actions"
+import { bulkUpdateReviewTaskStatusAction, decideReviewTaskStageAction, updateReviewTaskStatusAction } from "@/app/(app)/workspaces/[workspaceId]/review-actions"
 import { createAutomationRuleAction, setDocumentCodingAction } from "@/app/(app)/workspaces/[workspaceId]/automation-actions"
+import { decideExpenseClaimAction } from "@/app/(app)/workspaces/[workspaceId]/expense-claim-actions"
 import { pushDocumentToAccountingAction } from "@/app/(app)/workspaces/[workspaceId]/integration-push-actions"
 import type { FinanceProposalResult } from "@/lib/finance/actions"
 import { useRouter } from "next/navigation"
@@ -23,6 +24,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   account_required: "That rule needs an account to assign.",
   coding_data_required: "No coding was given.",
   proposal_unavailable: "Couldn't prepare that action right now.",
+  approval_workflows_not_enabled: "Approval workflows aren't enabled for this workspace.",
+  expense_approvals_not_enabled: "Expense approvals aren't enabled for this workspace.",
+  review_task_has_no_workflow: "That review task isn't on an approval workflow.",
+  expense_claim_not_found: "That expense claim no longer exists.",
+  expense_claim_not_submitted: "That expense claim isn't awaiting a decision.",
 }
 
 /** Renders one finance-agent Act tool's result (lib/finance/actions.ts) as an Accept/Dismiss card
@@ -108,6 +114,14 @@ async function runProposal(workspaceId: string, proposal: Exclude<FinanceProposa
     }
     case "push_to_accounting": {
       const result = await pushDocumentToAccountingAction(workspaceId, proposal.documentId, proposal.connectionId)
+      return { success: result.success, error: result.error ?? "" }
+    }
+    case "decide_review_task_stage": {
+      const result = await decideReviewTaskStageAction(workspaceId, proposal.taskId, proposal.decision)
+      return { success: result.success, error: result.error ?? "" }
+    }
+    case "decide_expense_claim": {
+      const result = await decideExpenseClaimAction(workspaceId, proposal.claimId, proposal.hasWorkflow, proposal.decision)
       return { success: result.success, error: result.error ?? "" }
     }
   }

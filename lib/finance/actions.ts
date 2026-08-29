@@ -21,6 +21,8 @@ export type FinanceProposal =
   | { kind: "set_document_coding"; documentId: string; codingData: Record<string, string | number>; summary: string }
   | { kind: "create_supplier_rule"; name: string; matcherType: "exact" | "contains"; matcherValue: string; account: string; requireReview: boolean; autopublish: boolean; summary: string }
   | { kind: "push_to_accounting"; documentId: string; connectionId: string; summary: string }
+  | { kind: "decide_review_task_stage"; taskId: string; decision: "approve" | "reject"; summary: string }
+  | { kind: "decide_expense_claim"; claimId: string; hasWorkflow: boolean; decision: "approve" | "reject"; summary: string }
 
 export type FinanceProposalResult = FinanceProposal | { error: string }
 
@@ -108,4 +110,63 @@ export async function describePushToAccounting(workspaceId: string, documentId: 
   const connection = await prisma.integrationConnection.findFirst({ where: { workspaceId, status: "active" }, orderBy: { createdAt: "asc" }, select: { id: true, provider: true } })
   if (!connection) return { error: "no_active_connection" }
   return { kind: "push_to_accounting", documentId, connectionId: connection.id, summary: `Push "${document.filename}" to ${connection.provider === "quickbooks" ? "QuickBooks" : "Xero"}` }
+}
+
+/** Dext-parity Phase 3 WP3.5. Distinct from describeApproveReviewTasks/describeRejectReviewTask
+ * above: those two only ever call updateReviewTaskStatus/bulkUpdateReviewTaskStatus, which refuse
+ * a task that has a workflow (decideReviewTaskStage is the required path for one of those). This
+ * describes a decision on a task's *current stage* instead — it's the only way for the agent to
+ * propose progressing (or ending) a workflow-staged task. Whether the acting user is actually
+ * allowed to decide this stage (the `requireOwner` gate) is deliberately not checked here — the
+ * same as every other propose function, it only validates the target exists and is in a decidable
+ * state; decideReviewTaskStageAction re-derives and enforces the real role gate at Accept time. */
+export async function describeDecideReviewTaskStage(workspaceId: string, taskId: string, decision: "approve" | "reject"): Promise<FinanceProposalResult> {
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("approval-workflows")) return { error: "approval_workflows_not_enabled" }
+  const task = await prisma.reviewTask.findFirst({
+    where: { id: taskId, workspaceId },
+    select: {
+      id: true, workflowId: true, currentStageIndex: true,
+      document: { select: { filename: true } },
+      workflow: { select: { stages: { orderBy: { stageIndex: "asc" }, select: { stageIndex: true, name: true } } } },
+    },
+  })
+  if (!task) return { error: "review_task_not_found" }
+  if (!task.workflowId || task.currentStageIndex === null) return { error: "review_task_has_no_workflow" }
+  const stages = task.workflow!.stages
+  const stage = stages.find((candidate) => candidate.stageIndex === task.currentStageIndex)
+  const stageLabel = stage ? `stage ${stage.stageIndex + 1} of ${stages.length} ("${stage.name}")` : "its current stage"
+  const summary = decision === "approve"
+    ? `Approve ${stageLabel} of the review task for "${task.document.filename}"`
+    : `Reject the review task for "${task.document.filename}" at ${stageLabel}`
+  return { kind: "decide_review_task_stage", taskId: task.id, decision, summary }
+}
+
+/** Dext-parity Phase 3 WP3.5, expense-claim counterpart to describeDecideReviewTaskStage. Unlike
+ * review tasks, a submitted ExpenseClaim may or may not have a workflow (submitExpenseClaim's
+ * workflowId is optional) — decideExpenseClaimAction needs to know which of its two underlying
+ * paths (decideExpenseClaimStage vs updateExpenseClaimStatus) to call, so hasWorkflow travels with
+ * the proposal rather than being re-derived blind on Accept. */
+export async function describeDecideExpenseClaim(workspaceId: string, claimId: string, decision: "approve" | "reject"): Promise<FinanceProposalResult> {
+  if (!(await getWorkspaceCapabilities(workspaceId)).has("expense-approvals")) return { error: "expense_approvals_not_enabled" }
+  const claim = await prisma.expenseClaim.findFirst({
+    where: { id: claimId, workspaceId },
+    select: {
+      id: true, title: true, total: true, currencyCode: true, status: true, workflowId: true, currentStageIndex: true,
+      workflow: { select: { stages: { orderBy: { stageIndex: "asc" }, select: { stageIndex: true, name: true } } } },
+    },
+  })
+  if (!claim) return { error: "expense_claim_not_found" }
+  if (claim.status !== "submitted") return { error: "expense_claim_not_submitted" }
+  const label = claim.title || (claim.total !== null && claim.currencyCode ? `${claim.total} ${claim.currencyCode}` : "expense claim")
+  const hasWorkflow = Boolean(claim.workflowId && claim.currentStageIndex !== null)
+  let stageNote = ""
+  if (hasWorkflow) {
+    const stages = claim.workflow!.stages
+    const stage = stages.find((candidate) => candidate.stageIndex === claim.currentStageIndex)
+    stageNote = stage ? ` at stage ${stage.stageIndex + 1} of ${stages.length} ("${stage.name}")` : ""
+  }
+  const summary = decision === "approve"
+    ? `Approve the expense claim "${label}"${stageNote}`
+    : `Reject the expense claim "${label}"${stageNote}`
+  return { kind: "decide_expense_claim", claimId: claim.id, hasWorkflow, decision, summary }
 }

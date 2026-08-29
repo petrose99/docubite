@@ -2,10 +2,10 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { prisma } from "@/lib/db"
 import {
-  describeApproveReviewTasks, describeCreateSupplierRule, describePushToAccounting,
-  describeRejectReviewTask, describeSetDocumentCoding,
+  describeApproveReviewTasks, describeCreateSupplierRule, describeDecideExpenseClaim, describeDecideReviewTaskStage,
+  describePushToAccounting, describeRejectReviewTask, describeSetDocumentCoding,
 } from "@/lib/finance/actions"
-import { findSupplierDocuments, getDocumentDetails, getInboxSummary, getSupplierRules } from "@/lib/finance/inbox"
+import { findSupplierDocuments, getDocumentDetails, getExpenseClaims, getInboxSummary, getSupplierRules } from "@/lib/finance/inbox"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { personaAddendumForIndustry } from "@/lib/modules/personas"
 import { findMatchingDocuments, searchDocumentChunks } from "@/lib/retrieval"
@@ -59,9 +59,10 @@ How to work:
 const FINANCE_INBOX_SYSTEM_PROMPT = `You are the DocuBite finance assistant, helping someone work through their review inbox and supplier rules. There is no spreadsheet grid here — work only through your tools.
 
 How to work:
-- Use get_inbox_summary, find_supplier_documents, get_document_details, and get_supplier_rules to answer questions and find what's being asked about. Look things up rather than guessing at ids or numbers.
+- Use get_inbox_summary, find_supplier_documents, get_document_details, get_supplier_rules, and get_expense_claims to answer questions and find what's being asked about. Look things up rather than guessing at ids or numbers.
 - Answer in plain prose, briefly. No preamble, no restating the question.
-- To take an action — approve or reject a review task, set a document's coding, create a supplier rule, or push a document to accounting — call the matching tool (approve_review_tasks, reject_review_task, set_document_coding, create_supplier_rule, push_to_accounting). Every one of these PROPOSES the action; it does not perform it. The tool's result is a summary of what would happen — say what you're proposing and that it's waiting for their confirmation in the panel below. Never claim an action happened, or that a document was pushed, coded, or a task approved, until you see the person confirm it landed.
+- A review task on an approval workflow (get_document_details' reviewTasks list shows a workflowId) can only move through decide_review_task_stage, never approve_review_tasks/reject_review_task — those two refuse a workflow task outright. A plain, workflow-less task is the reverse: use approve_review_tasks/reject_review_task for it.
+- To take an action — approve or reject a review task (plain or a workflow's current stage), decide an expense claim, set a document's coding, create a supplier rule, or push a document to accounting — call the matching tool (approve_review_tasks, reject_review_task, decide_review_task_stage, decide_expense_claim, set_document_coding, create_supplier_rule, push_to_accounting). Every one of these PROPOSES the action; it does not perform it. The tool's result is a summary of what would happen — say what you're proposing and that it's waiting for their confirmation in the panel below. Never claim an action happened, or that a document was pushed, coded, or a task or claim approved, until you see the person confirm it landed.
 - If a tool returns an error, explain what it means in plain terms rather than repeating the error code, and suggest what to check (e.g. "no active accounting connection" means Settings → Integrations needs a connected provider first).`
 
 /** Appended to the system prompt only when the document-search tool is registered (i.e. embeddings
@@ -269,6 +270,14 @@ export async function POST(request: Request) {
             try { return { rules: await getSupplierRules(workspaceId) } } catch { return { error: "rules_unavailable" } }
           },
         }),
+        get_expense_claims: tool({
+          description: "List submitted-or-later expense claims (claim id, title, status, total, whether it's on an approval workflow). Use this to find a claim id before decide_expense_claim. Excludes drafts — nothing to decide about one yet.",
+          inputSchema: z.object({}),
+          execute: async () => {
+            if (!(await getWorkspaceCapabilities(workspaceId)).has("expense-approvals")) return { error: "expense_approvals_not_enabled" }
+            try { return { claims: await getExpenseClaims(workspaceId) } } catch { return { error: "expense_claims_unavailable" } }
+          },
+        }),
         approve_review_tasks: tool({
           description: "Propose approving one or more review tasks, by review-task id (from get_document_details' reviewTasks list, not a document id). Does not approve them — returns a proposal for the person to confirm.",
           inputSchema: z.object({ taskIds: z.array(z.string()).min(1).describe("Review task ids to approve") }),
@@ -312,6 +321,26 @@ export async function POST(request: Request) {
           inputSchema: z.object({ documentId: z.string().describe("The document id") }),
           execute: async ({ documentId }) => {
             try { return await describePushToAccounting(workspaceId, documentId) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        decide_review_task_stage: tool({
+          description: "Propose approving or rejecting the *current stage* of a review task that is on an approval workflow (has a workflowId — check get_document_details' reviewTasks list). Does not use this for a plain, workflow-less task — use approve_review_tasks/reject_review_task for that instead. Does not decide it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({
+            taskId: z.string().describe("The review task id"),
+            decision: z.enum(["approve", "reject"]).describe("Approve the current stage, or reject the task outright"),
+          }),
+          execute: async ({ taskId, decision }) => {
+            try { return await describeDecideReviewTaskStage(workspaceId, taskId, decision) } catch { return { error: "proposal_unavailable" } }
+          },
+        }),
+        decide_expense_claim: tool({
+          description: "Propose approving or rejecting a submitted expense claim, whether or not it's on an approval workflow. Does not decide it — returns a proposal for the person to confirm.",
+          inputSchema: z.object({
+            claimId: z.string().describe("The expense claim id"),
+            decision: z.enum(["approve", "reject"]).describe("Approve or reject the claim (its current stage, if it has a workflow)"),
+          }),
+          execute: async ({ claimId, decision }) => {
+            try { return await describeDecideExpenseClaim(workspaceId, claimId, decision) } catch { return { error: "proposal_unavailable" } }
           },
         }),
       }

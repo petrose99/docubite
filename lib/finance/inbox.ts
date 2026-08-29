@@ -61,7 +61,7 @@ export async function getDocumentDetails(workspaceId: string, documentId: string
       id: true, filename: true, status: true, reviewedData: true, rawExtraction: true, confidence: true, codingData: true,
       appliedRule: { select: { id: true, name: true } },
       checkResults: { select: { checkCode: true, status: true, message: true } },
-      reviewTasks: { select: { id: true, status: true, reason: true, detail: true }, orderBy: { createdAt: "desc" }, take: 5 },
+      reviewTasks: { select: { id: true, status: true, reason: true, detail: true, workflowId: true, currentStageIndex: true }, orderBy: { createdAt: "desc" }, take: 5 },
     },
   })
   if (!document) return null
@@ -74,6 +74,22 @@ export async function getDocumentDetails(workspaceId: string, documentId: string
     checks: document.checkResults,
     reviewTasks: document.reviewTasks,
   }
+}
+
+/** Submitted-or-later expense claims, most recent first — what the agent reads to find a claim id
+ * before proposing decide_expense_claim (WP3.5); a draft is deliberately excluded here since
+ * there's nothing for the agent to decide about one yet. */
+export async function getExpenseClaims(workspaceId: string, limit = 20) {
+  const claims = await prisma.expenseClaim.findMany({
+    where: { workspaceId, status: { not: "draft" } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { id: true, title: true, status: true, total: true, currencyCode: true, workflowId: true, currentStageIndex: true },
+  })
+  return claims.map((claim) => ({
+    claimId: claim.id, title: claim.title, status: claim.status, total: claim.total, currencyCode: claim.currencyCode,
+    hasWorkflow: Boolean(claim.workflowId && claim.currentStageIndex !== null),
+  }))
 }
 
 /** Active supplier rules, most-used first — what the agent reads before proposing a new one, so
