@@ -3,7 +3,10 @@
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
-import { createExpenseClaim, decideExpenseClaimStage, deleteExpenseClaim, submitExpenseClaim, updateExpenseClaimStatus } from "@/models/expense-claims"
+import {
+  addExpenseClaimItems, createExpenseClaim, decideExpenseClaimStage, deleteExpenseClaim,
+  removeExpenseClaimItem, submitExpenseClaim, updateExpenseClaimStatus,
+} from "@/models/expense-claims"
 import { revalidatePath } from "next/cache"
 import { errorMessage, NO_ACCESS, paths, requireMember } from "./action-helpers"
 
@@ -41,6 +44,32 @@ export async function deleteExpenseClaimAction(workspaceId: string, claimId: str
     revalidatePath(paths(workspaceId).expenses)
     return { success: true, data: null }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not delete the claim") } }
+}
+
+/** "Yours, or an owner's call" — same bar as delete/submit, since a draft is still personal to
+ * whoever's assembling it. */
+export async function addExpenseClaimItemsAction(workspaceId: string, claimId: string, submitterId: string | null, documentIds: string[]): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  const membership = await requireExpenseClaimsMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
+  if (submitterId !== user.id && membership.role !== "owner") return { success: false, error: NO_ACCESS }
+  try {
+    await addExpenseClaimItems(workspaceId, claimId, documentIds)
+    revalidatePath(paths(workspaceId).expenses)
+    return { success: true, data: null }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not add those receipts") } }
+}
+
+export async function removeExpenseClaimItemAction(workspaceId: string, claimId: string, submitterId: string | null, itemId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  const membership = await requireExpenseClaimsMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
+  if (submitterId !== user.id && membership.role !== "owner") return { success: false, error: NO_ACCESS }
+  try {
+    await removeExpenseClaimItem(workspaceId, claimId, itemId)
+    revalidatePath(paths(workspaceId).expenses)
+    return { success: true, data: null }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not remove that receipt") } }
 }
 
 export async function submitExpenseClaimAction(workspaceId: string, claimId: string, submitterId: string | null, workflowId: string | null): Promise<ActionState<null>> {

@@ -1,8 +1,51 @@
-# Handoff — Dext parity Phase 3: approvals (WP3.1–3.4 complete, WP3.5 not started)
+# Handoff — Dext parity Phase 3: approvals (WP3.1–3.5 all complete + follow-ups)
 
-**Branch:** `claude/continue-implementation-76d5f6`
+## Update (2026-08-29, later session): WP3.5 landed on master separately, plus two follow-up fixes
+
+This session started from an earlier branch point and built its own WP3.5 (finance-agent approval
+proposals) independently, **not knowing** `master` had, in the meantime, already merged a separate
+WP3.5 implementation (`ad9deec`) — same feature, different session, different tool names
+(`decide_expense_claim` vs. this session's first draft `decide_expense_claim_stage`). Also already
+on `master`: the `@react-email/render` fix and a login-loop fix, both landed after this branch's
+original base commit.
+
+Rather than push a duplicate/conflicting WP3.5, this session:
+1. **Diffed the two WP3.5 implementations.** Functionally equivalent — same propose-then-confirm
+   shape, same two Act tools (approve/reject a workflow stage; decide an expense claim) plus one
+   read tool. Kept `master`'s already-merged version as authoritative; discarded this session's own
+   duplicate.
+2. **Found and fixed a real bug in `master`'s merged WP3.5**: `components/assistant/assistant-panel.tsx`'s
+   `FINANCE_PROPOSAL_TOOLS` set was never updated for the two new tool names
+   (`decide_review_task_stage`, `decide_expense_claim`). Without an entry there, the ai-chat
+   route and `finance-proposal.tsx` both already handled these tools correctly, but the panel
+   rendered them through the generic one-line "doing X" fallback instead of the Accept/Dismiss
+   card — meaning a person could see the model *propose* a decision but had no way to actually
+   accept or dismiss it. Fixed by adding both names to the set (and `get_expense_claims` to
+   `TOOL_LABELS` for its own read tool, which had the same fallback but a lower-severity gap: no
+   card needed, just a nicer in-progress label than the raw tool name).
+3. **Kept two genuinely new pieces of work** this branch built that `master` doesn't have — see
+   the two "follow-up" sections layered onto the *end* of this file (the sections below this one
+   are the original, pre-existing handoff for WP3.1–3.4 and are left as historical record, not
+   updated to match — some header claims like "WP3.5 is entirely unstarted" are now stale; treat
+   this update block and the branch's actual diff as authoritative over old prose below):
+   - A **"Send for review" button** on the document page (`components/documents/create-review-task-button.tsx`)
+     — closes the long-flagged "no UI to manually create a plain ReviewTask" gap.
+   - **Editing a draft expense claim's receipts** (`addExpenseClaimItems`/`removeExpenseClaimItem`
+     in `models/expense-claims.ts`, wired through actions + `expense-claim-row.tsx`) — closes the
+     "no editing an existing draft claim" gap.
+
+`npx tsc --noEmit` clean, `npx vitest run` 1089/1089 pass (110 files), `npx eslint` clean on every
+touched file (one pre-existing, unrelated `no-unused-vars` warning on `RESOLVED_STATUSES` in
+`models/expense-claims.ts`, present on `master` already, not touched here). Not verified live —
+this sandbox has no `DATABASE_URL`/Supabase env configured at all, and the browser-login issue
+flagged further down in this doc is (separately) still unresolved; both were left alone per
+explicit instruction this session.
+
+---
+
+**Branch (original, now stale):** `claude/continue-implementation-76d5f6`
 **Date:** 2026-08-29
-**Status:** WP3.1 (workflow models + engine), WP3.2 (settings UI + review-queue wiring), WP3.3 (expense claims), and WP3.4 (reminder emails) are all code-complete. `npx tsc --noEmit` clean, `npx vitest run` 1076/1076 pass (110 files), `npx prisma validate` clean, `npm run build` clean. WP3.1/3.2 were live-verified end to end through the actual browser UI; WP3.3/3.4 were live-verified against the real Postgres instance via model-layer scripts, since browser login broke mid-session for environment reasons this session spent real effort trying (and failing) to root-cause — see "Browser login is still broken in this session" below. WP3.5 is **entirely unstarted**. Continues from [HANDOFF-DEXT-PARITY-PHASE1-AND-2.md](HANDOFF-DEXT-PARITY-PHASE1-AND-2.md), whose Phase 1/2 work this session also finished verifying live (see that file's "Verification update" section).
+**Status (original, now stale — see update block above):** WP3.1 (workflow models + engine), WP3.2 (settings UI + review-queue wiring), WP3.3 (expense claims), and WP3.4 (reminder emails) are all code-complete. `npx tsc --noEmit` clean, `npx vitest run` 1076/1076 pass (110 files), `npx prisma validate` clean, `npm run build` clean. WP3.1/3.2 were live-verified end to end through the actual browser UI; WP3.3/3.4 were live-verified against the real Postgres instance via model-layer scripts, since browser login broke mid-session for environment reasons this session spent real effort trying (and failing) to root-cause — see "Browser login is still broken in this session" below. WP3.5 is **entirely unstarted**. Continues from [HANDOFF-DEXT-PARITY-PHASE1-AND-2.md](HANDOFF-DEXT-PARITY-PHASE1-AND-2.md), whose Phase 1/2 work this session also finished verifying live (see that file's "Verification update" section).
 
 ## What was built (WP3.1)
 

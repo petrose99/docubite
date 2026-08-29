@@ -61,6 +61,8 @@ const BILLING_MESSAGES: Record<string, string> = {
   document_not_an_expense_receipt: "Only expense receipt documents can be added to a claim.",
   document_already_claimed: "One of these receipts is already on another claim.",
   expense_claim_not_draft: "This claim has already been submitted and can no longer be edited.",
+  no_receipts_given: "Select at least one receipt to add.",
+  expense_claim_item_not_found: "That receipt isn't on this claim.",
   expense_claim_not_submitted: "This claim isn't awaiting a decision.",
   expense_claim_has_workflow: "This claim is on a workflow — decide its current stage instead.",
   expense_claim_has_no_workflow: "This claim has no workflow attached.",

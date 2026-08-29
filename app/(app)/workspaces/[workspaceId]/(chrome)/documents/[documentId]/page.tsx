@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AutomationRuleForm } from "@/components/workspace/automation-rule-form"
+import { CreateReviewTaskButton } from "@/components/documents/create-review-task-button"
 import { DeleteDocumentButton } from "@/components/documents/delete-document-button"
 import { LineItemsEditor } from "@/components/documents/line-items-editor"
 import { PushToAccountingCard } from "@/components/documents/push-to-accounting-card"
@@ -14,6 +15,7 @@ import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listBankMatches } from "@/models/bank-matches"
 import { getWorkspaceDocument } from "@/models/documents"
+import { getOpenReviewTaskForDocument } from "@/models/review-tasks"
 import { listWorkspaceIntegrationConnections, listWorkspaceIntegrationPushes } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
@@ -49,6 +51,12 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
   const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
   const canCreateRule = capabilities.has("supplier-rules") && membership.role === "owner" && supplier.length > 0
 
+  // "Send for review" affordance: only when the review-queue module is on, and only when this
+  // document doesn't already have an unresolved task — see getOpenReviewTaskForDocument's own
+  // doc-comment for why a second, competing task should never be offered.
+  const reviewQueueEnabled = capabilities.has("review-queue")
+  const openReviewTask = reviewQueueEnabled ? await getOpenReviewTaskForDocument(workspaceId, documentId) : null
+
   // WP2.1/WP2.3: the reconciliation panel surfaces only on the statement document itself, one
   // panel kind per template code — a document is never both a bank_statement and a
   // supplier_statement, so there is no case needing both panels at once.
@@ -59,7 +67,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
 
   return <main className="mx-auto max-w-3xl space-y-6">
     <Link className="text-sm underline" href={`/workspaces/${workspaceId}/files/${document.fileId}/sheet`}>Back to sheet</Link>
-    <header><div className="flex items-start justify-between gap-4"><h1 className="text-3xl font-bold">{document.filename}</h1><DeleteDocumentButton workspaceId={workspaceId} fileId={document.fileId} documentId={document.id} filename={document.filename} /></div><div className="mt-2 flex gap-2"><Badge>{document.status.replaceAll("_", " ")}</Badge>{document.storageKey && <a className="text-sm underline" href={`/api/documents/${document.id}/source`}>View source</a>}</div>{confidence?.missingRequiredFields?.length ? <p className="mt-3 text-sm text-amber-700">Missing required fields: {confidence.missingRequiredFields.join(", ")}</p> : null}{conflictingLabels.length ? <p className="mt-1 text-sm text-amber-700">Pages of this document disagreed on: {conflictingLabels.join(", ")} — please confirm against the source.</p> : null}</header>
+    <header><div className="flex items-start justify-between gap-4"><h1 className="text-3xl font-bold">{document.filename}</h1><div className="flex shrink-0 items-center gap-2">{reviewQueueEnabled && (openReviewTask
+      ? <Link className="text-sm underline" href={`/workspaces/${workspaceId}/review/${openReviewTask.id}`}>{openReviewTask.status === "in_review" ? "In review" : "Open"} — view review task</Link>
+      : <CreateReviewTaskButton workspaceId={workspaceId} documentId={document.id} />)}<DeleteDocumentButton workspaceId={workspaceId} fileId={document.fileId} documentId={document.id} filename={document.filename} /></div></div><div className="mt-2 flex gap-2"><Badge>{document.status.replaceAll("_", " ")}</Badge>{document.storageKey && <a className="text-sm underline" href={`/api/documents/${document.id}/source`}>View source</a>}</div>{confidence?.missingRequiredFields?.length ? <p className="mt-3 text-sm text-amber-700">Missing required fields: {confidence.missingRequiredFields.join(", ")}</p> : null}{conflictingLabels.length ? <p className="mt-1 text-sm text-amber-700">Pages of this document disagreed on: {conflictingLabels.join(", ")} — please confirm against the source.</p> : null}</header>
     <Card><CardHeader><CardTitle>Review extracted data</CardTitle><CardDescription>Your saved values are separate from the original AI extraction. Fields highlighted in amber had low AI confidence.</CardDescription></CardHeader><CardContent><form action={saveReview} className="space-y-4">{fields.map((field) => {
       const lowConfidence = typeof fieldConfidence[field.key] === "number" && fieldConfidence[field.key] < LOW_CONFIDENCE_THRESHOLD
       return <div key={field.key} className={`space-y-1 rounded-md ${lowConfidence ? "border border-amber-300 bg-amber-50 p-2" : ""}`}>

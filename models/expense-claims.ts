@@ -17,23 +17,28 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null
 }
 
-/** Every document a claim can be built from must already be an `expense_receipt`-templated
+/** Every document a claim item can be built from must already be an `expense_receipt`-templated
  * Document in this workspace, and not already claimed elsewhere — both enforced here rather than
  * left to the DB's unique constraint alone, so the caller gets a clear reason instead of a raw
- * constraint-violation error. Creates the claim and its items in one transaction, "draft" status. */
-export async function createExpenseClaim(input: { workspaceId: string; submitterId: string; title?: string | null; documentIds: string[] }) {
-  const documentIds = [...new Set(input.documentIds)].slice(0, 200)
-  if (!documentIds.length) throw new Error("expense_claim_needs_at_least_one_receipt")
-
+ * constraint-violation error. Shared by createExpenseClaim and addExpenseClaimItems so "what counts
+ * as claimable" only has one definition. */
+async function validateClaimableDocuments(workspaceId: string, documentIds: string[]) {
   const documents = await prisma.document.findMany({
-    where: { id: { in: documentIds }, workspaceId: input.workspaceId },
+    where: { id: { in: documentIds }, workspaceId },
     select: { id: true, template: { select: { code: true } } },
   })
   if (documents.length !== documentIds.length) throw new Error("document_not_found")
   if (documents.some((document) => document.template?.code !== "expense_receipt")) throw new Error("document_not_an_expense_receipt")
 
-  const alreadyClaimed = await prisma.expenseClaimItem.findFirst({ where: { workspaceId: input.workspaceId, documentId: { in: documentIds } }, select: { id: true } })
+  const alreadyClaimed = await prisma.expenseClaimItem.findFirst({ where: { workspaceId, documentId: { in: documentIds } }, select: { id: true } })
   if (alreadyClaimed) throw new Error("document_already_claimed")
+}
+
+/** Creates the claim and its items in one transaction, "draft" status. */
+export async function createExpenseClaim(input: { workspaceId: string; submitterId: string; title?: string | null; documentIds: string[] }) {
+  const documentIds = [...new Set(input.documentIds)].slice(0, 200)
+  if (!documentIds.length) throw new Error("expense_claim_needs_at_least_one_receipt")
+  await validateClaimableDocuments(input.workspaceId, documentIds)
 
   return prisma.expenseClaim.create({
     data: {
@@ -83,6 +88,36 @@ export async function deleteExpenseClaim(workspaceId: string, claimId: string) {
   if (!claim) throw new Error("expense_claim_not_found")
   if (claim.status !== "draft") throw new Error("expense_claim_not_draft")
   await prisma.expenseClaim.delete({ where: { id: claim.id } })
+}
+
+/** Adds more unclaimed `expense_receipt` documents to an existing draft — the missing half of
+ * WP3.3's "no editing a draft claim's receipts" gap (`createExpenseClaim` only ever took its full
+ * document list up front). Draft-only, same as deleteExpenseClaim: once submitted, a claim's
+ * receipt list is part of the decision record. */
+export async function addExpenseClaimItems(workspaceId: string, claimId: string, documentIds: string[]) {
+  const ids = [...new Set(documentIds)].slice(0, 200)
+  if (!ids.length) throw new Error("no_receipts_given")
+  const claim = await prisma.expenseClaim.findFirst({ where: { id: claimId, workspaceId }, select: { id: true, status: true } })
+  if (!claim) throw new Error("expense_claim_not_found")
+  if (claim.status !== "draft") throw new Error("expense_claim_not_draft")
+  await validateClaimableDocuments(workspaceId, ids)
+  await prisma.expenseClaimItem.createMany({ data: ids.map((documentId) => ({ workspaceId, claimId, documentId })) })
+}
+
+/** Removes one receipt from a still-draft claim. Refuses to leave the claim with zero items —
+ * `submitExpenseClaim` already refuses an empty claim, so an empty draft is a dead end; delete the
+ * whole claim instead (deleteExpenseClaim), which also frees its (zero) receipts, trivially. */
+export async function removeExpenseClaimItem(workspaceId: string, claimId: string, itemId: string) {
+  const claim = await prisma.expenseClaim.findFirst({
+    where: { id: claimId, workspaceId },
+    select: { id: true, status: true, items: { select: { id: true } } },
+  })
+  if (!claim) throw new Error("expense_claim_not_found")
+  if (claim.status !== "draft") throw new Error("expense_claim_not_draft")
+  const item = claim.items.find((candidate) => candidate.id === itemId)
+  if (!item) throw new Error("expense_claim_item_not_found")
+  if (claim.items.length === 1) throw new Error("expense_claim_needs_at_least_one_receipt")
+  await prisma.expenseClaimItem.delete({ where: { id: itemId } })
 }
 
 /** Locks the claim in: computes and freezes `total`/`currencyCode` from its items' own extracted
