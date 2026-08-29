@@ -54,7 +54,7 @@ export const MODULES: ModuleDefinition[] = [
   { key: "finance-agent", name: "Finance agent", description: "An AI assistant with finance-specific tools: coding, rules, and pushes.", industry: "finance", tier: "default", activation: "enable" },
   { key: "statement-packs", name: "Statement packs", description: "Bank statements, purchase orders, remittance advice, and supplier statements.", industry: "finance", tier: "optional", activation: "enable", domainPack: "finance", optionalTemplateCodes: ["bank_statement", "purchase_order", "remittance_advice", "supplier_statement"] },
   { key: "expense-approvals", name: "Expense approvals", description: "Submit, approve, and publish employee expense claims.", industry: "finance", tier: "optional", activation: "request" },
-  { key: "bank-match", name: "Bank matching", description: "Match statement lines to receipts automatically.", industry: "finance", tier: "optional", activation: "request" },
+  { key: "bank-match", name: "Bank matching", description: "Match statement lines to receipts automatically.", industry: "finance", tier: "optional", activation: "enable" },
 
   { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "healthcare", tier: "default", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },
   { key: "clinical-packs", name: "Clinical packs", description: "Pathology report templates.", industry: "healthcare", tier: "default", activation: "enable", domainPack: "pathology" },

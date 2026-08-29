@@ -11,6 +11,7 @@ import config from "@/lib/config"
 import { getValidAccessToken, TokenRefreshError } from "@/lib/integration-token-refresh"
 import { listExpenseAccounts as listQuickbooksAccounts } from "@/lib/integrations/quickbooks/client"
 import { listExpenseAccounts as listXeroAccounts } from "@/lib/integrations/xero/client"
+import { syncAccountingEntities } from "@/lib/integrations/sync"
 import {
   deleteWorkspaceIntegrationConnection,
   listWorkspaceIntegrationConnections,
@@ -67,6 +68,26 @@ export async function setDefaultExpenseAccountAction(workspaceId: string, connec
     return { success: true }
   } catch (error) {
     return { success: false, error: errorMessage(error, "Could not set the default expense account") }
+  }
+}
+
+/** Manual re-sync of the connection's chart of accounts / vendors / tax rates into
+ * AccountingEntity (WP1.5) — also run automatically once, right after the OAuth callback
+ * completes (see the callback routes). */
+export async function syncAccountingEntitiesAction(workspaceId: string, connectionId: string): Promise<ActionState> {
+  const gate = await guardIntegrations(workspaceId)
+  if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
+  try {
+    const connection = await prisma.integrationConnection.findFirst({ where: { id: connectionId, workspaceId }, select: { id: true } })
+    if (!connection) return { success: false, error: "That connection no longer exists" }
+    await syncAccountingEntities(connection.id)
+    revalidatePath(paths(workspaceId).integrations)
+    return { success: true }
+  } catch (error) {
+    if (error instanceof TokenRefreshError && error.message === "integration_needs_reauth") {
+      return { success: false, error: "This connection needs to be reconnected before it can be synced" }
+    }
+    return { success: false, error: errorMessage(error, "Could not sync accounts") }
   }
 }
 

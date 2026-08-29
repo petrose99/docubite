@@ -11,6 +11,7 @@ export function toXeroBillBody(bill: NormalizedBill, contactId: string, accountC
     ...(bill.issueDate ? { Date: bill.issueDate } : {}),
     ...(bill.dueDate ? { DueDate: bill.dueDate } : {}),
     ...(bill.referenceNumber ? { InvoiceNumber: bill.referenceNumber } : {}),
+    ...(bill.currencyCode ? { CurrencyCode: bill.currencyCode } : {}),
     LineItems: bill.lineItems.map((item) => ({
       Description: item.description,
       Quantity: item.quantity || 1,

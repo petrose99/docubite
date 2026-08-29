@@ -12,6 +12,7 @@ export const FINANCE_TEMPLATES = [
     code: "invoice", name: "Invoice", documentType: "invoice", isSystem: true, multiRow: true,
     fields: [
       { key: "vendor", label: "Supplier", type: "string", instruction: "Seller or supplier name", required: true },
+      { key: "supplier_vat_number", label: "Supplier VAT number", type: "string", instruction: "Supplier's VAT/tax registration number exactly as printed (e.g. GB123456789). Leave blank if not shown — do not infer.", required: false },
       { key: "invoice_number", label: "Invoice number", type: "string", instruction: "Invoice, bill, or reference number", required: true },
       { key: "issue_date", label: "Issue date", type: "date", instruction: "Date the invoice was issued", required: true },
       { key: "due_date", label: "Due date", type: "date", instruction: "Payment due date", required: false },
@@ -81,6 +82,7 @@ export const FINANCE_OPTIONAL_TEMPLATES = [
       { key: "account_number", label: "Account number", type: "string", instruction: "Account number, sort code, or IBAN as printed (masked or full)", required: false },
       { key: "statement_period_start", label: "Period start", type: "date", instruction: "First day of the statement period", required: false },
       { key: "statement_period_end", label: "Period end", type: "date", instruction: "Last day of the statement period", required: false },
+      { key: "currency_code", label: "Currency shown", type: "string", instruction: "Literal ISO 4217 code printed on the document; do not convert", required: false },
       { key: "opening_balance", label: "Opening balance", type: "number", instruction: "Balance at the start of the period", required: false, mergeStrategy: "first" },
       { key: "closing_balance", label: "Closing balance", type: "number", instruction: "Balance at the end of the period", required: false, mergeStrategy: "last" },
       { key: "transactions", label: "Transactions", type: "array", instruction: "Every transaction row in the statement, in the order printed", required: false, itemFields: [

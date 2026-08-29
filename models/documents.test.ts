@@ -4,10 +4,17 @@ vi.mock("@/lib/db", () => ({ prisma: {} }))
 vi.mock("@/prisma/client", () => ({ Prisma: {}, PrismaClient: vi.fn() }))
 vi.mock("@/models/workspaces", () => ({ consumeWorkspaceQuota: vi.fn() }))
 vi.mock("@/lib/document-storage", () => ({ documentStorageKey: vi.fn(), documentBlocksKey: vi.fn((ws: string, id: string) => `workspaces/${ws}/documents/${id}/blocks`), putDocumentSource: vi.fn(), deleteDocumentSource: vi.fn() }))
+vi.mock("@/lib/analytics", () => ({ track: vi.fn() }))
+vi.mock("@/models/document-field-values", () => ({ replaceDocumentFieldValues: vi.fn() }))
+vi.mock("@/models/field-corrections", () => ({ recordFieldCorrection: vi.fn().mockResolvedValue(undefined) }))
 
-const { createDocumentFromBuffer, deleteWorkspaceDocuments, documentDataForExport, documentHash, documentSourceFor, isSupportedDocumentBuffer, validateDocumentInput } = await import("@/models/documents")
+const { createDocumentFromBuffer, deleteWorkspaceDocuments, documentDataForExport, documentHash, documentSourceFor, isSupportedDocumentBuffer, updateDocumentField, validateDocumentInput } = await import("@/models/documents")
 const { prisma } = await import("@/lib/db")
 const { deleteDocumentSource } = await import("@/lib/document-storage")
+const { recordFieldCorrection } = await import("@/models/field-corrections")
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = prisma as any
 
 describe("documentSourceFor", () => {
   // Regression: dictations were being stored with source "upload" (the value every caller passes),
@@ -177,6 +184,35 @@ describe("deleteWorkspaceDocuments", () => {
 
     await deleteWorkspaceDocuments("w", ids, "user-1")
     expect(findMany.mock.calls[0][0].where.id.in).toHaveLength(100)
+  })
+})
+
+describe("updateDocumentField field-correction recording", () => {
+  const fieldSnapshot = [{ key: "vendor", label: "Supplier", type: "string", required: true }]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    db.document = {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "d1", workspaceId: "w1", status: "reviewed", fieldSnapshot, reviewedData: { vendor: "Acme In" }, rawExtraction: null,
+        confidence: {}, provenance: null, fileId: "f1", template: { code: "invoice" },
+      }),
+      update: vi.fn().mockResolvedValue({ id: "d1" }),
+    }
+    db.documentAuditEvent = { create: vi.fn() }
+    db.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(db))
+  })
+
+  it("records a correction when the new value actually differs", async () => {
+    await updateDocumentField({ workspaceId: "w1", documentId: "d1", fieldKey: "vendor", value: "Acme Inc", actorId: "u1" })
+    expect(vi.mocked(recordFieldCorrection)).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: "w1", templateCode: "invoice", fieldKey: "vendor", wrongValue: "Acme In", correctedValue: "Acme Inc",
+    }))
+  })
+
+  it("does not record a correction when the value is unchanged", async () => {
+    await updateDocumentField({ workspaceId: "w1", documentId: "d1", fieldKey: "vendor", value: "Acme In", actorId: "u1" })
+    expect(vi.mocked(recordFieldCorrection)).not.toHaveBeenCalled()
   })
 })
 

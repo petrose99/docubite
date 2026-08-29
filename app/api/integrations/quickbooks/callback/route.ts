@@ -1,5 +1,6 @@
 import config from "@/lib/config"
 import { verifyOAuthState } from "@/lib/integration-oauth-state"
+import { syncAccountingEntities } from "@/lib/integrations/sync"
 import { exchangeCodeForTokens } from "@/lib/integrations/quickbooks/client"
 import { encryptSecret } from "@/lib/secret-crypto"
 import { upsertWorkspaceIntegrationConnection } from "@/models/integrations"
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date()
-  await upsertWorkspaceIntegrationConnection(state.workspaceId, {
+  const connection = await upsertWorkspaceIntegrationConnection(state.workspaceId, {
     provider: "quickbooks",
     externalTenantId: realmId,
     tenantName: null, // QuickBooks doesn't return a company name on this exchange; shown as the realm id until set.
@@ -49,6 +50,9 @@ export async function GET(request: NextRequest) {
     scope: null,
     createdById: state.userId,
   })
+  // Best effort: a first sync failure here must not block the connection itself — the owner can
+  // always trigger it again from the "Sync accounts" button (integration-connection-actions.ts).
+  await syncAccountingEntities(connection.id).catch((error) => console.error("[quickbooks] initial account sync failed:", error instanceof Error ? error.message : error))
 
   return Response.redirect(`${config.app.baseURL}/workspaces/${state.workspaceId}/settings/integrations`)
 }

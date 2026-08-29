@@ -45,7 +45,7 @@ const DocumentsIcon = () => <Files className="h-4 w-4" />
  * Lido's spreadsheet is the page rather than a widget on it — chrome is one thin bar, and the
  * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Extraction and the
  * assistant are reached from the grid's own toolbar, not from page chrome. */
-export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
+export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, templatesBySheetId, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
   workspaceId: string
   fileId: string
   fileName: string
@@ -53,6 +53,11 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   snapshot: IWorkbookData | null
   rev: number
   template: SheetTemplate | null
+  /** Every worksheet's template, keyed by the Univer sheet id it seeded — looked up on every
+   * sheet-tab switch so the Extract panel always reflects whichever tab is actually active,
+   * without a re-fetch. A tab with no entry (a brand-new, not-yet-templated sheet) resolves to
+   * null, matching what the server sends when there is no template at all. */
+  templatesBySheetId: Record<string, SheetTemplate>
   usage: WorkspaceUsage
   sheetCount: number
   queuedIds: string[]
@@ -67,12 +72,20 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
 }) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [extractOpen, setExtractOpen] = useState(false)
+  // The template the Extract panel shows. Starts as the server's pick (the `?template=` sheet, or
+  // the file's first) and is swapped by the ActiveSheetChanged listener below whenever the user
+  // clicks a different tab, so the panel never lags the grid's own active sheet.
+  const [activeTemplate, setActiveTemplate] = useState<SheetTemplate | null>(template)
   const [formulaBuilderOpen, setFormulaBuilderOpen] = useState(false)
   const [documentsPanelOpen, setDocumentsPanelOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<ActiveFilter | null>(null)
   // Read inside callbacks that must not depend on (and re-create on) every filter change — the
   // BeforeActiveSheetChange listener registered once in handleReady, in particular.
   const activeFilterRef = useRef<ActiveFilter | null>(null)
+  // Read inside the ActiveSheetChanged listener registered once in handleReady, same reason as
+  // activeFilterRef above.
+  const templatesBySheetIdRef = useRef(templatesBySheetId)
+  useEffect(() => { templatesBySheetIdRef.current = templatesBySheetId }, [templatesBySheetId])
   const [source, setSource] = useState<SourceDocument | null>(null)
   const [target, setTarget] = useState<ProvenanceTarget | null>(null)
   // The revision the server settled on after absorbing an extraction, handed to the grid so its
@@ -229,6 +242,22 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       activeFilterRef.current = null
       setActiveFilter(null)
     })
+
+    /** The Extract panel is bound to whichever worksheet is actually active, not to whatever tab
+     * was active when the page loaded: clicking a different sheet tab must swap the panel's
+     * template (and its column chips) to that sheet's own, or an upload made right after
+     * switching tabs would extract using the wrong sheet's columns. `templatesBySheetId` was
+     * built server-side from the same query that resolved the initial `template` prop, so this
+     * is a lookup, not a fetch. */
+    const syncActiveTemplate = (sheet: FWorksheet | null | undefined) => {
+      const next = templatesBySheetIdRef.current[sheet?.getSheetId() ?? ""] ?? null
+      setActiveTemplate(next)
+      const url = new URL(window.location.href)
+      if (next) url.searchParams.set("template", next.code)
+      else url.searchParams.delete("template")
+      window.history.replaceState(window.history.state, "", url)
+    }
+    api.addEvent(api.Event.ActiveSheetChanged, (params) => syncActiveTemplate(params.activeSheet))
 
     /** Extract Data goes in the leading toolbar group rather than the trailing one because
      * Univer collapses the toolbar from the right: anything in `ribbon.start.others` is first
@@ -403,10 +432,10 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       )}
 
       {extractOpen && <ExtractPanel
-        key={template?.id ?? "new"}
+        key={activeTemplate?.id ?? "new"}
         workspaceId={workspaceId}
         fileId={fileId}
-        template={template}
+        template={activeTemplate}
         usage={usage}
         sheetCount={sheetCount}
         statuses={statuses}

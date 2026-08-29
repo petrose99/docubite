@@ -10,6 +10,7 @@ import {
   listWorkspaceWebhookEndpoints,
   workspaceIntegrationsPlanEnabled,
 } from "@/models/integrations"
+import { getLastSyncedAt } from "@/models/accounting-entities"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -50,6 +51,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ w
     listWorkspaceWebhookDeliveries(workspaceId, 50),
     listWorkspaceIntegrationConnections(workspaceId),
   ])
+  const connectionsWithSync = await Promise.all(connections.map(async (connection) => ({ ...connection, lastSyncedAt: await getLastSyncedAt(connection.id) })))
 
   return <main className="space-y-6">
     <header>
@@ -65,7 +67,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ w
       endpoints={endpoints}
       deliveries={deliveries}
       accountingProviders={{ quickbooks: config.integrations.quickbooks.enabled, xero: config.integrations.xero.enabled }}
-      connections={connections}
+      connections={connectionsWithSync}
     />
   </main>
 }

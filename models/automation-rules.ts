@@ -31,7 +31,7 @@ export async function createAutomationRule(input: { workspaceId: string; name: s
  * itself, which only ever changes what FUTURE documents get — this never touches a document
  * already coded by the old version, and never rewrites the rule.applied audit event that recorded
  * what actually happened at the time. */
-export async function updateAutomationRule(input: { workspaceId: string; ruleId: string; actorId: string; name?: string; matcher?: RuleMatcher; actions?: RuleActions; minConfidence?: number | null; requireReview?: boolean; isActive?: boolean }) {
+export async function updateAutomationRule(input: { workspaceId: string; ruleId: string; actorId: string; name?: string; matcher?: RuleMatcher; actions?: RuleActions; minConfidence?: number | null; requireReview?: boolean; autopublish?: boolean; isActive?: boolean }) {
   const rule = await prisma.automationRule.findFirst({ where: { id: input.ruleId, workspaceId: input.workspaceId }, select: { id: true } })
   if (!rule) throw new Error("automation_rule_not_found")
   const context = await getRequestAuditContext()
@@ -44,6 +44,7 @@ export async function updateAutomationRule(input: { workspaceId: string; ruleId:
         ...(input.actions !== undefined ? { actions: input.actions as unknown as Prisma.InputJsonValue } : {}),
         ...(input.minConfidence !== undefined ? { minConfidence: input.minConfidence } : {}),
         ...(input.requireReview !== undefined ? { requireReview: input.requireReview } : {}),
+        ...(input.autopublish !== undefined ? { autopublish: input.autopublish } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       },
     }),

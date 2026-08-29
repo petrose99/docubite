@@ -61,4 +61,15 @@ describe("normalizeBillFromDocument", () => {
   it("throws BillMappingError when total is not a finite number", () => {
     expect(() => normalizeBillFromDocument(makeDoc({ reviewedData: { vendor: "Acme", total: Number.NaN } }))).toThrow(BillMappingError)
   })
+
+  it("reads a valid 3-letter currency code, uppercased", () => {
+    const bill = normalizeBillFromDocument(makeDoc({ reviewedData: { vendor: "Acme", total: 5, currency_code: "usd" } }))
+    expect(bill.currencyCode).toBe("USD")
+  })
+
+  it("returns null currency code when absent or malformed", () => {
+    expect(normalizeBillFromDocument(makeDoc({ reviewedData: { vendor: "Acme", total: 5 } })).currencyCode).toBeNull()
+    expect(normalizeBillFromDocument(makeDoc({ reviewedData: { vendor: "Acme", total: 5, currency_code: "US" } })).currencyCode).toBeNull()
+    expect(normalizeBillFromDocument(makeDoc({ reviewedData: { vendor: "Acme", total: 5, currency_code: "USDOLLAR" } })).currencyCode).toBeNull()
+  })
 })

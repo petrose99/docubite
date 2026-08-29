@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/db", () => ({ prisma: {} }))
 const capabilitiesMock = vi.fn()
 vi.mock("@/lib/modules/capabilities", () => ({ getWorkspaceCapabilities: (...args: unknown[]) => capabilitiesMock(...args) }))
+const listAccountingEntitiesMock = vi.fn().mockResolvedValue([])
+vi.mock("@/models/accounting-entities", () => ({ listAccountingEntities: (...args: unknown[]) => listAccountingEntitiesMock(...args) }))
 
 const {
   describeApproveReviewTasks, describeRejectReviewTask, describeSetDocumentCoding,
-  describeCreateSupplierRule, describePushToAccounting,
+  describeCreateSupplierRule, describePushToAccounting, snapAccountToSyncedList,
 } = await import("@/lib/finance/actions")
 const { prisma } = await import("@/lib/db")
 
@@ -87,6 +89,46 @@ describe("describeCreateSupplierRule", () => {
     expect((plain as { summary: string }).summary).not.toMatch(/review|automatically/)
     expect((withFlags as { summary: string }).summary).toMatch(/review/)
     expect((withFlags as { summary: string }).summary).toMatch(/automatically/)
+  })
+
+  it("snaps a freehand account onto the synced chart of accounts when a confident match exists", async () => {
+    listAccountingEntitiesMock.mockResolvedValueOnce([{ code: null, name: "6000 — Printing" }, { code: null, name: "6100 — Software" }])
+    const result = await describeCreateSupplierRule("w1", { matcherType: "exact", matcherValue: "Acme", account: "printing" })
+    expect((result as { account: string }).account).toBe("6000 — Printing")
+  })
+
+  it("leaves the account untouched when nothing in the synced list confidently matches", async () => {
+    listAccountingEntitiesMock.mockResolvedValueOnce([{ code: null, name: "6000 — Printing" }])
+    const result = await describeCreateSupplierRule("w1", { matcherType: "exact", matcherValue: "Acme", account: "Brand new account" })
+    expect((result as { account: string }).account).toBe("Brand new account")
+  })
+})
+
+describe("snapAccountToSyncedList", () => {
+  it("returns the input unchanged when there is no synced list", () => {
+    expect(snapAccountToSyncedList("6000 Printing", [])).toBe("6000 Printing")
+  })
+
+  it("matches exactly, ignoring case and punctuation", () => {
+    const synced = [{ code: "6000", name: "Printing" }]
+    expect(snapAccountToSyncedList("6000 - printing", synced)).toBe("6000 — Printing")
+    expect(snapAccountToSyncedList("printing", synced)).toBe("6000 — Printing")
+    expect(snapAccountToSyncedList("6000", synced)).toBe("6000 — Printing")
+  })
+
+  it("snaps only when exactly one synced account contains the freehand text", () => {
+    const synced = [{ code: "6000", name: "Printing supplies" }, { code: "6100", name: "Software" }]
+    expect(snapAccountToSyncedList("printing", synced)).toBe("6000 — Printing supplies")
+  })
+
+  it("leaves the text unchanged when it matches more than one synced account", () => {
+    const synced = [{ code: "6000", name: "Office printing" }, { code: "6001", name: "Warehouse printing" }]
+    expect(snapAccountToSyncedList("printing", synced)).toBe("printing")
+  })
+
+  it("leaves the text unchanged when nothing matches", () => {
+    const synced = [{ code: "6000", name: "Printing" }]
+    expect(snapAccountToSyncedList("Travel", synced)).toBe("Travel")
   })
 })
 

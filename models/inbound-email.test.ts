@@ -5,7 +5,7 @@ vi.mock("@/lib/ingestion", () => ({ createIngestionItem: vi.fn() }))
 vi.mock("@/models/files", () => ({ createFile: vi.fn(), getFileTemplates: vi.fn() }))
 vi.mock("@/models/workspaces", () => ({ getWorkspaceMembers: vi.fn() }))
 
-const { ensureInboundEmailToken, isSenderAllowed, processInboundEmail } = await import("@/models/inbound-email")
+const { addAllowedSender, ensureInboundEmailToken, isSenderAllowed, matchesAllowPattern, processInboundEmail, removeAllowedSender } = await import("@/models/inbound-email")
 const { prisma } = await import("@/lib/db")
 const { createIngestionItem } = await import("@/lib/ingestion")
 const { createFile, getFileTemplates } = await import("@/models/files")
@@ -19,6 +19,9 @@ const PDF_BASE64 = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(16, 0x
 beforeEach(() => {
   vi.clearAllMocks()
   for (const key of Object.keys(db)) delete db[key]
+  db.inboundEmailAllowedSender = { findMany: vi.fn().mockResolvedValue([]), upsert: vi.fn(), findFirst: vi.fn(), delete: vi.fn() }
+  db.documentAuditEvent = { create: vi.fn() }
+  db.$transaction = vi.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[]))
 })
 
 describe("ensureInboundEmailToken", () => {
@@ -43,19 +46,78 @@ describe("ensureInboundEmailToken", () => {
   })
 })
 
+describe("matchesAllowPattern", () => {
+  it("matches an exact email, case-insensitively", () => {
+    expect(matchesAllowPattern("Bookkeeper@Firm.com", "bookkeeper@firm.com")).toBe(true)
+    expect(matchesAllowPattern("bookkeeper@firm.com", "other@firm.com")).toBe(false)
+  })
+
+  it("matches a domain pattern only against the exact domain, not a subdomain", () => {
+    expect(matchesAllowPattern("@corp.com", "x@corp.com")).toBe(true)
+    expect(matchesAllowPattern("@corp.com", "x@sub.corp.com")).toBe(false)
+  })
+})
+
 describe("isSenderAllowed", () => {
+  beforeEach(() => { db.inboundEmailAllowedSender = { findMany: vi.fn().mockResolvedValue([]) } })
+
   it("allows a workspace member's address, case-insensitively", async () => {
     vi.mocked(getWorkspaceMembers).mockResolvedValue([{ user: { email: "Owner@Example.com" } }] as never)
     expect(await isSenderAllowed("w1", "owner@example.com")).toBe(true)
   })
 
-  it("refuses a non-member address", async () => {
+  it("refuses a non-member, non-allowlisted address", async () => {
     vi.mocked(getWorkspaceMembers).mockResolvedValue([{ user: { email: "owner@example.com" } }] as never)
     expect(await isSenderAllowed("w1", "stranger@example.com")).toBe(false)
   })
 
+  it("allows an address matching an allowlist entry", async () => {
+    vi.mocked(getWorkspaceMembers).mockResolvedValue([])
+    db.inboundEmailAllowedSender.findMany.mockResolvedValue([{ pattern: "@bookkeepers.com" }])
+    expect(await isSenderAllowed("w1", "anyone@bookkeepers.com")).toBe(true)
+  })
+
   it("refuses a blank address", async () => {
     expect(await isSenderAllowed("w1", "   ")).toBe(false)
+  })
+})
+
+describe("addAllowedSender", () => {
+  it("rejects an empty pattern", async () => {
+    await expect(addAllowedSender({ workspaceId: "w1", pattern: "  ", createdById: "u1" })).rejects.toThrow("pattern_required")
+  })
+
+  it("rejects a pattern that is neither an email nor an @domain", async () => {
+    await expect(addAllowedSender({ workspaceId: "w1", pattern: "not-valid", createdById: "u1" })).rejects.toThrow("pattern_invalid")
+  })
+
+  it("upserts a lowercased pattern and writes an audit event", async () => {
+    db.inboundEmailAllowedSender.upsert.mockResolvedValue({ id: "s1", pattern: "bookkeeper@firm.com" })
+    const row = await addAllowedSender({ workspaceId: "w1", pattern: "Bookkeeper@Firm.com", createdById: "u1" })
+    expect(row).toEqual({ id: "s1", pattern: "bookkeeper@firm.com" })
+    expect(db.inboundEmailAllowedSender.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { workspaceId_pattern: { workspaceId: "w1", pattern: "bookkeeper@firm.com" } },
+    }))
+    expect(db.documentAuditEvent.create).toHaveBeenCalled()
+  })
+
+  it("accepts a domain pattern", async () => {
+    db.inboundEmailAllowedSender.upsert.mockResolvedValue({ id: "s1", pattern: "@firm.com" })
+    await expect(addAllowedSender({ workspaceId: "w1", pattern: "@firm.com", createdById: "u1" })).resolves.toBeTruthy()
+  })
+})
+
+describe("removeAllowedSender", () => {
+  it("throws when the sender does not belong to this workspace", async () => {
+    db.inboundEmailAllowedSender.findFirst.mockResolvedValue(null)
+    await expect(removeAllowedSender({ workspaceId: "w1", id: "s1", actorId: "u1" })).rejects.toThrow("allowed_sender_not_found")
+  })
+
+  it("deletes the row and writes an audit event", async () => {
+    db.inboundEmailAllowedSender.findFirst.mockResolvedValue({ id: "s1", pattern: "x@firm.com" })
+    await removeAllowedSender({ workspaceId: "w1", id: "s1", actorId: "u1" })
+    expect(db.inboundEmailAllowedSender.delete).toHaveBeenCalledWith({ where: { id: "s1" } })
+    expect(db.documentAuditEvent.create).toHaveBeenCalled()
   })
 })
 

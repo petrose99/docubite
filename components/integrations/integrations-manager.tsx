@@ -16,6 +16,7 @@ import {
   disconnectIntegrationAction,
   listExpenseAccountsAction,
   setDefaultExpenseAccountAction,
+  syncAccountingEntitiesAction,
 } from "@/app/(app)/workspaces/[workspaceId]/integration-connection-actions"
 import { Check, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -34,6 +35,7 @@ type IntegrationConnection = {
   defaultExpenseAccountId: string | null
   defaultExpenseAccountName: string | null
   createdAt: Date
+  lastSyncedAt: Date | null
 }
 
 const PROVIDER_LABELS: Record<string, string> = { quickbooks: "QuickBooks", xero: "Xero" }
@@ -78,6 +80,16 @@ function AccountingConnectionCard({ workspaceId, connection, isOwner, onChanged 
           <span className="text-xs text-muted-foreground">{connection.tenantName || connection.externalTenantId}</span>
           {connection.status === "needs_reauth" && <span className="ml-2 text-xs text-red-600">needs reconnect</span>}
         </span>
+        {isOwner && connection.status === "active" && (
+          <Button type="button" size="sm" variant="ghost" disabled={pending}
+            onClick={() => startTransition(async () => {
+              const res = await syncAccountingEntitiesAction(workspaceId, connection.id)
+              if (res.success) onChanged()
+              else toast.error(res.error || "Could not sync accounts")
+            })}>
+            Sync accounts
+          </Button>
+        )}
         {isOwner && (
           <Button type="button" size="sm" variant="ghost" disabled={pending}
             onClick={() => { if (confirm(`Disconnect ${PROVIDER_LABELS[connection.provider] ?? connection.provider}? Pushes to it will stop.`)) startTransition(async () => {
@@ -89,6 +101,11 @@ function AccountingConnectionCard({ workspaceId, connection, isOwner, onChanged 
           </Button>
         )}
       </div>
+      {isOwner && connection.status === "active" && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {connection.lastSyncedAt ? `Accounts last synced ${connection.lastSyncedAt.toLocaleString()}` : "Accounts not yet synced"}
+        </p>
+      )}
       {isOwner && connection.status === "active" && (
         <div className="mt-2 flex items-center gap-2 text-xs">
           <Label htmlFor={`account-${connection.id}`} className="shrink-0 text-muted-foreground">Default expense account</Label>

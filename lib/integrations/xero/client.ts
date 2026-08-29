@@ -77,6 +77,38 @@ export async function listExpenseAccounts(tenantId: string, accessToken: string)
   return (result.Accounts ?? []).map((a) => ({ code: a.Code, name: a.Name }))
 }
 
+export type XeroSyncedAccount = { code: string; name: string; active: boolean }
+export type XeroSyncedContact = { id: string; name: string; active: boolean }
+export type XeroSyncedTaxRate = { name: string; active: boolean }
+
+/** All accounts (any class, any status) for WP1.5's chart-of-accounts sync — Xero has no
+ * server-side pagination for /Accounts (unlike /Contacts), so this is a single request. */
+export async function listAccounts(tenantId: string, accessToken: string): Promise<XeroSyncedAccount[]> {
+  const result = await apiRequest<{ Accounts?: Array<{ Code?: string; Name: string; Status: string }> }>(tenantId, accessToken, "/Accounts")
+  return (result.Accounts ?? []).filter((a) => a.Code).map((a) => ({ code: a.Code as string, name: a.Name, active: a.Status === "ACTIVE" }))
+}
+
+/** Every contact flagged as a supplier. /Contacts pages at 100 rows via the `page` query param;
+ * a page shorter than the page size is Xero's own end-of-results signal for this endpoint. */
+const CONTACTS_PAGE_SIZE = 100
+
+export async function listContacts(tenantId: string, accessToken: string): Promise<XeroSyncedContact[]> {
+  const contacts: XeroSyncedContact[] = []
+  for (let page = 1; ; page++) {
+    const result = await apiRequest<{ Contacts?: Array<{ ContactID: string; Name: string; ContactStatus: string }> }>(
+      tenantId, accessToken, `/Contacts?where=${encodeURIComponent("IsSupplier==true")}&page=${page}`
+    )
+    const rows = result.Contacts ?? []
+    contacts.push(...rows.map((row) => ({ id: row.ContactID, name: row.Name, active: row.ContactStatus === "ACTIVE" })))
+    if (rows.length < CONTACTS_PAGE_SIZE) return contacts
+  }
+}
+
+export async function listTaxRates(tenantId: string, accessToken: string): Promise<XeroSyncedTaxRate[]> {
+  const result = await apiRequest<{ TaxRates?: Array<{ Name: string; Status: string }> }>(tenantId, accessToken, "/TaxRates")
+  return (result.TaxRates ?? []).map((rate) => ({ name: rate.Name, active: rate.Status === "ACTIVE" }))
+}
+
 /** Finds a contact by exact Name, or creates one. No fuzzy dedup, per scope. */
 export async function findOrCreateContact(tenantId: string, accessToken: string, name: string): Promise<string> {
   const found = await apiRequest<{ Contacts?: Array<{ ContactID: string }> }>(
@@ -89,6 +121,15 @@ export async function findOrCreateContact(tenantId: string, accessToken: string,
     body: JSON.stringify({ Contacts: [{ Name: name }] }),
   })
   return created.Contacts[0].ContactID
+}
+
+/** WP2.4: true when an ACCPAY invoice with this exact InvoiceNumber already exists at Xero —
+ * the ledger-side duplicate guard checked in lib/integration-push.ts before every push. */
+export async function findBillByInvoiceNumber(tenantId: string, accessToken: string, invoiceNumber: string): Promise<boolean> {
+  const escaped = invoiceNumber.replace(/"/g, '\\"')
+  const where = `Type=="ACCPAY" AND InvoiceNumber=="${escaped}"`
+  const result = await apiRequest<{ Invoices?: Array<{ InvoiceID: string }> }>(tenantId, accessToken, `/Invoices?where=${encodeURIComponent(where)}`)
+  return Boolean(result.Invoices?.length)
 }
 
 /** Creates the bill (an ACCPAY invoice). `body` is the exact shape from

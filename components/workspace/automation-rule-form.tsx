@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
-export function AutomationRuleForm({ workspaceId, defaultSupplier }: { workspaceId: string; defaultSupplier?: string }) {
+/** WP1.6: when this workspace has a synced chart of accounts (WP1.5), the free-text account field
+ * becomes a picker constrained to it — a rule can only assign an account that actually exists at
+ * the connected provider. Falls back to free text when there is no connection yet, or the sync
+ * hasn't run, so the form is never worse than before for a workspace without one. */
+export function AutomationRuleForm({ workspaceId, defaultSupplier, accountOptions = [] }: { workspaceId: string; defaultSupplier?: string; accountOptions?: { value: string; label: string }[] }) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
 
@@ -39,7 +43,12 @@ export function AutomationRuleForm({ workspaceId, defaultSupplier }: { workspace
     </div>
     <div>
       <label className="block text-xs font-medium text-stone-500">Account to assign</label>
-      <input name="account" required className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" placeholder="6000 — Printing" />
+      {accountOptions.length
+        ? <select name="account" required defaultValue="" className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm">
+            <option value="" disabled>Select an account</option>
+            {accountOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        : <input name="account" required className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" placeholder="6000 — Printing" />}
     </div>
     <label className="flex items-center gap-2 self-end text-sm">
       <input type="checkbox" name="requireReview" /> Always send matches to review
