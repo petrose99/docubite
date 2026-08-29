@@ -13,11 +13,19 @@ import { NextRequest, NextResponse } from "next/server"
  * so the control does not silently depend on plan tier. */
 const LAST_SEEN_COOKIE = "docubite-last-seen"
 
-export function isIdle(request: NextRequest): boolean {
+export function isIdle(request: NextRequest, lastSignInAt?: string | null): boolean {
   const lastSeen = request.cookies.get(LAST_SEEN_COOKIE)?.value
   if (!lastSeen) return false // first request on a fresh session — nothing to compare against yet
-  const idleMs = Date.now() - Number(lastSeen)
-  return Number.isFinite(idleMs) && idleMs > config.auth.idleTimeoutMinutes * 60_000
+  const lastSeenMs = Number(lastSeen)
+  if (!Number.isFinite(lastSeenMs)) return false
+  // A sign-in newer than the last-seen timestamp means this is a fresh session, not a stale one
+  // left idle: the cookie predates the login (it survives sign-out — httpOnly, so the login page
+  // cannot clear it) and must not be allowed to kill the session the user just created.
+  if (lastSignInAt) {
+    const signedInMs = Date.parse(lastSignInAt)
+    if (Number.isFinite(signedInMs) && signedInMs > lastSeenMs) return false
+  }
+  return Date.now() - lastSeenMs > config.auth.idleTimeoutMinutes * 60_000
 }
 
 function touchLastSeen(response: NextResponse) {
@@ -59,7 +67,7 @@ export async function updateSession(request: NextRequest): Promise<{ response: N
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { response, userId: null }
 
-  if (isIdle(request)) {
+  if (isIdle(request, user.last_sign_in_at)) {
     await supabase.auth.signOut()
     response.cookies.delete(LAST_SEEN_COOKIE)
     return { response, userId: null }

@@ -28,4 +28,21 @@ describe("isIdle", () => {
   it("treats a malformed cookie value as not idle rather than throwing", () => {
     expect(isIdle(fakeRequest("not-a-number"))).toBe(false)
   })
+
+  it("is not idle when the user signed in after the stale last-seen timestamp (fresh login)", () => {
+    const twentyMinutesAgo = Date.now() - 20 * 60_000
+    const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString()
+    expect(isIdle(fakeRequest(String(twentyMinutesAgo)), oneMinuteAgo)).toBe(false)
+  })
+
+  it("is still idle when the sign-in predates the stale last-seen timestamp", () => {
+    const twentyMinutesAgo = Date.now() - 20 * 60_000
+    const anHourAgo = new Date(Date.now() - 60 * 60_000).toISOString()
+    expect(isIdle(fakeRequest(String(twentyMinutesAgo)), anHourAgo)).toBe(true)
+  })
+
+  it("ignores an unparseable last_sign_in_at rather than throwing", () => {
+    const twentyMinutesAgo = Date.now() - 20 * 60_000
+    expect(isIdle(fakeRequest(String(twentyMinutesAgo)), "not-a-date")).toBe(true)
+  })
 })

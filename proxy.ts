@@ -31,7 +31,17 @@ export async function proxy(request: NextRequest) {
 
   const { response, userId } = await updateSession(request)
   const isProtected = PROTECTED_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
-  const result = isProtected && !userId ? NextResponse.redirect(new URL(globalConfig.auth.loginUrl, request.url)) : response
+  let result = response
+  if (isProtected && !userId) {
+    // The redirect must carry updateSession's cookie writes (a refreshed token, or the idle path's
+    // sign-out clearing the session + last-seen cookies) — building a bare redirect here once
+    // dropped them, leaving the browser with a stale last-seen cookie that marked every FRESH
+    // login idle on its first protected request, sign-out revoking it server-side each time: a
+    // permanent, self-sustaining login loop. See lib/supabase/middleware.ts's warning that every
+    // caller must return its response's cookies.
+    result = NextResponse.redirect(new URL(globalConfig.auth.loginUrl, request.url))
+    for (const cookie of response.headers.getSetCookie()) result.headers.append("set-cookie", cookie)
+  }
 
   // Report-Only until CSP_ENFORCE=true: soak on real traffic first, since `'strict-dynamic'` is
   // only as safe as the nonce actually reaching every script Next.js emits — see lib/csp.ts.
