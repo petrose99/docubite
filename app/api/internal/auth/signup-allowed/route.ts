@@ -25,7 +25,8 @@ export async function POST(request: Request) {
 
   const body = await request.text()
   try {
-    const webhook = new Webhook(config.supabase.authHookSecret)
+    const secret = config.supabase.authHookSecret
+    const webhook = new Webhook(secret.startsWith("v1,") ? secret.slice(3) : secret)
     webhook.verify(body, Object.fromEntries(request.headers))
   } catch {
     return Response.json({ error: { http_code: 401, message: "invalid_signature" } }, { status: 401 })
