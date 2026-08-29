@@ -36,11 +36,20 @@ const TOOL_LABELS: Record<string, string> = {
   find_supplier_documents: "Finding supplier documents",
   get_document_details: "Reading a document",
   get_supplier_rules: "Reading supplier rules",
+  get_expense_claims: "Reading expense claims",
 }
 
-/** Finance agent Act tools (Part 5c) — every one only ever proposes an action (lib/finance/actions.ts),
- * so they all render through the same Accept/Dismiss card rather than a one-line "doing X" label. */
-const FINANCE_PROPOSAL_TOOLS = new Set(["approve_review_tasks", "reject_review_task", "set_document_coding", "create_supplier_rule", "push_to_accounting"])
+/** Finance agent Act tools (Part 5c/WP3.5) — every one only ever proposes an action
+ * (lib/finance/actions.ts), so they all render through the same Accept/Dismiss card rather than a
+ * one-line "doing X" label. `decide_review_task_stage`/`decide_expense_claim` (WP3.5, ad9deec) were
+ * missing from this set — the ai-chat route and finance-proposal.tsx both already handled them, but
+ * without a matching entry here they fell through to the generic one-line "doing X" fallback below
+ * instead of the Accept/Dismiss card, so a person could see the model propose a decision but never
+ * had a way to act on it. Fixed as part of the Phase 3 follow-up pass. */
+const FINANCE_PROPOSAL_TOOLS = new Set([
+  "approve_review_tasks", "reject_review_task", "set_document_coding", "create_supplier_rule", "push_to_accounting",
+  "decide_review_task_stage", "decide_expense_claim",
+])
 
 /** The AI assistant, docked to the left of the grid.
  *

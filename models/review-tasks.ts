@@ -73,6 +73,18 @@ export const listReviewTasks = cache(async (workspaceId: string, filters: Review
   take: 500,
 }))
 
+/** The document page's "send for review" affordance needs to know whether this document already
+ * has an unresolved task before offering to create another — a document already `in_review` under
+ * a workflow, or sitting `open`, should link to that task rather than let someone spawn a second,
+ * competing one. Most recent first: a document can theoretically have more than one unresolved task
+ * only if something outside this affordance created it, but the newest is still the right one to
+ * point at. */
+export const getOpenReviewTaskForDocument = cache(async (workspaceId: string, documentId: string) => prisma.reviewTask.findFirst({
+  where: { workspaceId, documentId, status: { in: ["open", "in_review"] } },
+  select: { id: true, status: true },
+  orderBy: { createdAt: "desc" },
+}))
+
 export const getReviewTask = cache(async (workspaceId: string, taskId: string) => prisma.reviewTask.findFirst({
   where: { id: taskId, workspaceId },
   include: {

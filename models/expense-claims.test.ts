@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/db", () => ({ prisma: {} }))
 
 const {
-  createExpenseClaim, decideExpenseClaimStage, deleteExpenseClaim, submitExpenseClaim, updateExpenseClaimStatus,
+  addExpenseClaimItems, createExpenseClaim, decideExpenseClaimStage, deleteExpenseClaim,
+  removeExpenseClaimItem, submitExpenseClaim, updateExpenseClaimStatus,
 } = await import("@/models/expense-claims")
 const { prisma } = await import("@/lib/db")
 
@@ -50,6 +51,67 @@ describe("createExpenseClaim", () => {
         items: { create: [{ workspaceId: "w1", documentId: "d1" }, { workspaceId: "w1", documentId: "d2" }] },
       }),
     }))
+  })
+})
+
+describe("addExpenseClaimItems", () => {
+  it("refuses an empty list", async () => {
+    await expect(addExpenseClaimItems("w1", "c1", [])).rejects.toThrow("no_receipts_given")
+  })
+
+  it("refuses an unknown claim", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue(null) }
+    await expect(addExpenseClaimItems("w1", "c1", ["d1"])).rejects.toThrow("expense_claim_not_found")
+  })
+
+  it("refuses once the claim is no longer a draft", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "submitted" }) }
+    await expect(addExpenseClaimItems("w1", "c1", ["d1"])).rejects.toThrow("expense_claim_not_draft")
+  })
+
+  it("reuses the same claimable-document validation as createExpenseClaim", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "draft" }) }
+    db.document = { findMany: vi.fn().mockResolvedValue([{ id: "d1", template: { code: "invoice" } }]) }
+    await expect(addExpenseClaimItems("w1", "c1", ["d1"])).rejects.toThrow("document_not_an_expense_receipt")
+  })
+
+  it("adds an item per document", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "draft" }) }
+    db.document = { findMany: vi.fn().mockResolvedValue([{ id: "d1", template: { code: "expense_receipt" } }]) }
+    db.expenseClaimItem = { findFirst: vi.fn().mockResolvedValue(null), createMany: vi.fn() }
+
+    await addExpenseClaimItems("w1", "c1", ["d1"])
+
+    expect(db.expenseClaimItem.createMany).toHaveBeenCalledWith({ data: [{ workspaceId: "w1", claimId: "c1", documentId: "d1" }] })
+  })
+})
+
+describe("removeExpenseClaimItem", () => {
+  it("refuses an unknown claim", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue(null) }
+    await expect(removeExpenseClaimItem("w1", "c1", "i1")).rejects.toThrow("expense_claim_not_found")
+  })
+
+  it("refuses once the claim is no longer a draft", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "submitted", items: [{ id: "i1" }] }) }
+    await expect(removeExpenseClaimItem("w1", "c1", "i1")).rejects.toThrow("expense_claim_not_draft")
+  })
+
+  it("refuses an item not on this claim", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "draft", items: [{ id: "i1" }, { id: "i2" }] }) }
+    await expect(removeExpenseClaimItem("w1", "c1", "nope")).rejects.toThrow("expense_claim_item_not_found")
+  })
+
+  it("refuses to remove the last item, rather than leave an empty draft", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "draft", items: [{ id: "i1" }] }) }
+    await expect(removeExpenseClaimItem("w1", "c1", "i1")).rejects.toThrow("expense_claim_needs_at_least_one_receipt")
+  })
+
+  it("removes one item, leaving the rest", async () => {
+    db.expenseClaim = { findFirst: vi.fn().mockResolvedValue({ id: "c1", status: "draft", items: [{ id: "i1" }, { id: "i2" }] }) }
+    db.expenseClaimItem = { delete: vi.fn() }
+    await removeExpenseClaimItem("w1", "c1", "i1")
+    expect(db.expenseClaimItem.delete).toHaveBeenCalledWith({ where: { id: "i1" } })
   })
 })
 

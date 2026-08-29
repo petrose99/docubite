@@ -1,6 +1,9 @@
 "use client"
 
-import { decideExpenseClaimAction, deleteExpenseClaimAction, submitExpenseClaimAction } from "@/app/(app)/workspaces/[workspaceId]/expense-claim-actions"
+import {
+  addExpenseClaimItemsAction, decideExpenseClaimAction, deleteExpenseClaimAction,
+  removeExpenseClaimItemAction, submitExpenseClaimAction,
+} from "@/app/(app)/workspaces/[workspaceId]/expense-claim-actions"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -24,7 +27,7 @@ const STATUS_STYLES: Record<string, string> = {
   rejected: "bg-red-100 text-red-700",
 }
 
-export function ExpenseClaimRow({ workspaceId, claim, currentUserId, isOwner, canDecideCurrentStage, availableWorkflows }: {
+export function ExpenseClaimRow({ workspaceId, claim, currentUserId, isOwner, canDecideCurrentStage, availableWorkflows, unclaimedReceipts }: {
   workspaceId: string
   claim: ExpenseClaimRowData
   currentUserId: string
@@ -35,14 +38,43 @@ export function ExpenseClaimRow({ workspaceId, claim, currentUserId, isOwner, ca
    * re-checks, so the client never has to re-derive the owner gate. */
   canDecideCurrentStage: boolean
   availableWorkflows: { id: string; name: string; stageCount: number }[]
+  /** Every unclaimed receipt in the workspace, not just ones relevant to this claim — the same list
+   * the "New claim" form above already offers. Only rendered as a picker while this row is a draft
+   * someone can still edit. */
+  unclaimedReceipts: { id: string; filename: string; merchant: string; total: number | null }[]
 }) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [workflowChoice, setWorkflowChoice] = useState("")
+  const [addChoice, setAddChoice] = useState("")
 
   const mine = claim.submitter?.id === currentUserId
   const canEdit = claim.status === "draft" && (mine || isOwner)
+
+  const addReceipt = async () => {
+    if (!addChoice) return
+    setPending(true)
+    try {
+      const result = await addExpenseClaimItemsAction(workspaceId, claim.id, claim.submitter?.id ?? null, [addChoice])
+      if (!result.success) { toast.error(result.error || "Could not add that receipt"); return }
+      setAddChoice("")
+      router.refresh()
+    } catch {
+      toast.error("Could not reach the server")
+    } finally { setPending(false) }
+  }
+
+  const removeItem = async (itemId: string) => {
+    setPending(true)
+    try {
+      const result = await removeExpenseClaimItemAction(workspaceId, claim.id, claim.submitter?.id ?? null, itemId)
+      if (!result.success) { toast.error(result.error || "Could not remove that receipt"); return }
+      router.refresh()
+    } catch {
+      toast.error("Could not reach the server")
+    } finally { setPending(false) }
+  }
 
   const submitClaim = async () => {
     setPending(true)
@@ -95,8 +127,24 @@ export function ExpenseClaimRow({ workspaceId, claim, currentUserId, isOwner, ca
     </div>
 
     <ul className="mt-2 flex flex-wrap gap-1.5 text-xs text-stone-500">
-      {claim.items.map((item) => <li key={item.id} className="rounded-full border px-2 py-0.5">{item.merchant}{item.total !== null ? ` (${item.total.toFixed(2)})` : ""}</li>)}
+      {claim.items.map((item) => <li key={item.id} className="flex items-center gap-1 rounded-full border px-2 py-0.5">
+        {item.merchant}{item.total !== null ? ` (${item.total.toFixed(2)})` : ""}
+        {canEdit && claim.items.length > 1 && (
+          <button type="button" disabled={pending} onClick={() => void removeItem(item.id)} aria-label={`Remove ${item.merchant}`}
+            className="ml-0.5 text-stone-400 hover:text-red-600 disabled:opacity-50">×</button>
+        )}
+      </li>)}
     </ul>
+
+    {canEdit && unclaimedReceipts.length > 0 && (
+      <div className="mt-2 flex items-center gap-2">
+        <select className="rounded-md border px-2 py-1 text-xs" value={addChoice} onChange={(event) => setAddChoice(event.target.value)} disabled={pending}>
+          <option value="">Add a receipt…</option>
+          {unclaimedReceipts.map((receipt) => <option key={receipt.id} value={receipt.id}>{receipt.merchant}{receipt.total !== null ? ` (${receipt.total.toFixed(2)})` : ""}</option>)}
+        </select>
+        <button type="button" disabled={pending || !addChoice} onClick={() => void addReceipt()} className="rounded-md border px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50">Add</button>
+      </div>
+    )}
 
     {claim.workflow && (
       <p className="mt-2 text-xs text-stone-600">

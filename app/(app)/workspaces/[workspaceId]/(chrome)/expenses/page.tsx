@@ -35,6 +35,7 @@ export default async function ExpenseClaimsPage({ params }: { params: Promise<{ 
   ])
   const actorRole = membership.role === "owner" ? "owner" : "member"
   const availableWorkflows = workflows.map((workflow) => ({ id: workflow.id, name: workflow.name, stageCount: workflow.stages.length }))
+  const unclaimedReceipts = unclaimedDocuments.map((document) => ({ id: document.id, filename: document.filename, ...receiptSummary(document) }))
 
   return <main className="space-y-6">
     <header>
@@ -70,6 +71,7 @@ export default async function ExpenseClaimsPage({ params }: { params: Promise<{ 
                   isOwner={actorRole === "owner"}
                   canDecideCurrentStage={canDecideCurrentStage}
                   availableWorkflows={availableWorkflows}
+                  unclaimedReceipts={unclaimedReceipts}
                   claim={{
                     id: claim.id, title: claim.title, status: claim.status, total: claim.total, currencyCode: claim.currencyCode,
                     submitter: claim.submitter ? { id: claim.submitter.id, name: claim.submitter.name } : null,
