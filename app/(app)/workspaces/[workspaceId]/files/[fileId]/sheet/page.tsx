@@ -75,6 +75,25 @@ export default async function SheetPage({ params, searchParams }: {
       }
     : null
 
+  // Every worksheet's template, keyed by the Univer sheet id it seeded — so the client can swap
+  // the Extract panel's template the instant the user clicks a different sheet tab, with no
+  // re-fetch and no window where the panel shows one sheet's columns for another's tab.
+  const templatesBySheetId: Record<string, SheetTemplate> = Object.fromEntries(
+    templates.flatMap((candidate) => {
+      const version = candidate.versions[0]
+      if (!candidate.univerSheetId || !version) return []
+      return [[candidate.univerSheetId, {
+        id: candidate.id,
+        code: candidate.code,
+        name: candidate.name,
+        multiRow: candidate.multiRow,
+        documentCount,
+        fields: parseTemplateFields(version.fields),
+        prompt: version.prompt || "",
+      }]]
+    })
+  )
+
   return <SheetView
     workspaceId={workspaceId}
     fileId={fileId}
@@ -83,6 +102,7 @@ export default async function SheetPage({ params, searchParams }: {
     snapshot={(workbook?.snapshot as IWorkbookData | undefined) ?? null}
     rev={workbook?.rev ?? 0}
     template={template}
+    templatesBySheetId={templatesBySheetId}
     usage={usage}
     sheetCount={templates.length}
     queuedIds={queued.map((document) => document.id)}
