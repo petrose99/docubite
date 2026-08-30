@@ -20,7 +20,7 @@ export function NewWorkspaceForm({ defaultName }: { defaultName: string }) {
   return <form className="space-y-6" action={(formData) => startTransition(async () => {
     const result = await createInitialWorkspaceAction(String(formData.get("name") || ""), industry)
     if (!result.success || !result.data) { setError(result.error || "Could not set up your workspace"); return }
-    router.push(`/workspaces/${result.data.workspaceId}/files`)
+    router.push(`/workspaces/${result.data.workspaceId}`)
   })}>
     <IndustryPicker value={industry} onChange={setIndustry} disabled={pending} />
     <div className="flex flex-wrap items-center justify-center gap-2">

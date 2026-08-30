@@ -30,7 +30,7 @@ function parseSourceParams(query: { doc?: string; page?: string; bb?: string }):
  * button on its Start toolbar. */
 export default async function SheetPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string; fileId: string }>
-  searchParams: Promise<{ template?: string; doc?: string; page?: string; bb?: string }>
+  searchParams: Promise<{ template?: string; doc?: string; page?: string; bb?: string; extract?: string }>
 }) {
   const [{ workspaceId, fileId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
   await requireWorkspaceRole(workspaceId, user.id)
@@ -108,5 +108,6 @@ export default async function SheetPage({ params, searchParams }: {
     queuedIds={queued.map((document) => document.id)}
     hasRows={documentCount > 0}
     documentSearchEnabled={config.embeddings.enabled}
-    initialSource={initialSource} />
+    initialSource={initialSource}
+    initialExtractOpen={query.extract === "1"} />
 }

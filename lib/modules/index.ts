@@ -62,6 +62,10 @@ export const MODULES: ModuleDefinition[] = [
   // "Publish" in the description still refers to a future accounting push, not built here.
   { key: "expense-approvals", name: "Expense approvals", description: "Submit, approve, and publish employee expense claims.", industry: "finance", tier: "optional", activation: "enable", navItems: [{ href: "expenses", label: "Expenses", icon: "receipt" }] },
   { key: "bank-match", name: "Bank matching", description: "Match statement lines to receipts automatically.", industry: "finance", tier: "optional", activation: "enable" },
+  // No navItems: the sidebar special-cases this module's entry (an "Overview" link to the
+  // workspace root, not a `${base}/${href}` segment) since an empty href would produce a broken
+  // trailing-slash nav item.
+  { key: "finance-analytics", name: "Financial analytics", description: "Spend by category, cash flow trend, and AP aging built from your extracted documents.", industry: "finance", tier: "default", activation: "enable" },
 
   { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "healthcare", tier: "default", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },
   { key: "clinical-packs", name: "Clinical packs", description: "Pathology report templates.", industry: "healthcare", tier: "default", activation: "enable", domainPack: "pathology" },

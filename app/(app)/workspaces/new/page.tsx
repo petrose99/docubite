@@ -13,7 +13,7 @@ export default async function NewWorkspacePage() {
   const user = await getViewerUser()
   if (!user) redirect(config.auth.loginUrl)
   const memberships = await getWorkspacesForUser(user.id)
-  if (memberships.length) redirect(`/workspaces/${memberships[0].id}/files`)
+  if (memberships.length) redirect(`/workspaces/${memberships[0].id}`)
 
   return <main className="mx-auto max-w-4xl space-y-8 p-8">
     <header className="space-y-1 text-center">
