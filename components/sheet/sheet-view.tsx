@@ -385,6 +385,8 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         fileId={fileId}
         name={fileName}
         linkAccess={linkAccess}
+        backHref={`/workspaces/${workspaceId}/files/${fileId}`}
+        backLabel="Back"
         status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-stone-400"}`}>{label}</span> : null} />
 
       <div className="flex min-h-0 flex-1">

@@ -214,6 +214,17 @@ export async function listFiles(workspaceId: string, options: { folderId?: strin
   })
 }
 
+/** Home's "Recent files" card: most recently touched sheet files across the whole workspace,
+ * unlike listFiles' folder-scoped default. */
+export async function listRecentFiles(workspaceId: string, limit = 5) {
+  return prisma.documentFile.findMany({
+    where: { workspaceId, kind: "sheet" },
+    include: { _count: { select: { documents: true } }, folder: { select: { id: true, name: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  })
+}
+
 export async function listFolders(workspaceId: string, options: { parentId?: string | null; query?: string } = {}) {
   const query = options.query?.trim()
   return prisma.documentFolder.findMany({

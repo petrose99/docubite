@@ -79,6 +79,19 @@ export const listReviewTasks = cache(async (workspaceId: string, filters: Review
  * competing one. Most recent first: a document can theoretically have more than one unresolved task
  * only if something outside this affordance created it, but the newest is still the right one to
  * point at. */
+/** Home's "Awaiting review" card needs only a count, not the 500-row listReviewTasks payload. */
+export const countOpenReviewTasks = cache(async (workspaceId: string) =>
+  prisma.reviewTask.count({ where: { workspaceId, status: { in: ["open", "in_review"] } } }))
+
+/** The file hub's own open-review-tasks list — listReviewTasks scoped down to one file's
+ * documents, for a card that only makes sense once review-queue is enabled. */
+export const listOpenReviewTasksForFile = cache(async (workspaceId: string, fileId: string) => prisma.reviewTask.findMany({
+  where: { workspaceId, status: { in: ["open", "in_review"] }, document: { fileId } },
+  include: { document: { select: { id: true, filename: true, status: true } } },
+  orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+  take: 100,
+}))
+
 export const getOpenReviewTaskForDocument = cache(async (workspaceId: string, documentId: string) => prisma.reviewTask.findFirst({
   where: { workspaceId, documentId, status: { in: ["open", "in_review"] } },
   select: { id: true, status: true },

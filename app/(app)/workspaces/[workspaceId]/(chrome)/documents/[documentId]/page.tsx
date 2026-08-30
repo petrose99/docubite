@@ -66,7 +66,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ works
   const bankMatches = matchKind ? await listBankMatches(workspaceId, documentId) : []
 
   return <main className="mx-auto max-w-3xl space-y-6">
-    <Link className="text-sm underline" href={`/workspaces/${workspaceId}/files/${document.fileId}/sheet`}>Back to sheet</Link>
+    <Link className="text-sm underline" href={`/workspaces/${workspaceId}/files/${document.fileId}`}>Back to file</Link>
     <header><div className="flex items-start justify-between gap-4"><h1 className="text-3xl font-bold">{document.filename}</h1><div className="flex shrink-0 items-center gap-2">{reviewQueueEnabled && (openReviewTask
       ? <Link className="text-sm underline" href={`/workspaces/${workspaceId}/review/${openReviewTask.id}`}>{openReviewTask.status === "in_review" ? "In review" : "Open"} — view review task</Link>
       : <CreateReviewTaskButton workspaceId={workspaceId} documentId={document.id} />)}<DeleteDocumentButton workspaceId={workspaceId} fileId={document.fileId} documentId={document.id} filename={document.filename} /></div></div><div className="mt-2 flex gap-2"><Badge>{document.status.replaceAll("_", " ")}</Badge>{document.storageKey && <a className="text-sm underline" href={`/api/documents/${document.id}/source`}>View source</a>}</div>{confidence?.missingRequiredFields?.length ? <p className="mt-3 text-sm text-amber-700">Missing required fields: {confidence.missingRequiredFields.join(", ")}</p> : null}{conflictingLabels.length ? <p className="mt-1 text-sm text-amber-700">Pages of this document disagreed on: {conflictingLabels.join(", ")} — please confirm against the source.</p> : null}</header>

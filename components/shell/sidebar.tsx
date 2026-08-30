@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, Blocks, CheckCircle2, ClipboardCheck, CreditCard, Files, History, Mail, Mic, Percent, Receipt, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { BarChart3, Blocks, CheckCircle2, ClipboardCheck, CreditCard, FileBarChart, Files, History, Mail, Mic, Percent, Receipt, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -53,11 +53,10 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
     .flatMap((module) => module.navItems ?? [])
     .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, settings: item.href.startsWith("settings/") }))
 
-  // finance-analytics registers no navItems (its href would be the bare workspace root, which the
-  // ${base}/${href} join above can't express without a trailing slash) — so its one nav entry is
-  // hand-built here instead, exact-matched so it doesn't stay lit on every page under it.
+  // Home is every workspace's unconditional first entry — no module gates it, unlike the old
+  // finance-only "Overview" link. exact-matched so it doesn't stay lit on every page under it.
   const workItems = [
-    ...(enabled.has("finance-analytics") ? [{ href: base, label: "Overview", icon: BarChart3, exact: true }] : []),
+    { href: base, label: "Home", icon: BarChart3, exact: true },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
     ...moduleNavItems.filter((item) => !item.settings).map((item) => ({ ...item, exact: false })),
   ]
@@ -72,6 +71,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
     { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard, exact: false },
     ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook, exact: false }] : []),
     { href: `${base}/settings/templates`, label: "Templates", icon: Settings, exact: false },
+    { href: `${base}/settings/reports`, label: "Reports", icon: FileBarChart, exact: false },
   ]
 
   const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean }) => {

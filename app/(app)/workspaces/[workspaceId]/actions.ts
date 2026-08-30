@@ -14,10 +14,11 @@ import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
 import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
-import { addDomainPackToFile, canEdit, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileAccess, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
+import { addDomainPackToFile, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
+import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import { consumeWorkspaceQuota, setIndustry } from "@/models/workspaces"
 import { parseIndustry } from "@/types/industry"
-import { getCurrentUser, getViewerUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { after } from "next/server"
@@ -399,9 +400,10 @@ export async function setWorkspaceIndustryAction(workspaceId: string, mode: stri
  * the id the client pushes to; `New folder` opens a name modal first. */
 export async function createFileAction(workspaceId: string, folderId: string | null): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
-  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  const membership = await requireMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: seedTemplatesForIndustry(parseIndustry(membership.workspace.industry) ?? "general") })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
@@ -579,36 +581,6 @@ export async function deleteWorksheetAction(workspaceId: string, fileId: string,
     await revalidateSheet(workspaceId, fileId)
     return { success: true, data: null }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not delete the worksheet") } }
-}
-
-/* --------------------------------------------------------------------- shared files --- */
-
-/** The write path for /shared/[fileId] at "Can edit".
- *
- * Every other mutation in this file authorises through workspace membership, which a link
- * viewer does not have — so these resolve the file's own access instead. They are deliberately
- * narrow: one field of one document, and the document must belong to the file whose id the
- * caller proved access to, so a share can never be used as a lever on the rest of the
- * workspace. "Can interact" never reaches here at all; that sandbox is client-side only. */
-async function requireFileEditor(fileId: string) {
-  const viewer = await getViewerUser()
-  const resolved = await getFileAccess(fileId, viewer ? { id: viewer.id, email: viewer.email } : null)
-  return resolved && canEdit(resolved.access) ? { ...resolved, viewerId: viewer?.id ?? null } : null
-}
-
-export async function updateSharedDocumentFieldAction(fileId: string, documentId: string, fieldKey: string, value: unknown): Promise<ActionState<{ status: string; missingRequiredFields: string[] }>> {
-  const resolved = await requireFileEditor(fileId)
-  if (!resolved) return { success: false, error: "You do not have edit access to this file" }
-  if (typeof value === "string" && value.length > 100_000) return { success: false, error: "Value too large" }
-  if (value !== null && typeof value === "object" && JSON.stringify(value).length > 100_000) return { success: false, error: "Value too large" }
-  const document = await prisma.document.findFirst({ where: { id: documentId, fileId }, select: { id: true } })
-  if (!document) return { success: false, error: "Document not found" }
-  try {
-    const result = await updateDocumentField({ workspaceId: resolved.file.workspaceId, documentId, fieldKey, value, actorId: resolved.viewerId })
-    await revalidateSheet(resolved.file.workspaceId, fileId)
-    revalidatePath(`/shared/${fileId}`)
-    return { success: true, data: { status: result.document.status, missingRequiredFields: result.missingRequiredFields } }
-  } catch (error) { return { success: false, error: errorMessage(error, "Update failed") } }
 }
 
 /* Workspace lifecycle actions (create, rename, delete, members, invitations) live in the

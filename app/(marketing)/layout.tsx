@@ -18,7 +18,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const session = await getSession()
   const user = session ? await getUserBySupabaseUserId(session.user.id) : null
   const workspace = user ? (await getWorkspacesForUser(user.id))[0] : null
-  const workspaceHref = user ? (workspace ? `/workspaces/${workspace.id}/files` : "/workspaces") : undefined
+  const workspaceHref = user ? (workspace ? `/workspaces/${workspace.id}` : "/workspaces") : undefined
 
   return (
     <div className="flex min-h-screen flex-col bg-cream-50 text-stone-900">
