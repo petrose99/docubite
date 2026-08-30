@@ -88,6 +88,7 @@ export function modulesForIndustry(industry: Industry): ModuleDefinition[] {
 }
 
 export const INDUSTRIES: { key: Industry; label: string; description: string }[] = [
+  { key: "spreadsheets", label: "Just spreadsheets", description: "Sheets, search, and the AI assistant — no accounting workflow, no industry-specific modules." },
   { key: "finance", label: "Finance", description: "Bookkeeping and accounts payable: review, code, and push documents to your books." },
   { key: "healthcare", label: "Healthcare", description: "Dictate and structure clinical pathology reports." },
   { key: "construction", label: "Construction", description: "Subcontractor invoices, lien waivers, and job-cost documents." },

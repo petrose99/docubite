@@ -14,7 +14,12 @@ import { toast } from "sonner"
  *
  * `status` is the spreadsheet's save state, which sits beside the filename the way every other
  * spreadsheet puts it — the grid below owns the rest of the window and has nowhere to say it. */
-export function FileHeader({ workspaceId, fileId, name, linkAccess, status }: { workspaceId: string; fileId: string; name: string; linkAccess: string; status?: ReactNode }) {
+export function FileHeader({ workspaceId, fileId, name, linkAccess, status, backHref, backLabel }: {
+  workspaceId: string; fileId: string; name: string; linkAccess: string; status?: ReactNode
+  /** Defaults to the Files list — the sheet's file bar overrides this to the file hub instead,
+   * so "← Back" from the grid returns to the hub rather than skipping over it. */
+  backHref?: string; backLabel?: string
+}) {
   const router = useRouter()
   const [value, setValue] = useState(name)
   const [saved, setSaved] = useState(name)
@@ -43,8 +48,8 @@ export function FileHeader({ workspaceId, fileId, name, linkAccess, status }: { 
   }
 
   return <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-    <Link href={`/workspaces/${workspaceId}/files`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800">
-      <ArrowLeft className="h-4 w-4" />Files
+    <Link href={backHref ?? `/workspaces/${workspaceId}/files`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800">
+      <ArrowLeft className="h-4 w-4" />{backLabel ?? "Files"}
     </Link>
     <input
       aria-label="File name"

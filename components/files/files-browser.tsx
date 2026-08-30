@@ -279,7 +279,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   )
 
   const fileRow = (file: FileRowData, index: number) => {
-    const href = tab === "shared" ? `/shared/${file.id}` : `${base}/${file.id}/sheet`
+    const href = tab === "shared" ? `/shared/${file.id}` : `${base}/${file.id}`
     return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-stone-50"}>
       <td className="border-b px-3 py-2">
         {tab === "mine" && <input type="checkbox" aria-label={`Select ${file.name}`} className="h-4 w-4 accent-emerald-600" checked={marked.has(file.id)}

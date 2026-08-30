@@ -21,5 +21,7 @@ export function seedTemplatesForIndustry(industry: Industry) {
       return [...CONSTRUCTION_TEMPLATES, GENERIC_TEMPLATE]
     case "general":
       return FINANCE_TEMPLATES.filter((template) => template.code === "invoice" || template.code === "receipt" || template.code === "generic")
+    case "spreadsheets":
+      return [GENERIC_TEMPLATE]
   }
 }

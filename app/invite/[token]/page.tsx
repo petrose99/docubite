@@ -47,5 +47,5 @@ export default async function AcceptInvitationPage({ params }: { params: Promise
       {mismatch && <CardContent><SignOutButton label="Sign out" redirectTo={`/invite/${encodeURIComponent(token)}`} /></CardContent>}
     </Card>)
   }
-  redirect(`/workspaces/${workspaceId}/files`)
+  redirect(`/workspaces/${workspaceId}`)
 }
