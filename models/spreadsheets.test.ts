@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+class FakePrismaClientKnownRequestError extends Error {
+  constructor(message: string, readonly code: string) {
+    super(message)
+  }
+}
+
 vi.mock("@/lib/db", () => ({ prisma: {} }))
-vi.mock("@/prisma/client", () => ({ Prisma: {} }))
+vi.mock("@/prisma/client", () => ({ Prisma: { PrismaClientKnownRequestError: FakePrismaClientKnownRequestError } }))
 
 const { saveWorkbook, StaleRevisionError } = await import("@/models/spreadsheets")
 const { prisma } = await import("@/lib/db")
@@ -31,6 +37,24 @@ describe("saveWorkbook", () => {
     expect(saved.rev).toBe(1)
     expect(db.spreadsheetWorkbook.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ fileId: "file", rev: 1 }) }))
     expect(db.spreadsheetWorkbook.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("recovers when a concurrent request already created the workbook (P2002 on file_id)", async () => {
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue(null)
+    db.spreadsheetWorkbook.create.mockRejectedValue(new FakePrismaClientKnownRequestError("Unique constraint failed on the fields: (`file_id`)", "P2002"))
+    db.spreadsheetWorkbook.findFirstOrThrow.mockResolvedValue({ rev: 1, snapshot: input.snapshot, updatedAt: new Date(0) })
+
+    const saved = await saveWorkbook({ ...input, rev: 0 })
+
+    expect(saved.rev).toBe(1)
+    expect(db.spreadsheetWorkbook.findFirstOrThrow).toHaveBeenCalledWith(expect.objectContaining({ where: { workspaceId: "ws", fileId: "file" } }))
+  })
+
+  it("re-throws create errors that are not the unique-constraint race", async () => {
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue(null)
+    db.spreadsheetWorkbook.create.mockRejectedValue(new FakePrismaClientKnownRequestError("connection lost", "P1001"))
+
+    await expect(saveWorkbook({ ...input, rev: 0 })).rejects.toThrow("connection lost")
   })
 
   it("guards the revision inside the update so two saves racing on one revision cannot both win", async () => {

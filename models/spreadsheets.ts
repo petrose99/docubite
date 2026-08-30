@@ -40,11 +40,26 @@ export async function saveWorkbook(input: { workspaceId: string; fileId: string;
   const existing = await prisma.spreadsheetWorkbook.findFirst({ where: { workspaceId: input.workspaceId, fileId: input.fileId }, select: { rev: true } })
 
   if (!existing) {
-    const created = await prisma.spreadsheetWorkbook.create({
-      data: { workspaceId: input.workspaceId, fileId: input.fileId, rev: 1, snapshot },
-      select: { rev: true, snapshot: true, updatedAt: true },
-    })
-    return { rev: created.rev, snapshot: created.snapshot as WorkbookSnapshot, updatedAt: created.updatedAt }
+    try {
+      const created = await prisma.spreadsheetWorkbook.create({
+        data: { workspaceId: input.workspaceId, fileId: input.fileId, rev: 1, snapshot },
+        select: { rev: true, snapshot: true, updatedAt: true },
+      })
+      return { rev: created.rev, snapshot: created.snapshot as WorkbookSnapshot, updatedAt: created.updatedAt }
+    } catch (error) {
+      // Two requests for the same brand-new file (e.g. the sheet page's own load racing a
+      // concurrent one) can both see "no row yet" and both try to create it. The loser hits the
+      // unique constraint on file_id rather than a bug — fetch what the winner wrote instead of
+      // surfacing a 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const saved = await prisma.spreadsheetWorkbook.findFirstOrThrow({
+          where: { workspaceId: input.workspaceId, fileId: input.fileId },
+          select: { rev: true, snapshot: true, updatedAt: true },
+        })
+        return { rev: saved.rev, snapshot: saved.snapshot as WorkbookSnapshot, updatedAt: saved.updatedAt }
+      }
+      throw error
+    }
   }
 
   // The rev guard lives in the WHERE clause rather than in a read-then-write, so two saves
