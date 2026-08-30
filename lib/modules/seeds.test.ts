@@ -9,24 +9,14 @@ describe("seedTemplatesForIndustry", () => {
     }
   })
 
-  it("every returned list includes the shared generic template except finance's own set", () => {
+  it("every returned list includes the shared generic template", () => {
     for (const industry of INDUSTRIES) {
       const codes = seedTemplatesForIndustry(industry).map((template) => template.code)
       expect(codes).toContain("generic")
     }
   })
 
-  it("finance gets its own four templates, unchanged", () => {
+  it("finance gets its own four templates, unchanged — the app is finance-only", () => {
     expect(seedTemplatesForIndustry("finance").map((template) => template.code)).toEqual(["invoice", "receipt", "expense_receipt", "generic"])
-  })
-
-  it("general gets only invoice, receipt and generic — no expense_receipt", () => {
-    expect(seedTemplatesForIndustry("general").map((template) => template.code).sort()).toEqual(["generic", "invoice", "receipt"])
-  })
-
-  it("construction gets its own pack plus generic", () => {
-    const codes = seedTemplatesForIndustry("construction").map((template) => template.code)
-    expect(codes).toContain("subcontractor_invoice")
-    expect(codes).toContain("generic")
   })
 })

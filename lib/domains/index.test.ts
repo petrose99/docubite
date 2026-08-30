@@ -3,9 +3,9 @@ import { extractionDomainPacks, findExtractionDomainPack } from "@/lib/domains"
 import { FINANCE_TEMPLATES } from "@/lib/domains/finance"
 
 describe("extractionDomainPacks", () => {
-  it("offers finance, pathology, logistics and construction, but not general", () => {
+  it("offers only finance, not general", () => {
     const domains = extractionDomainPacks().map((pack) => pack.domain)
-    expect(domains).toEqual(["finance", "pathology", "logistics", "construction"])
+    expect(domains).toEqual(["finance"])
   })
 
   it("each pack carries the adapters for its own domain only", () => {
@@ -24,7 +24,6 @@ describe("extractionDomainPacks", () => {
 
 describe("findExtractionDomainPack", () => {
   it("finds a known pack by domain", () => {
-    expect(findExtractionDomainPack("logistics")?.label).toBe("Logistics")
     expect(findExtractionDomainPack("finance")?.label).toBe("Finance (optional)")
   })
 

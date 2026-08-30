@@ -5,6 +5,6 @@ import type { Industry } from "@/types/industry"
  * createWorkspaceForUser / createTeamWorkspace (models/workspaces.ts), replacing the old bare
  * DEFAULT_DOCUMENT_TEMPLATES/no-param call. The app is finance-only, so every workspace gets the
  * same seed set. */
-export function seedTemplatesForIndustry(industry: Industry) {
+export function seedTemplatesForIndustry(_industry: Industry) {
   return FINANCE_TEMPLATES
 }

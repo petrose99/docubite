@@ -18,7 +18,7 @@ import { diffExtractions, type RunDiff } from "@/lib/run-diff"
 import { deriveSheet, type SheetColumn, type SheetRow } from "@/lib/sheet-derive"
 import { cacheAiFormula, getCachedAiFormula } from "@/models/ai-formulas"
 import { touchFile } from "@/models/files"
-import { errorMessage, requireMember, NO_ACCESS } from "./action-helpers"
+import { requireMember, NO_ACCESS } from "./action-helpers"
 
 export type ExtractionRows = { sheetId: string; sheetName: string; columns: SheetColumn[]; rows: SheetRow[]; documentIds: string[] }
 

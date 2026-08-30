@@ -1,6 +1,6 @@
 import { parseTemplateFields } from "@/lib/document-templates"
 import { projectDocumentFields } from "@/lib/field-projection"
-import { PATHOLOGY_TEMPLATES } from "@/lib/domains/pathology"
+import { FINANCE_OPTIONAL_TEMPLATES } from "@/lib/domains/finance"
 import type { DocumentProvenance, Ref } from "@/lib/provenance"
 import { describe, expect, it } from "vitest"
 
@@ -112,22 +112,22 @@ describe("projectDocumentFields", () => {
   })
 
   it("works unchanged on a different domain's template — the adapter is data, not code", () => {
-    const pathologyFields = parseTemplateFields(PATHOLOGY_TEMPLATES[0].fields)
+    const bankStatementFields = parseTemplateFields(FINANCE_OPTIONAL_TEMPLATES[0].fields)
     const rows = projectDocumentFields({
-      fields: pathologyFields,
+      fields: bankStatementFields,
       values: {
-        accession_no: "S26-1234", specimen_type: "core biopsy", anatomical_site: "left breast",
-        diagnosis: "Invasive ductal carcinoma", sign_out_date: "2026-04-02",
-        ihc_markers: [{ name: "ER", result: "positive", percent_positive: 90 }],
+        account_holder: "Acme Ltd", account_number: "12345678", currency_code: "GBP",
+        opening_balance: 100, closing_balance: 250,
+        transactions: [{ description: "Deposit", credit: 150 }],
       },
       source: "asr",
     })
     const byKey = Object.fromEntries(rows.filter((row) => !row.itemKey).map((row) => [row.fieldKey, row]))
-    expect(byKey.accession_no.valueText).toBe("S26-1234")
-    expect(byKey.sign_out_date.valueDate).toBe("2026-04-02")
-    // The marker is filterable in its own right, not buried in prose.
-    expect(rows.find((row) => row.itemKey === "name")?.valueText).toBe("ER")
-    expect(rows.find((row) => row.itemKey === "percent_positive")?.valueNumber).toBe(90)
+    expect(byKey.account_holder.valueText).toBe("Acme Ltd")
+    expect(byKey.closing_balance.valueNumber).toBe(250)
+    // The transaction field is filterable in its own right, not buried in prose.
+    expect(rows.find((row) => row.itemKey === "description")?.valueText).toBe("Deposit")
+    expect(rows.find((row) => row.itemKey === "credit")?.valueNumber).toBe(150)
     expect(rows.every((row) => row.source === "asr")).toBe(true)
   })
 })
