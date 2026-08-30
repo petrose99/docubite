@@ -34,7 +34,7 @@ export function WorkspaceSwitcher({ workspaces, workspaceId }: { workspaces: Swi
     }
     toast.success("Workspace created")
     setOpen(false); setCreating(false); setName("")
-    router.push(`/workspaces/${result.data.workspaceId}/files`)
+    router.push(`/workspaces/${result.data.workspaceId}`)
   })
 
   return <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setCreating(false); setUpgrade(false) } }}>
@@ -54,7 +54,7 @@ export function WorkspaceSwitcher({ workspaces, workspaceId }: { workspaces: Swi
       <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Workspaces</p>
       <ul className="max-h-64 overflow-y-auto">
         {workspaces.map((workspace) => <li key={workspace.id}>
-          <Link href={`/workspaces/${workspace.id}/files`} onClick={() => setOpen(false)}
+          <Link href={`/workspaces/${workspace.id}`} onClick={() => setOpen(false)}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-stone-700 hover:bg-stone-100">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-stone-100 text-[10px] font-bold text-stone-500">{workspace.name.trim().charAt(0).toUpperCase()}</span>
             <span className="min-w-0 flex-1 truncate">{workspace.name}</span>

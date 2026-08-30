@@ -45,7 +45,7 @@ const DocumentsIcon = () => <Files className="h-4 w-4" />
  * Lido's spreadsheet is the page rather than a widget on it — chrome is one thin bar, and the
  * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Extraction and the
  * assistant are reached from the grid's own toolbar, not from page chrome. */
-export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, templatesBySheetId, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
+export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, templatesBySheetId, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource, initialExtractOpen = false }: {
   workspaceId: string
   fileId: string
   fileName: string
@@ -69,9 +69,13 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   /** An open-at-page deep link (from the Files content search): open this document over the grid
    * once, at the given page/highlight. Already validated server-side; absent for a normal open. */
   initialSource?: { documentId: string; page: number | null; bbox: [number, number, number, number] | null }
+  /** Files' "Upload" button deep-links straight here (`?extract=1`) so a brand-new file opens with
+   * the Extract panel already up, instead of landing on an empty grid the user has to know to open
+   * it from. Ignored in read-only view since there's nothing to extract into. */
+  initialExtractOpen?: boolean
 }) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
-  const [extractOpen, setExtractOpen] = useState(false)
+  const [extractOpen, setExtractOpen] = useState(Boolean(initialExtractOpen) && !readOnly)
   // The template the Extract panel shows. Starts as the server's pick (the `?template=` sheet, or
   // the file's first) and is swapped by the ActiveSheetChanged listener below whenever the user
   // clicks a different tab, so the panel never lags the grid's own active sheet.

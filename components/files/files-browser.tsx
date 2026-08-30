@@ -4,7 +4,7 @@ import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAc
 import { ShareDialog } from "@/components/files/share-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog } from "@/components/ui/dialog"
-import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Plus, Search, Share2, Table2, Trash2 } from "lucide-react"
+import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Plus, Search, Share2, Table2, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState, type ReactNode } from "react"
@@ -187,12 +187,12 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
 
   /** Lido creates and navigates with no dialog — the file is named "untitled" and renamed
    * inline later, so nothing is asked up front. */
-  const newFile = async () => {
+  const newFile = async (openExtract = false) => {
     setCreating(true)
     try {
       const result = await createFileAction(workspaceId, folderId)
       if (!result.success || !result.data) { toast.error(result.error || "Could not create the file"); return }
-      router.push(`${base}/${result.data.fileId}/sheet`)
+      router.push(`${base}/${result.data.fileId}/sheet${openExtract ? "?extract=1" : ""}`)
     } catch {
       toast.error("Could not reach the server — no file was created")
     } finally { setCreating(false) }
@@ -350,6 +350,9 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
         </button>
         <button type="button" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={creating} onClick={() => void newFile()}>
           {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}New file
+        </button>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50" disabled={creating} onClick={() => void newFile(true)}>
+          <Upload className="h-4 w-4" />Upload
         </button>
       </>}
       <div className="relative ml-auto w-64 max-w-full">

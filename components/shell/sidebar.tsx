@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { Blocks, CheckCircle2, ClipboardCheck, CreditCard, Files, History, Mail, Mic, Percent, Receipt, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { BarChart3, Blocks, CheckCircle2, ClipboardCheck, CreditCard, Files, History, Mail, Mic, Percent, Receipt, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -51,23 +51,41 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
   const moduleNavItems = MODULES
     .filter((module) => enabled.has(module.key))
     .flatMap((module) => module.navItems ?? [])
-    .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files }))
+    .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, settings: item.href.startsWith("settings/") }))
 
-  const items = [
-    { href: `${base}/files`, label: "Files", icon: Files },
-    ...moduleNavItems,
-    { href: `${base}/settings/workspace`, label: "Workspace", icon: Users },
-    { href: `${base}/settings/modules`, label: "Modules", icon: Blocks },
-    { href: `${base}/settings/activity`, label: "Activity", icon: History },
-    { href: `${base}/settings/email`, label: "Email intake", icon: Mail },
-    { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck },
-    { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard },
-    ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook }] : []),
-    { href: `${base}/settings/templates`, label: "Settings", icon: Settings },
+  // finance-analytics registers no navItems (its href would be the bare workspace root, which the
+  // ${base}/${href} join above can't express without a trailing slash) — so its one nav entry is
+  // hand-built here instead, exact-matched so it doesn't stay lit on every page under it.
+  const workItems = [
+    ...(enabled.has("finance-analytics") ? [{ href: base, label: "Overview", icon: BarChart3, exact: true }] : []),
+    { href: `${base}/files`, label: "Files", icon: Files, exact: false },
+    ...moduleNavItems.filter((item) => !item.settings).map((item) => ({ ...item, exact: false })),
   ]
 
+  const settingsItems = [
+    ...moduleNavItems.filter((item) => item.settings).map((item) => ({ ...item, exact: false })),
+    { href: `${base}/settings/workspace`, label: "Workspace", icon: Users, exact: false },
+    { href: `${base}/settings/modules`, label: "Modules", icon: Blocks, exact: false },
+    { href: `${base}/settings/activity`, label: "Activity", icon: History, exact: false },
+    { href: `${base}/settings/email`, label: "Email intake", icon: Mail, exact: false },
+    { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck, exact: false },
+    { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard, exact: false },
+    ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook, exact: false }] : []),
+    { href: `${base}/settings/templates`, label: "Templates", icon: Settings, exact: false },
+  ]
+
+  const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean }) => {
+    // Everything except an `exact` entry (Overview) stays lit while you're inside a page under it —
+    // Files while you're in a file's sheet, a settings leaf while you're on its own sub-pages.
+    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)
+    return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900"}`}>
+      <item.icon className="h-4 w-4 shrink-0" />{item.label}
+    </Link>
+  }
+
   return <aside className="flex w-56 shrink-0 flex-col gap-1 border-r bg-stone-50 px-2 py-3">
-    <Link href={`${base}/files`} className="flex items-center gap-2 px-2 py-1">
+    <Link href={base} className="flex items-center gap-2 px-2 py-1">
       <BiteMark className="h-7 w-7 shrink-0" />
       <span className="truncate text-sm font-bold text-stone-900">DocuBite</span>
     </Link>
@@ -75,14 +93,12 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
     <div className="mb-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>
 
     <nav className="space-y-0.5">
-      {items.map((item) => {
-        // Files stays lit while you are inside a file's sheet, which lives under it.
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
-        return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
-          className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900"}`}>
-          <item.icon className="h-4 w-4 shrink-0" />{item.label}
-        </Link>
-      })}
+      {workItems.map(navLink)}
+    </nav>
+
+    <nav className="mt-4 space-y-0.5">
+      <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Settings</p>
+      {settingsItems.map(navLink)}
     </nav>
 
     <div className="mt-auto pt-3">

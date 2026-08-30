@@ -23,7 +23,7 @@ export default async function WorkspacesPage() {
   if (!user) redirect(config.auth.loginUrl)
   const memberships = await getWorkspacesForUser(user.id)
   if (!memberships.length) redirect("/workspaces/new")
-  redirect(`/workspaces/${memberships[0].id}/files`)
+  redirect(`/workspaces/${memberships[0].id}`)
 }
 
 export const dynamic = "force-dynamic"
