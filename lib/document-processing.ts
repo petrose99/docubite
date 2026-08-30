@@ -21,7 +21,6 @@ import { parseDocumentWithMineru } from "@/lib/mineru"
 import { parsePageRange } from "@/lib/page-range"
 import { auditEventData, recordSystemAudit } from "@/lib/audit"
 import { prisma } from "@/lib/db"
-import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { emitWorkspaceEvent } from "@/lib/webhooks"
 import { kickWebhookDrain } from "@/lib/webhook-delivery"
 import { Prisma } from "@/prisma/client"
@@ -293,7 +292,6 @@ export async function processDocumentJob(jobId: string) {
     if (isPdf && config.documents.maxPages > 0 && estimatedWork > config.documents.maxPages) throw new Error("pdf_page_limit_exceeded")
 
     if (!document.aiQuotaClaimed) {
-      await consumeWorkspaceQuota(document.workspaceId, "ai")
       await prisma.document.update({ where: { id: document.id }, data: { aiQuotaClaimed: true } })
     }
     const aiProvider = config.ai.provider

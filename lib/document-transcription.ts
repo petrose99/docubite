@@ -21,7 +21,6 @@ import {
 import { buildAudioProvenance } from "@/lib/provenance-audio"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { createFieldSuggestions } from "@/models/field-suggestions"
-import { consumeWorkspaceQuota } from "@/models/workspaces"
 // Type-only: a runtime import of Prisma in a module reachable from a test breaks vitest's
 // resolution of @/prisma/client. Only the InputJsonValue type is needed here.
 import type { Prisma } from "@/prisma/client"
@@ -362,7 +361,6 @@ export async function processTranscribeJob(job: { id: string; attempts: number; 
     return
   }
   if (!document.aiQuotaClaimed) {
-    await consumeWorkspaceQuota(document.workspaceId, "ai")
     await prisma.document.update({ where: { id: document.id }, data: { aiQuotaClaimed: true } })
   }
   const transcript = await transcribeDocumentAudio(document)

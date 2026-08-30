@@ -41,7 +41,7 @@ describe("checkWorkspaceScope", () => {
 
   it("leaves unscoped models alone", () => {
     // Identity and membership must be readable before a workspace is known.
-    for (const model of ["User", "Session", "WorkspaceMember", "Workspace", "StripeWebhookEvent"]) {
+    for (const model of ["User", "Session", "WorkspaceMember", "Workspace", "AdminAuditEvent"]) {
       expect(() => checkWorkspaceScope(model, "findMany", { where: {} })).not.toThrow()
     }
   })

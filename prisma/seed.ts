@@ -8,38 +8,21 @@
  * through) and the matching local User row, linked by supabaseUserId exactly the way
  * resolveOrProvisionUser links a real sign-up.
  *
- * Every account is seeded with a plan but NO Stripe customer or subscription id. That is what
- * keeps them useful: deleteWorkspace refuses to delete a workspace with a live Stripe
- * subscription attached, and the checkout route now refuses a second one — so a demo account
- * carrying fake Stripe ids would be both undeletable and unable to test checkout.
- *
  * Run with: npm run db:seed  (dev server stopped — the local PGlite database takes one connection)
  */
 import { createAdminClient } from "@/lib/supabase/server"
 import { createWorkspaceForUser } from "@/models/workspaces"
 import { prisma } from "@/lib/db"
 
-type DemoAccount = { email: string; name: string; role: string; planCode: string; password: string }
+type DemoAccount = { email: string; name: string; role: string; password: string }
 
 /** Fixed, obviously-local passwords: the point of a demo account is that someone can sign in
  * without going hunting, and these only ever exist on a developer's machine. The production
  * guard below is what keeps them there. */
 const ACCOUNTS: DemoAccount[] = [
-  { email: "admin@docubite.local", name: "DocuBite Admin", role: "admin", planCode: "enterprise", password: "admin-docubite-2026" },
-  { email: "demo-starter@docubite.local", name: "Demo Starter", role: "user", planCode: "starter", password: "demo-starter-2026" },
-  { email: "demo-growth@docubite.local", name: "Demo Growth", role: "user", planCode: "growth", password: "demo-growth-2026" },
-  { email: "demo-enterprise@docubite.local", name: "Demo Enterprise", role: "user", planCode: "enterprise", password: "demo-enterprise-2026" },
+  { email: "admin@docubite.local", name: "DocuBite Admin", role: "admin", password: "admin-docubite-2026" },
+  { email: "demo@docubite.local", name: "Demo User", role: "user", password: "demo-docubite-2026" },
 ]
-
-/** The window consumeWorkspaceQuota falls back to when a subscription has no Stripe period —
- * kept identical to defaultUsagePeriod in models/workspaces.ts so the seeded subscription and the
- * usage rows the app writes agree on which month they are in. */
-function currentPeriod(now = new Date()) {
-  return {
-    start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
-    end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
-  }
-}
 
 /** Provisions (or updates) the Supabase Auth identity for one demo account, returning its
  * supabaseUserId. Looked up by the LOCAL row's already-linked id first, not by asking Supabase to
@@ -70,22 +53,14 @@ async function seedAccount(account: DemoAccount) {
   // demo account opens on a working sheet rather than an empty shell. Only on the first run:
   // re-seeding must not hand the account a second workspace every time.
   const membership = await prisma.workspaceMember.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "asc" } })
-  const workspaceId = membership?.workspaceId ?? (await createWorkspaceForUser(user, { planCode: account.planCode })).id
+  if (!membership) await createWorkspaceForUser(user)
 
-  const period = currentPeriod()
-  // status "active" with trialEndsAt cleared: these accounts exist to demonstrate a paid plan, and
-  // leaving them "trialing" would have them expire out from under a demo two weeks later.
-  await prisma.workspaceSubscription.upsert({
-    where: { workspaceId },
-    create: { workspaceId, planCode: account.planCode, status: "active", trialEndsAt: null, currentPeriodStart: period.start, currentPeriodEnd: period.end },
-    update: { planCode: account.planCode, status: "active", trialEndsAt: null, cancelAtPeriodEnd: false, currentPeriodStart: period.start, currentPeriodEnd: period.end },
-  })
-  return { email: account.email, password: account.password, role: account.role, planCode: account.planCode }
+  return { email: account.email, password: account.password, role: account.role }
 }
 
 async function main() {
   // These are known credentials with an admin account among them. Seeding them into a real
-  // deployment would hand anyone who reads this file a limit-exempt login.
+  // deployment would hand anyone who reads this file an admin login.
   if (process.env.NODE_ENV === "production" && process.env.SEED_DEMO_ACCOUNTS !== "true") {
     throw new Error("Refusing to seed demo accounts in production. Set SEED_DEMO_ACCOUNTS=true if this is genuinely what you want.")
   }
@@ -94,7 +69,7 @@ async function main() {
   for (const account of ACCOUNTS) seeded.push(await seedAccount(account))
 
   console.log("\nSeeded accounts:\n")
-  for (const row of seeded) console.log(`  ${row.email.padEnd(30)} ${row.password.padEnd(24)} ${row.role.padEnd(6)} ${row.planCode}`)
+  for (const row of seeded) console.log(`  ${row.email.padEnd(30)} ${row.password.padEnd(24)} ${row.role}`)
   console.log("")
 }
 

@@ -16,7 +16,7 @@
  * in Supabase Auth's own project, not this database, since the auth migration);
  * Workspace itself (the scoping root — filtering it by workspaceId is meaningless); WorkspaceMember
  * and WorkspaceInvitation (membership is how workspace access is *decided*, so it must be readable
- * before a workspace is known); StripeWebhookEvent and AdminAuditEvent (system-level); and the
+ * before a workspace is known); AdminAuditEvent (system-level); and the
  * child models reached only through a scoped parent (DocumentTemplateVersion, DocumentFileShare). */
 export const WORKSPACE_SCOPED_MODELS = new Set([
   "Document",
@@ -32,8 +32,6 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "ExtractionShape",
   "SpreadsheetWorkbook",
   "AiFormulaCache",
-  "WorkspaceUsagePeriod",
-  "WorkspaceSubscription",
   // Outbound integrations (P1). WorkspaceApiKey is authenticated unscoped by keyHash (a UNIQUE
   // operation, so permitted), but every list/manage query is workspace-scoped. WebhookDelivery is
   // the queue row: like DocumentProcessingJob it is drained across all workspaces, and that global

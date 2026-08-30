@@ -10,7 +10,6 @@ import { LOW_CONFIDENCE } from "@/lib/sheet-seed"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { recordFieldCorrection } from "@/models/field-corrections"
-import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { emitWorkspaceEvent } from "@/lib/webhooks"
 import { kickWebhookDrain } from "@/lib/webhook-delivery"
 import { prisma } from "@/lib/db"
@@ -91,7 +90,6 @@ export async function createDocumentFromBuffer(input: {
     return { document: existing, job, duplicate: true }
   }
 
-  await consumeWorkspaceQuota(input.workspaceId, "document")
   const id = randomUUID()
   const storageKey = documentStorageKey(input.workspaceId, id)
   const receivedAt = input.receivedAt || new Date()

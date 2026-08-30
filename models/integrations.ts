@@ -2,18 +2,15 @@ import { randomBytes } from "crypto"
 import { prisma } from "@/lib/db"
 import type { Prisma } from "@/prisma/client"
 import { generateApiKey } from "@/lib/api-key"
-import { getWorkspacePlan } from "@/lib/plans"
 import { encryptSecret } from "@/lib/secret-crypto"
 import { assertUrlSafe } from "@/lib/url-safety"
 import { isWebhookEventType } from "@/lib/webhooks"
 import { getDocumentFieldValues } from "@/models/document-field-values"
 
-/** Whether the workspace's plan includes the integrations surface. Distinct from the deployment
- * gate (config.integrations.enabled): a deployment can have integrations configured while a
- * particular workspace is on a plan (a future free tier) that excludes them. */
-export async function workspaceIntegrationsPlanEnabled(workspaceId: string): Promise<boolean> {
-  const sub = await prisma.workspaceSubscription.findUnique({ where: { workspaceId }, select: { planCode: true } })
-  return getWorkspacePlan(sub?.planCode || "starter").integrations
+/** There is no plan tier gating the integrations surface anymore — every workspace has it,
+ * subject only to the deployment-level gate (config.integrations.enabled). */
+export async function workspaceIntegrationsPlanEnabled(_workspaceId: string): Promise<boolean> {
+  return true
 }
 
 /** The data layer for the integrations surface (P1): API keys, webhook endpoints, delivery history,

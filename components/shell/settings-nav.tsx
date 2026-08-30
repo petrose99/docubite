@@ -1,7 +1,7 @@
 "use client"
 
 import { MODULES } from "@/lib/modules"
-import { Blocks, CheckCircle2, CreditCard, FileBarChart, History, Mail, Percent, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { Blocks, CheckCircle2, FileBarChart, History, Mail, Percent, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -39,7 +39,6 @@ export function SettingsNav({ workspaceId, enabledModuleKeys, integrationsEnable
     { href: `${base}/activity`, label: "Activity", icon: History },
     { href: `${base}/email`, label: "Email intake", icon: Mail },
     { href: `${base}/security`, label: "Security", icon: ShieldCheck },
-    { href: `${base}/billing`, label: "Billing & Usage", icon: CreditCard },
     ...(integrationsEnabled ? [{ href: `${base}/integrations`, label: "Integrations", icon: Webhook }] : []),
   ]
 

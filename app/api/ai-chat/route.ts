@@ -9,7 +9,7 @@ import { findSupplierDocuments, getDocumentDetails, getExpenseClaims, getInboxSu
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { personaAddendumForIndustry } from "@/lib/modules/personas"
 import { findMatchingDocuments, searchDocumentChunks } from "@/lib/retrieval"
-import { getWorkspaceMembership, consumeWorkspaceQuota } from "@/models/workspaces"
+import { getWorkspaceMembership } from "@/models/workspaces"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai"
 import { z } from "zod"
@@ -162,22 +162,6 @@ export async function POST(request: Request) {
   if (!workspace?.aiEnabled) return Response.json({ error: "ai_disabled" }, { status: 403 })
 
   if (!config.ai.geminiApiKey) return Response.json({ error: "ai_not_configured" }, { status: 503 })
-
-  // Only a fresh question costs quota. The tool loop posts the conversation back on every step,
-  // and billing those would charge a user several times for one request.
-  const last = messages[messages.length - 1]
-  if (last?.role === "user") {
-    try {
-      await consumeWorkspaceQuota(workspaceId, "ai")
-    } catch (error) {
-      // 429 means "come back later", which is true of an exhausted monthly allowance and false
-      // of a lapsed trial or a dead subscription — those need a payment decision, so they get
-      // 402 and their own code. A blanket 429 told every one of them to wait it out.
-      const code = error instanceof Error ? error.message : "quota_exceeded"
-      if (code === "trial_expired" || code === "subscription_inactive") return Response.json({ error: code }, { status: 402 })
-      return Response.json({ error: "quota_exceeded" }, { status: 429 })
-    }
-  }
 
   const google = createGoogleGenerativeAI({ apiKey: config.ai.geminiApiKey })
 

@@ -38,6 +38,6 @@ export default function AccountingPage() {
     <SolutionsTeaser />
     <Security />
     <Faq />
-    <CtaBand variant="selfServe" />
+    <CtaBand />
   </>
 }

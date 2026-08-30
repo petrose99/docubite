@@ -70,19 +70,6 @@ export const options: NextAdminOptions = {
       // see app/admin-next/baa, which is where it is actually set.
       edit: { display: ["name", "kind", "aiEnabled"] },
     },
-    WorkspaceSubscription: {
-      title: "Subscriptions",
-      icon: "CreditCardIcon",
-      list: {
-        display: ["id", "planCode", "status", "currentPeriodEnd", "cancelAtPeriodEnd", "updatedAt"],
-        defaultSort: { field: "updatedAt", direction: "desc" },
-      },
-    },
-    WorkspaceUsagePeriod: {
-      title: "Usage periods",
-      icon: "ChartBarIcon",
-      list: { display: ["id", "periodStart", "periodEnd", "inboundDocumentCount", "aiExtractionCount"] },
-    },
     DocumentProcessingJob: {
       title: "Processing jobs",
       icon: "QueueListIcon",
@@ -93,15 +80,6 @@ export const options: NextAdminOptions = {
       list: {
         display: ["id", "type", "status", "attempts", "errorCode", "scheduledAt"],
         defaultSort: { field: "scheduledAt", direction: "desc" },
-      },
-    },
-    StripeWebhookEvent: {
-      title: "Stripe events",
-      icon: "BoltIcon",
-      permissions: [],
-      list: {
-        display: ["id", "stripeEventId", "type", "status", "attempts", "errorCode", "createdAt"],
-        defaultSort: { field: "createdAt", direction: "desc" },
       },
     },
     ProductEvent: {

@@ -19,13 +19,6 @@ function hardChecks(): ConfigCheck[] {
       detail: "unset — uploaded documents are accepted without a malware scan",
     },
   ]
-  if (config.billing.enforcePlanLimits) {
-    checks.push({
-      name: "STRIPE_*",
-      ok: Boolean(config.stripe.secretKey && config.stripe.webhookSecret && config.stripe.starterPriceId && config.stripe.growthPriceId),
-      detail: "ENFORCE_PLAN_LIMITS is on but Stripe is not fully configured (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_STARTER_PRICE_ID, STRIPE_GROWTH_PRICE_ID) — checkout and plan enforcement will fail",
-    })
-  }
   return checks
 }
 
@@ -38,11 +31,6 @@ function softChecks(): ConfigCheck[] {
       name: "NEXT_PUBLIC_SENTRY_DSN",
       ok: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
       detail: "unset — production errors will not be reported to Sentry",
-    },
-    {
-      name: "ENFORCE_PLAN_LIMITS",
-      ok: process.env.ENFORCE_PLAN_LIMITS !== undefined,
-      detail: 'not explicitly set — defaulting to "false", so plan seat/document/AI-extraction limits are not enforced',
     },
   ]
 }

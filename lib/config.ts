@@ -42,17 +42,12 @@ const envSchema = z.object({
   // app-level fallback enforced in lib/supabase/middleware.ts regardless of plan tier.
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(15),
   DISABLE_SIGNUP: z.enum(["true", "false"]).default("false"),
-  ENFORCE_PLAN_LIMITS: z.enum(["true", "false"]).default("false"),
   RESEND_API_KEY: z.string().default("please-set-your-resend-api-key-here"),
   RESEND_FROM_EMAIL: z.string().default("DocuBite <user@localhost>"),
   // Both halves or nothing — a UI-only flag now (see isGoogleAuthEnabled); a half-set pair would
   // advertise a Google button whose provider isn't actually registered on the Supabase side.
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  STRIPE_SECRET_KEY: z.string().default(""),
-  STRIPE_WEBHOOK_SECRET: z.string().default(""),
-  STRIPE_STARTER_PRICE_ID: z.string().default(""),
-  STRIPE_GROWTH_PRICE_ID: z.string().default(""),
   AWS_REGION: z.string().default("eu-west-1"),
   AWS_S3_DOCUMENTS_BUCKET: z.string().default(""),
   AWS_S3_KMS_KEY_ID: z.string().default(""),
@@ -267,10 +262,6 @@ const config = {
   // the two server-only paths that need admin privileges: the bulk user-migration script and
   // prisma/seed.ts. Never construct a client with serviceRoleKey outside those.
   supabase: { url: env.NEXT_PUBLIC_SUPABASE_URL || "", anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "", serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || "", authHookSecret: env.SUPABASE_AUTH_HOOK_SECRET || "" },
-  stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, starterPriceId: env.STRIPE_STARTER_PRICE_ID, growthPriceId: env.STRIPE_GROWTH_PRICE_ID },
-  // Seats, monthly documents and monthly AI extractions are only actually refused when this is
-  // on. lib/plans.ts reads it through here so there is exactly one place that decides.
-  billing: { enforcePlanLimits: env.ENFORCE_PLAN_LIMITS === "true" },
   email: { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM_EMAIL },
   // Tenant isolation. Both default to their safe-for-a-live-app setting; see the env comments for
   // the staged adoption path from `warn` to `throw` to RLS.

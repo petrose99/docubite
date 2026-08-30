@@ -18,7 +18,6 @@ import { diffExtractions, type RunDiff } from "@/lib/run-diff"
 import { deriveSheet, type SheetColumn, type SheetRow } from "@/lib/sheet-derive"
 import { cacheAiFormula, getCachedAiFormula } from "@/models/ai-formulas"
 import { touchFile } from "@/models/files"
-import { consumeWorkspaceQuota } from "@/models/workspaces"
 import { errorMessage, requireMember, NO_ACCESS } from "./action-helpers"
 
 export type ExtractionRows = { sheetId: string; sheetName: string; columns: SheetColumn[]; rows: SheetRow[]; documentIds: string[] }
@@ -261,12 +260,6 @@ export async function summarizeFolderReportAction(workspaceId: string, fileId: s
   const report = await buildFolderReport(workspaceId, fileId, uploadBatchId)
   if (!report) return { success: false, error: "No documents in this upload batch" }
 
-  try {
-    await consumeWorkspaceQuota(workspaceId, "ai")
-  } catch (error) {
-    return { success: false, error: errorMessage(error, "This workspace has used its AI allowance for the period") }
-  }
-
   // Only the counts go to the model — group labels, counts, duplicate and gap counts, issues — so
   // no document content leaves the deterministic layer.
   const stats = {
@@ -317,15 +310,6 @@ export async function evaluateAiFormulaAction(workspaceId: string, fn: string, p
   const cached = await getCachedAiFormula(workspaceId, hash)
   if (cached !== null) return { success: true, data: { result: cached, cached: true } }
 
-  try {
-    await consumeWorkspaceQuota(workspaceId, "ai")
-  } catch (error) {
-    // Reporting the reason rather than assuming one: consumeWorkspaceQuota also refuses an
-    // expired trial and an inactive subscription, and telling those users they are out of AI
-    // allowance sends them looking for a bigger plan instead of a payment method.
-    return { success: false, error: errorMessage(error, "This workspace has used its AI allowance for the period") }
-  }
-
   const response = await requestLLM({ providers: [{ provider, apiKey, model }] }, { prompt: buildAiFormulaPrompt(prompt, inputs), schema: aiFormulaJsonSchema })
   if (response.error) return { success: false, error: response.error }
 
@@ -357,12 +341,6 @@ export async function buildFormulaAction(workspaceId: string, request: string, c
   const apiKey = provider === "gemini" ? config.ai.geminiApiKey : config.ai.openaiApiKey
   const model = provider === "gemini" ? config.ai.geminiModelName : config.ai.openaiModelName
   if (!apiKey) return { success: false, error: "AI is not configured on this server" }
-
-  try {
-    await consumeWorkspaceQuota(workspaceId, "ai")
-  } catch (error) {
-    return { success: false, error: errorMessage(error, "This workspace has used its AI allowance for the period") }
-  }
 
   const columns = context.headers
     .map((header, index) => `${String.fromCharCode(65 + index)}: ${header || "(no header)"}${context.sampleRow[index] === undefined || context.sampleRow[index] === null ? "" : ` — e.g. ${context.sampleRow[index]}`}`)

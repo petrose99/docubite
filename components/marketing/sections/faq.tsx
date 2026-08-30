@@ -1,5 +1,4 @@
 import { Accordion, AccordionItem } from "@/components/ui/accordion"
-import { TRIAL_DAYS } from "@/lib/plans"
 import Link from "next/link"
 
 export function Faq() {
@@ -29,11 +28,8 @@ export function Faq() {
           <AccordionItem question="Do my documents get used to train a model?">
             No. A document goes to our parsing service to be turned into text, and only that text is sent to the configured model to structure that one document. See the <Link href="/docs/ai" className="font-medium text-emerald-800 underline underline-offset-4">AI use notice</Link>.
           </AccordionItem>
-          <AccordionItem question={`What is included in the ${TRIAL_DAYS}-day trial?`}>
-            The full product, no credit card. Add a payment method whenever you are ready; if the trial ends first, your data stays exactly where it is and you pick a plan to carry on.
-          </AccordionItem>
           <AccordionItem question="Can my team work in the same workspace?">
-            Team workspaces with owner and member roles are on the Growth plan and above. Every plan includes per-file link sharing for people outside the workspace.
+            Team workspaces with owner and member roles are available to every workspace, plus per-file link sharing for people outside the workspace.
           </AccordionItem>
           <AccordionItem question="What can someone I share a link with do?">
             Whatever level you pick: view, interact, or edit — per public link or per email address, no account needed on their end. Interact is a sandbox: a live grid they can explore where nothing is ever saved. <span className="font-mono">=AI()</span> is disabled on shared links, so a visitor can&apos;t spend your AI allowance.
@@ -45,7 +41,7 @@ export function Faq() {
             PDF, JPEG, PNG, WebP and HEIC, up to 50&nbsp;MB each, up to 100 files in a batch — including a whole folder dragged in at once. Email-in and cloud-drive imports aren&apos;t available yet.
           </AccordionItem>
           <AccordionItem question="What can I dictate?">
-            Anything free-form in a clinical workspace — a pathology read, a referral note, a delivery update, a to-do. There&apos;s no format to pick first: the recording is routed to the right report automatically, with a synoptic block of extracted fields alongside it.
+            Anything free-form — a note on a document, a to-do, a quick summary. There&apos;s no format to pick first: the recording is routed to the right report automatically, with a synoptic block of extracted fields alongside it.
           </AccordionItem>
         </Accordion>
       </div>
