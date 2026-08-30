@@ -3,13 +3,11 @@
 import { getCellProvenanceAction, getDocumentSourceInfoAction, getExtractionRowsAction, markDocumentsSheetAppliedAction } from "@/app/(app)/workspaces/[workspaceId]/sheet-actions"
 import { AssistantPanel } from "@/components/assistant/assistant-panel"
 import type { SourceHit } from "@/components/assistant/document-sources"
-import { ExtractPanel } from "@/components/extract/extract-panel"
-import type { SheetTemplate, WorkspaceUsage } from "@/components/extract/types"
 import { useExtractionProgress } from "@/components/extract/use-extraction-progress"
 import { FileHeader } from "@/components/files/file-header"
 import type { FWorksheet } from "@univerjs/preset-sheets-core"
 import type { FUniver, IWorkbookData } from "@univerjs/presets"
-import { Database, Download, FileDown, FileText, Files, Sparkles } from "lucide-react"
+import { Download, FileDown, FileText, Files, Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { registerAiFormulas } from "./custom-functions"
@@ -32,7 +30,6 @@ function clipQuote(snippet: string): string {
   return `${(lastSpace > 60 ? slice.slice(0, lastSpace) : slice).trimEnd()}…`
 }
 
-const ExtractIcon = () => <Database className="h-4 w-4" />
 const FormulaIcon = () => <Sparkles className="h-4 w-4" />
 const SourceIcon = () => <FileText className="h-4 w-4" />
 const DownloadIcon = () => <Download className="h-4 w-4" />
@@ -43,23 +40,16 @@ const DocumentsIcon = () => <Files className="h-4 w-4" />
  * rest of the window.
  *
  * Lido's spreadsheet is the page rather than a widget on it — chrome is one thin bar, and the
- * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Extraction and the
- * assistant are reached from the grid's own toolbar, not from page chrome. */
-export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, template, templatesBySheetId, usage, sheetCount, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource, initialExtractOpen = false }: {
+ * grid's own ribbon, formula bar, sheet tabs and zoom fill everything below. Uploading and
+ * extraction happen on the Home/Files hub and the file's own hub page, not here — this surface
+ * is for viewing and editing rows that already landed. */
+export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot, rev, queuedIds, hasRows, readOnly = false, documentSearchEnabled = false, initialSource }: {
   workspaceId: string
   fileId: string
   fileName: string
   linkAccess: string
   snapshot: IWorkbookData | null
   rev: number
-  template: SheetTemplate | null
-  /** Every worksheet's template, keyed by the Univer sheet id it seeded — looked up on every
-   * sheet-tab switch so the Extract panel always reflects whichever tab is actually active,
-   * without a re-fetch. A tab with no entry (a brand-new, not-yet-templated sheet) resolves to
-   * null, matching what the server sends when there is no template at all. */
-  templatesBySheetId: Record<string, SheetTemplate>
-  usage: WorkspaceUsage
-  sheetCount: number
   queuedIds: string[]
   hasRows: boolean
   readOnly?: boolean
@@ -69,27 +59,14 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   /** An open-at-page deep link (from the Files content search): open this document over the grid
    * once, at the given page/highlight. Already validated server-side; absent for a normal open. */
   initialSource?: { documentId: string; page: number | null; bbox: [number, number, number, number] | null }
-  /** Files' "Upload" button deep-links straight here (`?extract=1`) so a brand-new file opens with
-   * the Extract panel already up, instead of landing on an empty grid the user has to know to open
-   * it from. Ignored in read-only view since there's nothing to extract into. */
-  initialExtractOpen?: boolean
 }) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
-  const [extractOpen, setExtractOpen] = useState(Boolean(initialExtractOpen) && !readOnly)
-  // The template the Extract panel shows. Starts as the server's pick (the `?template=` sheet, or
-  // the file's first) and is swapped by the ActiveSheetChanged listener below whenever the user
-  // clicks a different tab, so the panel never lags the grid's own active sheet.
-  const [activeTemplate, setActiveTemplate] = useState<SheetTemplate | null>(template)
   const [formulaBuilderOpen, setFormulaBuilderOpen] = useState(false)
   const [documentsPanelOpen, setDocumentsPanelOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<ActiveFilter | null>(null)
   // Read inside callbacks that must not depend on (and re-create on) every filter change — the
   // BeforeActiveSheetChange listener registered once in handleReady, in particular.
   const activeFilterRef = useRef<ActiveFilter | null>(null)
-  // Read inside the ActiveSheetChanged listener registered once in handleReady, same reason as
-  // activeFilterRef above.
-  const templatesBySheetIdRef = useRef(templatesBySheetId)
-  useEffect(() => { templatesBySheetIdRef.current = templatesBySheetId }, [templatesBySheetId])
   const [source, setSource] = useState<SourceDocument | null>(null)
   const [target, setTarget] = useState<ProvenanceTarget | null>(null)
   // The revision the server settled on after absorbing an extraction, handed to the grid so its
@@ -101,7 +78,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
 
   /** Writes the rows of a just-finished extraction straight into the open grid. The server has
    * them either way — it reconciles on every load — but going through the facade is what makes
-   * them appear while the Extract panel is still on screen. */
+   * them appear live if this sheet happens to be open while a background upload finishes. */
   const absorbExtraction = useCallback(async (documentIds: string[]) => {
     const api = apiRef.current
     if (!api || readOnly) return
@@ -125,7 +102,10 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
     if (typeof settled === "number") setAdoptRev(settled)
   }, [fileId, readOnly, workspaceId])
 
-  const { statuses, track } = useExtractionProgress(workspaceId, queuedIds, (ids) => void absorbExtraction(ids), documentSearchEnabled)
+  // Resumes polling for documents still in flight when the page loaded (uploaded from Home/Files
+  // or a file's own hub) so a sheet left open finishes filling in live; nothing here triggers new
+  // uploads — that only happens off this page now.
+  useExtractionProgress(workspaceId, queuedIds, (ids) => void absorbExtraction(ids), documentSearchEnabled)
 
   // The revision this browser is responsible for. A server revision ahead of it means another
   // tab has edited the file — extraction no longer moves it, since we write those rows here.
@@ -144,14 +124,6 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
     clientRev.current = adoptRev
     notifiedRev.current = adoptRev
   }, [adoptRev])
-
-  // Lido's welcome flow: an empty sheet greets you with the extractor already open.
-  const autoOpened = useRef(false)
-  useEffect(() => {
-    if (autoOpened.current || readOnly || hasRows || queuedIds.length) return
-    autoOpened.current = true
-    setExtractOpen(true)
-  }, [hasRows, queuedIds.length, readOnly])
 
   /** Opens the document behind whichever cell is selected, scrolled and highlighted to where the
    * value was read from. Reads the pointer off the cell rather than the row, so it works the same
@@ -247,36 +219,6 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       setActiveFilter(null)
     })
 
-    /** The Extract panel is bound to whichever worksheet is actually active, not to whatever tab
-     * was active when the page loaded: clicking a different sheet tab must swap the panel's
-     * template (and its column chips) to that sheet's own, or an upload made right after
-     * switching tabs would extract using the wrong sheet's columns. `templatesBySheetId` was
-     * built server-side from the same query that resolved the initial `template` prop, so this
-     * is a lookup, not a fetch. */
-    const syncActiveTemplate = (sheet: FWorksheet | null | undefined) => {
-      const next = templatesBySheetIdRef.current[sheet?.getSheetId() ?? ""] ?? null
-      setActiveTemplate(next)
-      const url = new URL(window.location.href)
-      if (next) url.searchParams.set("template", next.code)
-      else url.searchParams.delete("template")
-      window.history.replaceState(window.history.state, "", url)
-    }
-    api.addEvent(api.Event.ActiveSheetChanged, (params) => syncActiveTemplate(params.activeSheet))
-
-    /** Extract Data goes in the leading toolbar group rather than the trailing one because
-     * Univer collapses the toolbar from the right: anything in `ribbon.start.others` is first
-     * into the ⋮ overflow on a narrow window, and the primary action of the whole product
-     * cannot be the one that hides. */
-    api.registerComponent("docubite-extract-icon", ExtractIcon)
-    api.createMenu({
-      id: "docubite.extract-data",
-      title: "Extract Data",
-      tooltip: "Upload documents and turn them into rows",
-      icon: "docubite-extract-icon",
-      order: -1,
-      action: () => setExtractOpen(true),
-    }).appendTo("ribbon.start.history")
-
     /** The formula builder belongs on the Formulas tab, next to Univer's own function tools —
      * it is a way of writing a formula, not a separate feature. */
     api.registerComponent("docubite-formula-icon", FormulaIcon)
@@ -303,8 +245,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       action: () => { setFormulaBuilderOpen(false); setDocumentsPanelOpen(true) },
     }).appendTo("ribbon.start.history")
 
-    /** Download, next to Extract Data: the two ends of the same job, documents in and a
-     * spreadsheet out. Navigating rather than fetching so the browser's own download machinery
+    /** Download. Navigating rather than fetching so the browser's own download machinery
      * handles the file — the route answers with a content-disposition attachment. */
     api.registerComponent("docubite-download-icon", DownloadIcon)
     api.createMenu({
@@ -436,17 +377,6 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
           <Files className="h-4 w-4" />Showing: {activeFilter.filename} · Show all
         </button>
       )}
-
-      {extractOpen && <ExtractPanel
-        key={activeTemplate?.id ?? "new"}
-        workspaceId={workspaceId}
-        fileId={fileId}
-        template={activeTemplate}
-        usage={usage}
-        sheetCount={sheetCount}
-        statuses={statuses}
-        onClose={() => setExtractOpen(false)}
-        onDocumentsQueued={track} />}
     </main>
   )
 }

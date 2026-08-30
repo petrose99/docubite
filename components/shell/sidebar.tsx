@@ -4,19 +4,18 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, Blocks, CheckCircle2, ClipboardCheck, CreditCard, FileBarChart, Files, History, Mail, Mic, Percent, Receipt, Settings, ShieldCheck, Users, Wand2, Webhook } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, Mic, Receipt, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 /** Maps a ModuleDefinition.navItems[].icon string (lib/modules) to the lucide component it names.
  * A string in the registry rather than the component itself keeps lib/modules free of a React/UI
- * dependency — it's read by server code (capabilities, seeds) that has no business importing icons. */
+ * dependency — it's read by server code (capabilities, seeds) that has no business importing icons.
+ * Settings-tagged module items (Rules, Tax, Approvals) don't render here at all — they show up in
+ * components/shell/settings-nav.tsx instead, next to the settings pages they actually lead to. */
 const ICONS: Record<string, typeof Files> = {
   inbox: ClipboardCheck,
-  workflow: Wand2,
-  percent: Percent,
   mic: Mic,
-  "check-circle": CheckCircle2,
   receipt: Receipt,
 }
 
@@ -27,57 +26,43 @@ const ICONS: Record<string, typeof Files> = {
  * back out through the file bar's "← Files" rather than a persistent rail, and a grid is the
  * one screen where 224px of chrome costs real columns.
  *
- * Module nav entries (Review, Supplier rules, Tax, Dictate) come from `enabledModuleKeys` —
- * the workspace's resolved capability set (lib/modules/capabilities.ts), read once in the layout
- * server component and passed down as plain strings — rather than from ad-hoc per-feature
- * booleans. Settings items that aren't modules (Workspace, Activity, Security, Billing,
- * Integrations, Settings) stay hard-coded below, in the same shape as before. */
-export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, integrationsEnabled = false }: {
+ * Home, Files, module entries, then a single Settings link — the ~10 individual settings links
+ * that used to sit here flat now live as tabs on the settings pages themselves (SettingsNav), so
+ * this rail doesn't scroll. Module nav entries (Review, Dictate, Expenses) come from
+ * `enabledModuleKeys` — the workspace's resolved capability set (lib/modules/capabilities.ts) —
+ * rather than ad-hoc per-feature booleans. */
+export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
   /** Every module key currently enabled for this workspace (getWorkspaceCapabilities(...).enabled),
    * used to build the nav entries each module registers via ModuleDefinition.navItems. */
   enabledModuleKeys: string[]
-  /** The server's config.integrations.enabled. Kept as its own prop, not a module lookup: it gates
-   * a settings page, not a module nav item, and is a deployment fact rather than a workspace one. */
-  integrationsEnabled?: boolean
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
 
   const base = `/workspaces/${workspaceId}`
   const enabled = new Set(enabledModuleKeys)
-  const moduleNavItems = MODULES
+  const moduleWorkItems = MODULES
     .filter((module) => enabled.has(module.key))
     .flatMap((module) => module.navItems ?? [])
-    .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, settings: item.href.startsWith("settings/") }))
+    .filter((item) => !item.href.startsWith("settings/"))
+    .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, exact: false }))
 
-  // Home is every workspace's unconditional first entry — no module gates it, unlike the old
-  // finance-only "Overview" link. exact-matched so it doesn't stay lit on every page under it.
+  // Home is every workspace's unconditional first entry — exact-matched so it doesn't stay lit on
+  // every page under it, unlike Files (which stays lit through a file's hub and sheet too).
   const workItems = [
     { href: base, label: "Home", icon: BarChart3, exact: true },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
-    ...moduleNavItems.filter((item) => !item.settings).map((item) => ({ ...item, exact: false })),
-  ]
-
-  const settingsItems = [
-    ...moduleNavItems.filter((item) => item.settings).map((item) => ({ ...item, exact: false })),
-    { href: `${base}/settings/workspace`, label: "Workspace", icon: Users, exact: false },
-    { href: `${base}/settings/modules`, label: "Modules", icon: Blocks, exact: false },
-    { href: `${base}/settings/activity`, label: "Activity", icon: History, exact: false },
-    { href: `${base}/settings/email`, label: "Email intake", icon: Mail, exact: false },
-    { href: `${base}/settings/security`, label: "Security", icon: ShieldCheck, exact: false },
-    { href: `${base}/settings/billing`, label: "Billing & Usage", icon: CreditCard, exact: false },
-    ...(integrationsEnabled ? [{ href: `${base}/settings/integrations`, label: "Integrations", icon: Webhook, exact: false }] : []),
-    { href: `${base}/settings/templates`, label: "Templates", icon: Settings, exact: false },
-    { href: `${base}/settings/reports`, label: "Reports", icon: FileBarChart, exact: false },
+    ...moduleWorkItems,
+    { href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false },
   ]
 
   const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean }) => {
-    // Everything except an `exact` entry (Overview) stays lit while you're inside a page under it —
-    // Files while you're in a file's sheet, a settings leaf while you're on its own sub-pages.
-    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)
+    // Non-exact entries stay lit while you're inside a page under them — Settings while you're on
+    // any settings leaf, a module item while you're on its own sub-pages.
+    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.label === "Settings" && pathname.startsWith(`${base}/settings`))
     return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
       className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900"}`}>
       <item.icon className="h-4 w-4 shrink-0" />{item.label}
@@ -94,11 +79,6 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, inte
 
     <nav className="space-y-0.5">
       {workItems.map(navLink)}
-    </nav>
-
-    <nav className="mt-4 space-y-0.5">
-      <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Settings</p>
-      {settingsItems.map(navLink)}
     </nav>
 
     <div className="mt-auto pt-3">

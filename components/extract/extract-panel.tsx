@@ -1,6 +1,6 @@
 "use client"
 
-import { deleteDocumentsAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { deleteDocumentsAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
 import { downscaleImage } from "@/components/extract/downscale-image"
 import { FileRow } from "@/components/extract/file-row"
@@ -43,6 +43,14 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
+/** What the file itself should be called once it actually has something in it: the top-level
+ * folder name for a folder upload, or the first file's name (minus extension) for a single
+ * file/drop/ZIP — never left as "untitled". */
+function deriveFileName(row: StagedFile): string {
+  if (row.relativePath) return row.relativePath.split("/")[0]
+  return row.filename.replace(/\.[^./]+$/, "") || row.filename
+}
+
 function UsageMeter({ usage }: { usage: WorkspaceUsage }) {
   const percent = usage.documentsLimit > 0 ? Math.min(100, Math.round((usage.documentsUsed / usage.documentsLimit) * 100)) : 0
   return <div className="flex items-center gap-3 border-b px-4 py-2.5 text-xs text-stone-500">
@@ -54,9 +62,13 @@ function UsageMeter({ usage }: { usage: WorkspaceUsage }) {
 
 /** Lido-style floating extraction panel: draggable, non-modal, so the sheet stays visible
  * behind it and freshly extracted rows appear next to it live. */
-export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
+export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
   workspaceId: string
   fileId: string
+  /** The file's current display name. Drives auto-naming below: only a file still called
+   * "untitled" (i.e. one this same upload just created) gets renamed automatically — a file
+   * that already has a real name, picked up here to add more documents to, is left alone. */
+  fileName: string
   template: SheetTemplate | null
   usage: WorkspaceUsage
   sheetCount: number
@@ -66,7 +78,6 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
 }) {
   const acceptedTypes = DOCUMENT_TYPES
   const router = useRouter()
-  const sheetBase = `/workspaces/${workspaceId}/files/${fileId}/sheet`
 
   // Working copy of the sheet being edited; dirty until saved through the action.
   const [name, setName] = useState(template?.name || `Sheet ${sheetCount + 1}`)
@@ -77,6 +88,9 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   const [savedTemplateId, setSavedTemplateId] = useState<string | null>(template?.id ?? null)
 
   const [staged, setStaged] = useState<StagedFile[]>([])
+  // A ZIP/photo upload that failed for want of a field forces the setup section open even with
+  // nothing staged — see ensureSheetSaved.
+  const [setupRevealed, setSetupRevealed] = useState(false)
   const [pageRange, setPageRange] = useState("")
   const [pageRangeError, setPageRangeError] = useState(false)
   const [promptExpanded, setPromptExpanded] = useState(false)
@@ -85,7 +99,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   const [aiBusy, setAiBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirming, setConfirming] = useState<{ kind: "row"; row: StagedFile } | { kind: "all"; count: number } | null>(null)
-  // A saved shape the first upload was recognised as, offered before any columns are set up.
+  // A saved shape the first upload was recognised as, offered before any fields are set up.
   const [matchedShape, setMatchedShape] = useState<MatchedShape | null>(null)
   // The settled document whose run diff is open, if any.
   const [diffDocId, setDiffDocId] = useState<string | null>(null)
@@ -227,14 +241,28 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
     addEntries(fileArray.map((file) => ({ file })))
   }, [acceptFile, addEntries])
 
-  // Lido pre-fills columns from the first document without being asked; do the same, but
-  // only for a sheet that has no columns yet so an existing setup is never overwritten.
+  // Lido pre-fills fields from the first document without being asked; do the same, but
+  // only for a sheet that has no fields yet so an existing setup is never overwritten.
   useEffect(() => {
     const first = staged.find((row) => row.file)
     if (!first || fields.length || autoSuggested.current || aiBusy) return
     autoSuggested.current = true
     void runSuggestion(first, undefined)
   }, [staged]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A file created by this same "Upload" click starts out "untitled" (there was never a naming
+  // step). The instant it actually has something in it, it earns a real name — the top-level
+  // folder for a folder upload, or the first file's own name otherwise — so a file never sits in
+  // the list as "untitled" waiting for someone to notice and rename it by hand. A file that
+  // already had a name (adding more documents to an existing sheet) is left alone.
+  const autoNamed = useRef(false)
+  useEffect(() => {
+    const first = staged[0]
+    if (!first || autoNamed.current) return
+    autoNamed.current = true
+    if (fileName.trim().toLowerCase() !== "untitled") return
+    void renameFileAction(workspaceId, fileId, deriveFileName(first))
+  }, [staged, fileName, workspaceId, fileId])
 
   async function runSuggestion(row: StagedFile, singleColumn: string | undefined, opts?: { fresh?: boolean }) {
     if (!row.file) return
@@ -254,7 +282,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
       if (singleColumn) {
         const taken = new Set(fields.map((field) => field.key))
         const fresh = suggestion.fields.filter((field) => !taken.has(field.key))
-        if (!fresh.length) { toast.info("That column already exists") ; return }
+        if (!fresh.length) { toast.info("That field already exists") ; return }
         setFields((previous) => [...previous, ...fresh.slice(0, 1)])
       } else {
         const taken = new Set(fields.map((field) => field.key))
@@ -262,11 +290,11 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
         setFields((previous) => [...previous, ...fresh])
         if (suggestion.prompt && !prompt.trim()) setPrompt(suggestion.prompt)
         if (suggestion.name && !template && name.startsWith("Sheet ")) setName(suggestion.name)
-        toast.success("Columns suggested from your document", { description: "Review the chips, then process your files." })
+        toast.success("Fields suggested from your document", { description: "Review the chips, then process your files." })
       }
       markDirty()
     } catch {
-      toast.error("Could not reach the server — no columns were suggested")
+      toast.error("Could not reach the server — no fields were suggested")
     } finally { setAiBusy(false) }
   }
 
@@ -295,12 +323,15 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
 
   async function ensureSheetSaved(): Promise<string | null> {
     if (savedTemplateId && !dirty) return savedTemplateId
-    if (!fields.length) { toast.error("Add at least one column first"); return null }
+    // A ZIP or a photo capture processes immediately on picking, with no staged preview first —
+    // so on a brand-new file there was never a document to auto-suggest fields from. Reveal the
+    // Fields section (normally hidden until a file is present) rather than failing into a toast
+    // with no visible way to fix it: the user can add a field by hand and try again.
+    if (!fields.length) { setSetupRevealed(true); toast.error("Add at least one field first"); return null }
     const result = await saveExtractionSheetAction(workspaceId, fileId, savedTemplateId, { name: name.trim() || "Sheet", fields, prompt, multiRow })
     if (!result.success || !result.data) { toast.error(result.error || "Could not save the sheet"); return null }
     setSavedTemplateId(result.data.templateId)
     setDirty(false)
-    if (!template || template.code !== result.data.code) router.replace(`${sheetBase}?template=${result.data.code}`)
     return result.data.templateId
   }
 
@@ -461,22 +492,24 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
   }
 
   const inputClass = "w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+  // Fields/instructions/page-range only matter once there's a document to extract from — showing
+  // them on an empty panel is setup for a file that isn't there yet. But a file reopened to add
+  // more documents can already have fields (from its existing template) with nothing staged this
+  // session, and a ZIP/photo attempt can force the section open with nothing staged either — both
+  // count as "there's a file" too, just not one sitting in the upload list.
+  const hasFile = staged.length > 0 || fields.length > 0 || setupRevealed
   const tabs = [
     { label: "Upload", icon: FileUp, active: true },
     { label: "Google Drive", icon: CloudOff, active: false },
-    { label: "OneDrive", icon: CloudOff, active: false },
     { label: "Email", icon: Mail, active: false },
   ]
 
   return <div ref={panelRef} className="fixed z-50 flex max-h-[calc(100vh-6rem)] w-[26.5rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl" style={position ? { left: position.x, top: position.y } : { right: 24, top: 88 }}>
     <div className="flex cursor-grab touch-none justify-center pt-1.5 text-stone-300 active:cursor-grabbing" onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}><GripHorizontal className="h-4 w-4" /></div>
-    <div className="flex items-start justify-between gap-3 px-4 pb-3">
+    <div className="flex items-center justify-between gap-3 px-4 pb-3">
       <div className="flex items-center gap-2.5">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><FileUp className="h-5 w-5" /></div>
-        <div>
-          <h2 className="text-base font-bold leading-tight text-stone-900">Extract Data</h2>
-          <input aria-label="Sheet name" className="mt-0.5 w-44 truncate rounded border border-transparent bg-transparent px-1 py-0 text-xs text-stone-500 hover:border-stone-200 focus:border-stone-300 focus:outline-none" value={name} onChange={(event) => { setName(event.target.value); markDirty() }} />
-        </div>
+        <h2 className="text-base font-bold text-stone-900">Extract Data</h2>
       </div>
       <div className="flex items-center gap-1">
         {lastBatch && <button type="button" onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50" title="Folder report"><Files className="h-3.5 w-3.5" />Report</button>}
@@ -501,7 +534,7 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
             <div className="min-w-0">
               <p className="text-sm font-semibold text-emerald-900">Looks like a {matchedShape.name}</p>
               <p className="mt-0.5 text-xs text-emerald-800">
-                {matchedShape.lastFilename ? `Same columns as ${matchedShape.lastFilename}, ${relativeTime(matchedShape.lastRunAt)}?` : `You set this up ${relativeTime(matchedShape.lastRunAt)}. Reuse the same columns?`}
+                {matchedShape.lastFilename ? `Same fields as ${matchedShape.lastFilename}, ${relativeTime(matchedShape.lastRunAt)}?` : `You set this up ${relativeTime(matchedShape.lastRunAt)}. Reuse the same fields?`}
               </p>
             </div>
           </div>
@@ -545,36 +578,38 @@ export function ExtractPanel({ workspaceId, fileId, template, usage, sheetCount,
         <button type="button" className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50" disabled={busy || !processable.length || !fields.length} onClick={() => void uploadRows(processable)}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Process all files{processable.length > 1 ? ` (${processable.length})` : ""}
         </button>
-        {!fields.length && staged.length > 0 && <p className="mt-1.5 text-xs text-stone-400">{aiBusy ? "Analyzing your document to suggest columns…" : "Add at least one column below before processing."}</p>}
+        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{aiBusy ? "Analyzing your document to suggest fields…" : "Add at least one field below before processing."}</p>}
       </section>
 
-      <section>
-        <h3 className="text-sm font-bold text-stone-900">Columns</h3>
-        <p className="mb-2 text-xs text-stone-500">Each column is one data point the AI extracts. Click a chip to refine it.</p>
-        <ColumnChips fields={fields} aiBusy={aiBusy} aiReady={staged.some((row) => row.file)} onChange={(next) => { setFields(next); markDirty() }} onAiSuggest={() => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, undefined, { fresh: true }) }} onAiColumn={(description) => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, description) }} />
-      </section>
+      {hasFile && <>
+        <section>
+          <h3 className="text-sm font-bold text-stone-900">Fields</h3>
+          <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
+          <ColumnChips fields={fields} aiBusy={aiBusy} aiReady={staged.some((row) => row.file)} onChange={(next) => { setFields(next); markDirty() }} onAiSuggest={() => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, undefined, { fresh: true }) }} onAiColumn={(description) => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, description) }} />
+        </section>
 
-      <section>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-stone-900">Extra instructions</h3>
-          <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-stone-700" onClick={() => setPromptExpanded((value) => !value)}><ChevronsUpDown className="h-3.5 w-3.5" />{promptExpanded ? "Collapse" : "Expand"} editor</button>
-        </div>
-        <p className="mb-2 text-xs text-stone-500">Any additional guidance for the extraction</p>
-        <textarea className={inputClass} rows={promptExpanded ? 10 : 3} placeholder="e.g. Extract each line item as a separate row. Amounts are plain numbers without currency symbols." value={prompt} onChange={(event) => { setPrompt(event.target.value); markDirty() }} />
-      </section>
+        <section>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-stone-900">Extra instructions</h3>
+            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-stone-700" onClick={() => setPromptExpanded((value) => !value)}><ChevronsUpDown className="h-3.5 w-3.5" />{promptExpanded ? "Collapse" : "Expand"} editor</button>
+          </div>
+          <p className="mb-2 text-xs text-stone-500">Any additional guidance for the extraction</p>
+          <textarea className={inputClass} rows={promptExpanded ? 10 : 3} placeholder="e.g. Extract each line item as a separate row. Amounts are plain numbers without currency symbols." value={prompt} onChange={(event) => { setPrompt(event.target.value); markDirty() }} />
+        </section>
 
-      <section className="space-y-2.5 pb-1">
-        <div className="flex items-center gap-2">
-          <label className="shrink-0 text-sm font-medium text-stone-700" htmlFor="extract-page-range">Page range:</label>
-          <input id="extract-page-range" className={`${inputClass} ${pageRangeError ? "border-red-400 ring-1 ring-red-300" : ""}`} placeholder="Leave blank for all pages, or e.g. 1-3,5" value={pageRange} onChange={(event) => setPageRange(event.target.value)} onBlur={(event) => validatePageRange(event.target.value)} />
-        </div>
-        {pageRangeError && <p className="text-xs text-red-500">Use page numbers and ranges like 1-3,5</p>}
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700">
-          <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={multiRow} onChange={(event) => { setMultiRow(event.target.checked); markDirty() }} />
-          Extract multiple rows per document
-        </label>
-        <p className="-mt-1 text-xs text-stone-400">One spreadsheet row per line item, with document details repeated.</p>
-      </section>
+        <section className="space-y-2.5 pb-1">
+          <div className="flex items-center gap-2">
+            <label className="shrink-0 text-sm font-medium text-stone-700" htmlFor="extract-page-range">Page range:</label>
+            <input id="extract-page-range" className={`${inputClass} ${pageRangeError ? "border-red-400 ring-1 ring-red-300" : ""}`} placeholder="Leave blank for all pages, or e.g. 1-3,5" value={pageRange} onChange={(event) => setPageRange(event.target.value)} onBlur={(event) => validatePageRange(event.target.value)} />
+          </div>
+          {pageRangeError && <p className="text-xs text-red-500">Use page numbers and ranges like 1-3,5</p>}
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700">
+            <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={multiRow} onChange={(event) => { setMultiRow(event.target.checked); markDirty() }} />
+            Extract multiple rows per document
+          </label>
+          <p className="-mt-1 text-xs text-stone-400">One spreadsheet row per line item, with document details repeated.</p>
+        </section>
+      </>}
     </div>
 
     <ConfirmDialog

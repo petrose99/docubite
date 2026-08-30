@@ -1,10 +1,12 @@
 "use client"
 
 import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAction, duplicateFileAction, moveFilesAction, renameFileAction, renameFolderAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { ExtractOverlay } from "@/components/extract/extract-overlay"
+import type { WorkspaceUsage } from "@/components/extract/types"
 import { ShareDialog } from "@/components/files/share-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog } from "@/components/ui/dialog"
-import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Plus, Search, Share2, Table2, Trash2, Upload } from "lucide-react"
+import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Search, Share2, Table2, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState, type ReactNode } from "react"
@@ -88,7 +90,7 @@ function RowMenu({ items }: { items: Array<{ label: string; icon: typeof Pencil;
   </div>
 }
 
-export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, dir, folders, allFolders, files, sharedFiles, documentSearchEnabled = false, contentMatches = [], scopeFolderName = null }: {
+export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, dir, folders, allFolders, files, sharedFiles, documentSearchEnabled = false, contentMatches = [], scopeFolderName = null, usage }: {
   workspaceId: string
   tab: "mine" | "shared"
   folderId: string | null
@@ -107,16 +109,24 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   documentSearchEnabled?: boolean
   contentMatches?: ContentMatchRow[]
   scopeFolderName?: string | null
+  /** Fed straight into the Extract overlay's quota meter when "Upload" creates a new file. */
+  usage: WorkspaceUsage
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const base = `/workspaces/${workspaceId}/files`
+  // This list's own page (folder nav, search, sort) and a row/newly created file's own sheet both
+  // hang off the same /files prefix.
+  const pageBase = `/workspaces/${workspaceId}/files`
+  const fileBase = pageBase
   const rows = tab === "shared" ? sharedFiles : files
 
   const [marked, setMarked] = useState<Set<string>>(new Set())
   const anchor = useRef<number | null>(null)
   const [searchValue, setSearchValue] = useState(search)
   const [creating, setCreating] = useState(false)
+  // The file an "Upload" just created, so the Extract overlay can open in place instead of
+  // navigating into the (now upload-free) sheet.
+  const [uploadFileId, setUploadFileId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [newFolder, setNewFolder] = useState<{ name: string } | null>(null)
   const [renaming, setRenaming] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null)
@@ -144,7 +154,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
     const params = new URLSearchParams(searchParams.toString())
     for (const [key, value] of Object.entries(changes)) { if (value === null || value === "") params.delete(key); else params.set(key, value) }
     const query = params.toString()
-    return query ? `${base}?${query}` : base
+    return query ? `${pageBase}?${query}` : pageBase
   }
 
   // Search is URL-driven, matching how the sheet page already threads ?status= and ?q=.
@@ -185,14 +195,18 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
     anchor.current = null
   }
 
-  /** Lido creates and navigates with no dialog — the file is named "untitled" and renamed
-   * inline later, so nothing is asked up front. */
-  const newFile = async (openExtract = false) => {
+  /** The one way to create a file: creates it with no dialog — named "untitled", renamed inline
+   * later — then opens the Extract overlay right here, which offers both a normal file picker
+   * and an "upload a whole folder" option inside it. A separate "New file" button was redundant
+   * with this: closing the overlay without uploading anything leaves exactly the same empty,
+   * untitled sheet "New file" used to create directly. */
+  const newFile = async () => {
     setCreating(true)
     try {
       const result = await createFileAction(workspaceId, folderId)
       if (!result.success || !result.data) { toast.error(result.error || "Could not create the file"); return }
-      router.push(`${base}/${result.data.fileId}/sheet${openExtract ? "?extract=1" : ""}`)
+      setUploadFileId(result.data.fileId)
+      router.refresh()
     } catch {
       toast.error("Could not reach the server — no file was created")
     } finally { setCreating(false) }
@@ -279,7 +293,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   )
 
   const fileRow = (file: FileRowData, index: number) => {
-    const href = tab === "shared" ? `/shared/${file.id}` : `${base}/${file.id}`
+    const href = tab === "shared" ? `/shared/${file.id}` : `${fileBase}/${file.id}`
     return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-stone-50"}>
       <td className="border-b px-3 py-2">
         {tab === "mine" && <input type="checkbox" aria-label={`Select ${file.name}`} className="h-4 w-4 accent-emerald-600" checked={marked.has(file.id)}
@@ -321,7 +335,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
     return <tr key={`content-${match.documentId}`} className="hover:bg-stone-50">
       <td className="border-b px-3 py-2"></td>
       <td colSpan={4} className="border-b px-3 py-2">
-        <Link href={`${base}/${match.fileId}/sheet?${params.toString()}`} className="block">
+        <Link href={`${fileBase}/${match.fileId}/sheet?${params.toString()}`} className="block">
           <span className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />
             <span className="truncate font-medium text-stone-800" title={match.filename}>{match.filename}</span>
@@ -349,10 +363,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
           <FolderPlus className="h-4 w-4" />New folder
         </button>
         <button type="button" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={creating} onClick={() => void newFile()}>
-          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}New file
-        </button>
-        <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50" disabled={creating} onClick={() => void newFile(true)}>
-          <Upload className="h-4 w-4" />Upload
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Upload
         </button>
       </>}
       <div className="relative ml-auto w-64 max-w-full">
@@ -405,7 +416,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
             <td className="border-b px-3 py-2"></td>
             <td className="border-b px-3 py-2">
               <Link href={withParams({ folder: folder.id })} className="inline-flex items-center gap-2 font-medium text-stone-800 hover:text-emerald-800">
-                <Folder className="h-4 w-4 shrink-0 text-stone-400" />{folder.name}
+                <Folder className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500" />{folder.name}
               </Link>
             </td>
             <td className="border-b px-3 py-2 text-stone-400">{folder.fileCount} file{folder.fileCount === 1 ? "" : "s"}</td>
@@ -479,5 +490,15 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       confirmLabel={busy ? "Deleting…" : "Delete"}
       onConfirm={() => void confirmDelete()}
       onCancel={() => setConfirming(null)} />
+
+    {uploadFileId && <ExtractOverlay
+      workspaceId={workspaceId}
+      fileId={uploadFileId}
+      fileName="untitled"
+      template={null}
+      usage={usage}
+      sheetCount={0}
+      documentSearchEnabled={documentSearchEnabled}
+      onClose={() => { setUploadFileId(null); router.refresh() }} />}
   </div>
 }

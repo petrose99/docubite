@@ -1,12 +1,10 @@
-import type { SheetTemplate } from "@/components/extract/types"
 import { SheetView } from "@/components/sheet/sheet-view"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
-import { parseTemplateFields } from "@/lib/document-templates"
 import { prisma } from "@/lib/db"
-import { getFileTemplates, getWorkspaceFile } from "@/models/files"
+import { getWorkspaceFile } from "@/models/files"
 import { ensureFileWorkbook } from "@/models/spreadsheets"
-import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
+import { requireWorkspaceRole } from "@/models/workspaces"
 import type { IWorkbookData } from "@univerjs/presets"
 import { notFound } from "next/navigation"
 
@@ -25,12 +23,12 @@ function parseSourceParams(query: { doc?: string; page?: string; bb?: string }):
   return { doc: query.doc, page, bbox }
 }
 
-/** The Lido-style spreadsheet workspace, scoped to one file: a file bar on top, the grid
- * filling everything below it, and the Extract Data panel floating over the grid from the
- * button on its Start toolbar. */
+/** The Lido-style spreadsheet workspace, scoped to one file: a file bar on top and the grid
+ * filling everything below it. Purely for viewing and editing rows that already landed —
+ * uploading and extraction happen on Home/Files or the file's own hub page instead. */
 export default async function SheetPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string; fileId: string }>
-  searchParams: Promise<{ template?: string; doc?: string; page?: string; bb?: string; extract?: string }>
+  searchParams: Promise<{ doc?: string; page?: string; bb?: string }>
 }) {
   const [{ workspaceId, fileId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
   await requireWorkspaceRole(workspaceId, user.id)
@@ -47,52 +45,12 @@ export default async function SheetPage({ params, searchParams }: {
 
   // The workbook is brought up to date with extraction before it is handed to the client, so a
   // file whose documents were extracted while nothing was watching still opens with its rows.
-  const [templates, usage, workbook] = await Promise.all([
-    getFileTemplates(workspaceId, fileId),
-    getWorkspaceUsage(workspaceId),
-    ensureFileWorkbook(workspaceId, fileId),
-  ])
-
-  // Which worksheet the Extract panel configures. `?template=` selects one; otherwise the
-  // file's first, which is the tab the grid opens on.
-  const selected = templates.find((candidate) => candidate.code === query.template) || templates[0] || null
-  const currentVersion = selected?.versions[0]
+  const workbook = await ensureFileWorkbook(workspaceId, fileId)
 
   const [documentCount, queued] = await Promise.all([
     prisma.document.count({ where: { fileId } }),
     prisma.document.findMany({ where: { fileId, status: { in: ["received", "queued", "processing"] } }, select: { id: true }, take: 100 }),
   ])
-
-  const template: SheetTemplate | null = selected && currentVersion
-    ? {
-        id: selected.id,
-        code: selected.code,
-        name: selected.name,
-        multiRow: selected.multiRow,
-        documentCount,
-        fields: parseTemplateFields(currentVersion.fields),
-        prompt: currentVersion.prompt || "",
-      }
-    : null
-
-  // Every worksheet's template, keyed by the Univer sheet id it seeded — so the client can swap
-  // the Extract panel's template the instant the user clicks a different sheet tab, with no
-  // re-fetch and no window where the panel shows one sheet's columns for another's tab.
-  const templatesBySheetId: Record<string, SheetTemplate> = Object.fromEntries(
-    templates.flatMap((candidate) => {
-      const version = candidate.versions[0]
-      if (!candidate.univerSheetId || !version) return []
-      return [[candidate.univerSheetId, {
-        id: candidate.id,
-        code: candidate.code,
-        name: candidate.name,
-        multiRow: candidate.multiRow,
-        documentCount,
-        fields: parseTemplateFields(version.fields),
-        prompt: version.prompt || "",
-      }]]
-    })
-  )
 
   return <SheetView
     workspaceId={workspaceId}
@@ -101,13 +59,8 @@ export default async function SheetPage({ params, searchParams }: {
     linkAccess={file.linkAccess}
     snapshot={(workbook?.snapshot as IWorkbookData | undefined) ?? null}
     rev={workbook?.rev ?? 0}
-    template={template}
-    templatesBySheetId={templatesBySheetId}
-    usage={usage}
-    sheetCount={templates.length}
     queuedIds={queued.map((document) => document.id)}
     hasRows={documentCount > 0}
     documentSearchEnabled={config.embeddings.enabled}
-    initialSource={initialSource}
-    initialExtractOpen={query.extract === "1"} />
+    initialSource={initialSource} />
 }

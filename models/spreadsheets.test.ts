@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/db", () => ({ prisma: {} }))
 vi.mock("@/prisma/client", () => ({ Prisma: {} }))
 
-const { saveWorkbook, StaleRevisionError } = await import("@/models/spreadsheets")
+const { saveWorkbook, ensureFileWorkbook, StaleRevisionError } = await import("@/models/spreadsheets")
 const { prisma } = await import("@/lib/db")
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,5 +51,38 @@ describe("saveWorkbook", () => {
     await expect(saveWorkbook({ ...input, rev: 4 })).rejects.toThrow(StaleRevisionError)
     await expect(saveWorkbook({ ...input, rev: 4 }).catch((error) => (error as InstanceType<typeof StaleRevisionError>).currentRev)).resolves.toBe(9)
     expect(db.spreadsheetWorkbook.findFirstOrThrow).not.toHaveBeenCalled()
+  })
+})
+
+describe("ensureFileWorkbook", () => {
+  beforeEach(() => {
+    db.documentTemplate = { findMany: vi.fn(), update: vi.fn() }
+    db.document = { findMany: vi.fn(), updateMany: vi.fn() }
+  })
+
+  // Uploading now happens from Home/Files or a file's own hub, never from the sheet — so a
+  // document can finish extracting while its file's sheet has NEVER been opened. This is the
+  // reconcile path that makes that safe: the first-ever load must still seed every ready
+  // document into the grid, not just the ones that happened to arrive while someone was watching.
+  it("seeds every ready document on the first-ever load, even though nothing was watching while they processed", async () => {
+    db.documentTemplate.findMany.mockResolvedValue([
+      { id: "tpl1", univerSheetId: null, name: "Sheet 1", multiRow: false, versions: [{ fields: [] }] },
+    ])
+    db.spreadsheetWorkbook.findFirst.mockResolvedValue(null) // no workbook yet: never opened
+    db.document.findMany.mockResolvedValue([
+      { id: "doc1", filename: "invoice.pdf", templateId: "tpl1", reviewedData: {}, rawExtraction: null, confidence: null },
+    ])
+    db.spreadsheetWorkbook.create.mockResolvedValue({ rev: 1, snapshot: { id: "file", sheets: {} }, updatedAt: new Date(0) })
+
+    const result = await ensureFileWorkbook("ws", "file")
+
+    expect(result?.rev).toBe(1)
+    expect(db.document.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspaceId: "ws", fileId: "file", status: { notIn: ["received", "queued", "processing", "failed"] } }),
+    }))
+    // First-ever load takes every finished document — no `sheetAppliedAt: null` filter, since
+    // there is no existing workbook yet for anything to have been applied to.
+    expect(db.document.findMany.mock.calls[0][0].where.sheetAppliedAt).toBeUndefined()
+    expect(db.document.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ["doc1"] } } }))
   })
 })

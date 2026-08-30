@@ -5,7 +5,8 @@
       "name": "docubite-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 7331
+      "port": 7331,
+      "autoPort": false
     }
   ]
 }
