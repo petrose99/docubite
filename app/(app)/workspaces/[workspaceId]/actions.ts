@@ -14,7 +14,7 @@ import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
 import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
-import { addDomainPackToFile, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
+import { addDomainPackToFile, createFile, createFolder, deleteFileIfEmpty, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
 import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
@@ -369,6 +369,20 @@ export async function createFileAction(workspaceId: string, folderId: string | n
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
+}
+
+/** Companion to createFileAction's "Upload" flow: closing the Extract overlay without uploading
+ * anything should not leave a stray empty file behind. No-ops if the file picked up any documents
+ * in the meantime, so it is safe to call unconditionally on close. */
+export async function discardEmptyFileAction(workspaceId: string, fileId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  const membership = await requireMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
+  try {
+    await deleteFileIfEmpty(workspaceId, fileId, user.id)
+    revalidatePath(paths(workspaceId).files)
+    return { success: true, data: null }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not clean up the file") } }
 }
 
 export async function renameFileAction(workspaceId: string, fileId: string, name: string): Promise<ActionState<{ name: string }>> {

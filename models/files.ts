@@ -366,6 +366,18 @@ export async function deleteFiles(workspaceId: string, fileIds: string[], actorI
   return { deleted }
 }
 
+/** Cleans up after "Upload" -> cancel: that button creates the file first so the Extract overlay
+ * has somewhere to open into (see files-browser.tsx's newFile), which means closing the overlay
+ * without uploading anything would otherwise leave a stray empty, untitled file behind. Only
+ * deletes when the file truly has no documents — one already holding real data is never touched,
+ * even if this is called on it by mistake. */
+export async function deleteFileIfEmpty(workspaceId: string, fileId: string, actorId: string) {
+  const documentCount = await prisma.document.count({ where: { workspaceId, fileId } })
+  if (documentCount > 0) return { deleted: false }
+  await deleteFiles(workspaceId, [fileId], actorId)
+  return { deleted: true }
+}
+
 export async function createFolder(input: { workspaceId: string; name: string; parentId?: string | null }) {
   if (input.parentId && !(await prisma.documentFolder.findFirst({ where: { id: input.parentId, workspaceId: input.workspaceId }, select: { id: true } }))) throw new Error("folder_not_found")
   return prisma.documentFolder.create({ data: { workspaceId: input.workspaceId, parentId: input.parentId || null, name: cleanName(input.name, "New folder") } })

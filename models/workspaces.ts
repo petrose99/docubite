@@ -6,8 +6,7 @@ import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
-import { createFile, deleteFiles } from "@/models/files"
-import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
+import { deleteFiles } from "@/models/files"
 import { User } from "@/prisma/client"
 import crypto, { randomBytes } from "crypto"
 import { cache } from "react"
@@ -36,8 +35,6 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
       members: { create: { userId: user.id, role: "owner" } },
     },
   })
-  // The worksheets a new user starts with now live on their first file, not on the workspace.
-  await createFile({ workspaceId: workspace.id, userId: user.id, templates: seedTemplatesForIndustry("finance") })
   return workspace
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAction, duplicateFileAction, moveFilesAction, renameFileAction, renameFolderAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAction, discardEmptyFileAction, duplicateFileAction, moveFilesAction, renameFileAction, renameFolderAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ExtractOverlay } from "@/components/extract/extract-overlay"
 import type { WorkspaceUsage } from "@/components/extract/types"
 import { ShareDialog } from "@/components/files/share-dialog"
@@ -499,6 +499,11 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       usage={usage}
       sheetCount={0}
       documentSearchEnabled={documentSearchEnabled}
-      onClose={() => { setUploadFileId(null); router.refresh() }} />}
+      onClose={() => {
+        const fileId = uploadFileId
+        setUploadFileId(null)
+        if (fileId) void discardEmptyFileAction(workspaceId, fileId).finally(() => router.refresh())
+        else router.refresh()
+      }} />}
   </div>
 }
