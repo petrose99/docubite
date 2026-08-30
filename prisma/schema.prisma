@@ -69,12 +69,9 @@ model Workspace {
    * their files live by default. "team" — a shared workspace, creatable only on a plan whose
    * member limit is above one. */
   kind            String                 @default("personal")
-  /// "finance" | "healthcare" | "construction" | "logistics" | "general" (types/industry.ts).
-  /// Which industry this workspace is: what gets seeded into a new file, which nav entries show
-  /// (via lib/modules), and which AI prompt preamble is used. Locked once the workspace has any
-  /// content — see setIndustry in models/workspaces.ts — so switching never leaves content seeded
-  /// for the wrong industry behind.
-  industry        String                 @default("general")
+  /// "finance" (types/industry.ts) — the app is finance-only; kept as a string column rather than
+  /// dropped outright since a handful of nav/AI-prompt code paths still key off it.
+  industry        String                 @default("finance")
   aiEnabled       Boolean                @default(true) @map("ai_enabled")
   /// F15: when on, this workspace is presumed to handle ePHI. setLinkAccess refuses anything but
   /// "none", getFileAccess ignores an existing linkAccess for a signed-out viewer, and the share
@@ -102,10 +99,7 @@ model Workspace {
   folders         DocumentFolder[]
   files           DocumentFile[]
   jobs            DocumentProcessingJob[]
-  usagePeriods    WorkspaceUsagePeriod[]
-  subscription    WorkspaceSubscription?
   auditEvents     DocumentAuditEvent[]
-  webhookEvents   StripeWebhookEvent[]
   workbooks       SpreadsheetWorkbook[]
   aiFormulaCache  AiFormulaCache[]
   extractionShapes ExtractionShape[]
@@ -167,46 +161,6 @@ model WorkspaceInvitation {
 
   @@index([workspaceId, email])
   @@map("workspace_invitations")
-}
-
-model WorkspaceSubscription {
-  id                   String    @id @default(uuid()) @db.Uuid
-  workspaceId          String    @unique @map("workspace_id") @db.Uuid
-  planCode             String    @default("starter") @map("plan_code")
-  status               String    @default("trialing")
-  stripeCustomerId     String?   @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
-  currentPeriodStart   DateTime? @map("current_period_start")
-  currentPeriodEnd     DateTime? @map("current_period_end")
-  /// End of the free trial the workspace was created on. Nullable because rows created before
-  /// trials existed have no trial to expire, and because a workspace that has converted to a
-  /// paid subscription is governed by currentPeriodEnd instead.
-  trialEndsAt          DateTime? @map("trial_ends_at")
-  /// Set when the customer cancels in the Stripe portal: the subscription stays `active` until
-  /// currentPeriodEnd and then stops. Without it the billing card would say "Renews …" right up
-  /// to the day the workspace goes dark.
-  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
-  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@map("workspace_subscriptions")
-}
-
-model WorkspaceUsagePeriod {
-  id                    String    @id @default(uuid()) @db.Uuid
-  workspaceId           String    @map("workspace_id") @db.Uuid
-  periodStart           DateTime  @map("period_start")
-  periodEnd             DateTime  @map("period_end")
-  inboundDocumentCount  Int       @default(0) @map("inbound_document_count")
-  aiExtractionCount     Int       @default(0) @map("ai_extraction_count")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@unique([workspaceId, periodStart])
-  @@index([workspaceId, periodEnd])
-  @@map("workspace_usage_periods")
 }
 
 model DocumentFolder {
@@ -760,26 +714,6 @@ model AiFormulaCache {
 
   @@unique([workspaceId, hash])
   @@map("ai_formula_cache")
-}
-
-model StripeWebhookEvent {
-  id            String     @id @default(uuid()) @db.Uuid
-  stripeEventId String     @unique @map("stripe_event_id")
-  workspaceId   String?    @map("workspace_id") @db.Uuid
-  type          String
-  status        String     @default("pending")
-  attempts      Int        @default(0)
-  errorCode     String?    @map("error_code")
-  processingStartedAt DateTime? @map("processing_started_at")
-  leaseUntil    DateTime?  @map("lease_until")
-  processedAt   DateTime?  @map("processed_at")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-
-  @@index([workspaceId])
-  @@index([status, leaseUntil])
-  @@map("stripe_webhook_events")
 }
 
 /// A workspace-scoped API key for the public /api/v1 surface. Only the sha256 of the secret is

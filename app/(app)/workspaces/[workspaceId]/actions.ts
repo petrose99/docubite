@@ -16,8 +16,6 @@ import { expandZipBuffer } from "@/lib/zip-ingestion"
 import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
 import { addDomainPackToFile, createFile, createFolder, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
 import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
-import { consumeWorkspaceQuota, setIndustry } from "@/models/workspaces"
-import { parseIndustry } from "@/types/industry"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
@@ -255,11 +253,9 @@ export async function suggestTemplateFieldsAction(workspaceId: string, formData:
           return { success: true, data: { suggestion: null, matchedShape: { id: matched.id, name: matched.name, docType: matched.docType ?? "", entity: matched.entity ?? "", fields: parsed.data, prompt: matched.prompt ?? "", multiRow: matched.multiRow, lastRunAt: matched.updatedAt.toISOString(), lastFilename } } }
         }
       }
-      await consumeWorkspaceQuota(workspaceId, "ai")
       return { success: true, data: { suggestion: await suggestFieldsFromContents(contents), matchedShape: null } }
     }
 
-    await consumeWorkspaceQuota(workspaceId, "ai")
     return { success: true, data: { suggestion: await suggestFieldsFromBuffer({ buffer, mimeType: file.type, filename: file.name, singleColumn }), matchedShape: null } }
   } catch (error) { return { success: false, error: errorMessage(error, "Suggestion failed") } }
 }
@@ -348,20 +344,6 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id, ["owner"])
   if (!membership) return { success: false, error: NO_ACCESS }
-  // hipaaMode presumes ePHI, which is healthcare-industry territory — see setIndustry. An empty
-  // workspace turning it on for the first time is auto-switched into healthcare rather than
-  // refused; one that already has content in another industry is refused rather than silently
-  // reclassifying it.
-  if (enabled && membership.workspace.industry !== "healthcare") {
-    try {
-      await setIndustry({ workspaceId, actorId: user.id, mode: "healthcare" })
-    } catch (error) {
-      if (error instanceof Error && error.message === "product_mode_locked") {
-        return { success: false, error: "Switch this workspace to healthcare industry in Workspace settings before enabling HIPAA mode — it already has files in another industry." }
-      }
-      return { success: false, error: "Could not change the HIPAA mode setting" }
-    }
-  }
   try {
     await prisma.$transaction([
       prisma.workspace.update({ where: { id: workspaceId }, data: { hipaaMode: enabled } }),
@@ -374,26 +356,6 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
   } catch { return { success: false, error: "Could not change the HIPAA mode setting" } }
 }
 
-/** The counterpart picker in Workspace settings: manual switches only, since hipaaMode's own
- * toggle already drives the auto-switch into healthcare above. Locked once the workspace has any
- * content — see setIndustry. */
-export async function setWorkspaceIndustryAction(workspaceId: string, mode: string): Promise<ActionState<null>> {
-  const user = await getCurrentUser()
-  if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
-  const parsed = parseIndustry(mode)
-  if (!parsed) return { success: false, error: "Invalid industry" }
-  try {
-    await setIndustry({ workspaceId, actorId: user.id, mode: parsed })
-    revalidatePath(paths(workspaceId).workspace)
-    return { success: true, data: null }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown_error"
-    if (message === "product_mode_locked") return { success: false, error: "This workspace already has files — industry can no longer be changed." }
-    if (message === "hipaa_mode_requires_clinical") return { success: false, error: "Turn off HIPAA mode in this settings page before switching industry." }
-    return { success: false, error: "Could not change the industry" }
-  }
-}
-
 /* ------------------------------------------------------------------ files and folders --- */
 
 /** Matches Lido's asymmetry: `New file` creates and navigates with no dialog, so this returns
@@ -403,7 +365,7 @@ export async function createFileAction(workspaceId: string, folderId: string | n
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: seedTemplatesForIndustry(parseIndustry(membership.workspace.industry) ?? "general") })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: seedTemplatesForIndustry("finance") })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }

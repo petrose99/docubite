@@ -1,9 +1,6 @@
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import { BLANK_BIAS_TERMS, BLANK_TEMPLATES } from "@/lib/domains/blank"
-import { CONSTRUCTION_BIAS_TERMS, CONSTRUCTION_TEMPLATES } from "@/lib/domains/construction"
 import { FINANCE_BIAS_TERMS, FINANCE_OPTIONAL_TEMPLATES, FINANCE_TEMPLATES } from "@/lib/domains/finance"
-import { LOGISTICS_BIAS_TERMS, LOGISTICS_TEMPLATES } from "@/lib/domains/logistics"
-import { PATHOLOGY_BIAS_TERMS, PATHOLOGY_TEMPLATES } from "@/lib/domains/pathology"
 
 /** The domain registry: every schema adapter the app knows about, keyed by template code.
  *
@@ -11,9 +8,8 @@ import { PATHOLOGY_BIAS_TERMS, PATHOLOGY_TEMPLATES } from "@/lib/domains/patholo
  * rather than branching on it, so supporting a new document domain means adding a pack file and
  * one line below — no changes to the pipeline.
  *
- * IMPORTANT: only the finance pack is seeded into new files (models/files.ts, via
- * DEFAULT_DOCUMENT_TEMPLATES). Pathology and logistics are registered but opt-in, so registering a
- * domain never changes what an existing or newly created file contains. */
+ * The app is finance-only: only the finance pack is seeded into new files (models/files.ts, via
+ * DEFAULT_DOCUMENT_TEMPLATES), and "general" (blank.ts) exists solely to power dictation. */
 
 export type DomainAdapter = {
   /** Template code — unique across all domains, and the join key to DocumentTemplate.code. */
@@ -21,7 +17,7 @@ export type DomainAdapter = {
   name: string
   documentType: string
   /** The domain this template belongs to, for domain-scoped queries and ASR term selection. */
-  domain: "finance" | "pathology" | "logistics" | "construction" | "general"
+  domain: "finance" | "general"
   isSystem: boolean
   multiRow: boolean
   fields: DocumentFieldDefinition[]
@@ -59,18 +55,9 @@ function pack(
   }))
 }
 
-const PATHOLOGY_PROMPT = [
-  "This is a clinical pathology document. Quote diagnostic statements as written — never paraphrase,",
-  "summarize, or infer a diagnosis, grade, or stage that is not explicitly stated.",
-  "If a value is stated but unreadable, omit it rather than guessing.",
-].join(" ")
-
 export const DOMAIN_ADAPTERS: DomainAdapter[] = [
   ...pack(FINANCE_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
   ...pack(FINANCE_OPTIONAL_TEMPLATES, "finance", FINANCE_BIAS_TERMS, null, false, "table"),
-  ...pack(PATHOLOGY_TEMPLATES, "pathology", PATHOLOGY_BIAS_TERMS, PATHOLOGY_PROMPT, false, "soap_note"),
-  ...pack(LOGISTICS_TEMPLATES, "logistics", LOGISTICS_BIAS_TERMS, null, false, "table"),
-  ...pack(CONSTRUCTION_TEMPLATES, "construction", CONSTRUCTION_BIAS_TERMS, null, false, "table"),
   ...pack(BLANK_TEMPLATES, "general", BLANK_BIAS_TERMS, null, true, "narrative"),
 ]
 
@@ -81,13 +68,10 @@ export function findDomainAdapter(code: string | null | undefined): DomainAdapte
 
 /** The domain packs a file can opt into from the templates settings page. General is excluded
  * because it is the ephemeral dictation-only pack, not something with worksheets to add to a
- * file. Finance IS offered now (WP8) — unlike pathology/logistics its "pack" is only the four
- * optional templates (bank_statement, purchase_order, remittance_advice, supplier_statement);
- * the seeded four (invoice, receipt, expense_receipt, generic) are filtered out below since every
- * file already has them. Adding a pack here is exactly what "ship the domain packs" means:
- * pathology and logistics have been fully built and registered since Stage 3/4, just never
- * reachable from the UI. */
-const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { finance: "Finance (optional)", pathology: "Pathology", logistics: "Logistics", construction: "Construction" }
+ * file. Finance's "pack" is only the four optional templates (bank_statement, purchase_order,
+ * remittance_advice, supplier_statement); the seeded four (invoice, receipt, expense_receipt,
+ * generic) are filtered out below since every file already has them. */
+const EXTRACTION_PACK_LABELS: Partial<Record<DomainAdapter["domain"], string>> = { finance: "Finance (optional)" }
 
 /** Codes already seeded into every new file (models/files.ts) — excluded from every pack so the
  * picker never offers to "add" a worksheet a file already has. Only finance has any overlap. */
@@ -129,4 +113,4 @@ export function biasTermsForTemplate(code: string | null | undefined): string[] 
   return [...(findDomainAdapter(code)?.biasTerms ?? [])]
 }
 
-export { BLANK_TEMPLATES, CONSTRUCTION_TEMPLATES, FINANCE_TEMPLATES, LOGISTICS_TEMPLATES, PATHOLOGY_TEMPLATES }
+export { BLANK_TEMPLATES, FINANCE_TEMPLATES }
