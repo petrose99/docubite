@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { searchDocumentsByContent } from "@/lib/retrieval"
 import { folderTrail, listAllFolders, listFiles, listFilesSharedWith, listFolders, type FileSortField } from "@/models/files"
-import { requireWorkspaceRole } from "@/models/workspaces"
+import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
 import Link from "next/link"
 
 /** The folder being searched from, and its descendants — the "in this folder" side of the grouped
@@ -26,8 +26,9 @@ function descendantFolderIds(allFolders: Array<{ id: string; parentId: string | 
   return ids
 }
 
-/** The landing page. Lido drops you here, not into a spreadsheet: files and folders, a search
- * box, My Files / Shared With Me, and the two creation affordances. */
+/** Files: the file/folder list, search, My Files / Shared With Me, and the creation affordances.
+ * A destination of its own — Home links here rather than embedding the list, so Home stays a
+ * short landing page and Files stays the one place to actually browse and manage files. */
 export default async function FilesPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string }>
   searchParams: Promise<{ folder?: string; q?: string; sort?: string; dir?: string; tab?: string }>
@@ -45,13 +46,14 @@ export default async function FilesPage({ params, searchParams }: {
   // other workspaces, which this search does not span.
   const contentSearchOn = tab === "mine" && !!search && config.embeddings.enabled
 
-  const [files, folders, allFolders, trail, shared, contentMatches] = await Promise.all([
+  const [files, folders, allFolders, trail, shared, contentMatches, usage] = await Promise.all([
     tab === "mine" ? listFiles(workspaceId, { folderId, query: search, sort, dir }) : Promise.resolve([]),
     tab === "mine" && !search ? listFolders(workspaceId, { parentId: folderId }) : Promise.resolve([]),
     tab === "mine" ? listAllFolders(workspaceId) : Promise.resolve([]),
     folderTrail(workspaceId, folderId),
     tab === "shared" ? listFilesSharedWith(user.email) : Promise.resolve([]),
     contentSearchOn ? searchDocumentsByContent(workspaceId, search, { limit: 12, actorId: user.id }) : Promise.resolve([]),
+    getWorkspaceUsage(workspaceId),
   ])
 
   // Grouped results only exist when searching from inside a folder with the feature on. `inScope`
@@ -81,6 +83,7 @@ export default async function FilesPage({ params, searchParams }: {
       dir={dir}
       documentSearchEnabled={config.embeddings.enabled}
       scopeFolderName={scopeFolderName}
+      usage={usage}
       folders={folders.map((folder) => ({ id: folder.id, name: folder.name, fileCount: folder._count.files, folderCount: folder._count.children }))}
       allFolders={allFolders}
       files={files.map((file) => ({

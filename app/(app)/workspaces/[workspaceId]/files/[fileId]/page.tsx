@@ -1,11 +1,15 @@
+import type { SheetTemplate } from "@/components/extract/types"
 import { FileHeader } from "@/components/files/file-header"
+import { FileHubUploadButton } from "@/components/files/file-hub-upload-button"
 import { getCurrentUser } from "@/lib/auth"
+import config from "@/lib/config"
+import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listWorkspaceDocuments } from "@/models/documents"
 import { getFileTemplates, getWorkspaceFile } from "@/models/files"
 import { listOpenReviewTasksForFile } from "@/models/review-tasks"
-import { requireWorkspaceRole } from "@/models/workspaces"
-import { ClipboardCheck, Download, FileText, Table2, Upload } from "lucide-react"
+import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
+import { ClipboardCheck, Download, FileText, Table2 } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -30,13 +34,22 @@ export default async function FileHubPage({ params }: { params: Promise<{ worksp
   const capabilities = await getWorkspaceCapabilities(workspaceId)
   const hasReviewQueue = capabilities.has("review-queue")
 
-  const [documents, templates, reviewTasks] = await Promise.all([
+  const [documents, templates, reviewTasks, usage] = await Promise.all([
     listWorkspaceDocuments(workspaceId, { fileId }),
     getFileTemplates(workspaceId, fileId),
     hasReviewQueue ? listOpenReviewTasksForFile(workspaceId, fileId) : Promise.resolve([]),
+    getWorkspaceUsage(workspaceId),
   ])
 
   const base = `/workspaces/${workspaceId}/files/${fileId}`
+
+  // Which worksheet "Upload documents" adds to — the file's first, same default the sheet used
+  // to open on. Mirrors the shape sheet/page.tsx builds for the same purpose.
+  const selected = templates[0]
+  const currentVersion = selected?.versions[0]
+  const template: SheetTemplate | null = selected && currentVersion
+    ? { id: selected.id, code: selected.code, name: selected.name, multiRow: selected.multiRow, documentCount: documents.length, fields: parseTemplateFields(currentVersion.fields), prompt: currentVersion.prompt || "" }
+    : null
 
   return <div className="mx-auto w-full max-w-5xl">
     <FileHeader workspaceId={workspaceId} fileId={fileId} name={file.name} linkAccess={file.linkAccess} />
@@ -46,9 +59,7 @@ export default async function FileHubPage({ params }: { params: Promise<{ worksp
         <Link href={`${base}/sheet`} className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
           <Table2 className="h-4 w-4" />Open spreadsheet
         </Link>
-        <Link href={`${base}/sheet?extract=1`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50">
-          <Upload className="h-4 w-4" />Upload documents
-        </Link>
+        <FileHubUploadButton workspaceId={workspaceId} fileId={fileId} fileName={file.name} template={template} usage={usage} sheetCount={templates.length} documentSearchEnabled={config.embeddings.enabled} />
         <Link href={`${base}/export?format=xlsx`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50">
           <Download className="h-4 w-4" />Export xlsx
         </Link>
