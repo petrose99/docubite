@@ -1,12 +1,11 @@
 import { Reveal } from "@/components/marketing/reveal"
-import { HeartPulse, KeyRound, Lock, ScanEye, ShieldCheck, ToggleLeft } from "lucide-react"
+import { KeyRound, Lock, ScanEye, ShieldCheck, ToggleLeft } from "lucide-react"
 import Link from "next/link"
 
 const points = [
   { icon: Lock, title: "Private encrypted storage", text: "Source documents sit in KMS-encrypted object storage. Browsers never talk to it directly — every view is streamed through the application." },
   { icon: KeyRound, title: "MFA, SSO and per-file link control", text: "Owner and member roles, per-file link sharing you can revoke, and invitations that expire on their own." },
   { icon: ShieldCheck, title: "Append-only audit trail, 6-year archival", text: "Every access and edit is logged and cannot be altered after the fact, retained for six years — the window most compliance regimes ask for." },
-  { icon: HeartPulse, title: "HIPAA mode", text: "A workspace-wide switch that enforces MFA for every member and disables link sharing outright — for the documents that can never be one careless click from public." },
   { icon: ScanEye, title: "Malware-scanned before it's touched", text: "Every upload is scanned before it is rendered, stored for viewing, or sent anywhere. In production the scan fails closed: no verdict, no processing." },
   { icon: ToggleLeft, title: "AI you can switch off", text: "A per-workspace kill switch turns off every AI call — extraction falls back to review-only, and shared links never had it to begin with." },
 ]

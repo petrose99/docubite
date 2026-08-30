@@ -1,25 +1,41 @@
+import { AiBand } from "@/components/marketing/sections/ai-band"
 import { CtaBand } from "@/components/marketing/sections/cta-band"
+import { ExtractionCore } from "@/components/marketing/sections/extraction-core"
 import { Faq } from "@/components/marketing/sections/faq"
+import { FolderReport } from "@/components/marketing/sections/folder-report"
 import { Hero } from "@/components/marketing/sections/hero"
-import { ModeChooser } from "@/components/marketing/sections/mode-chooser"
+import { IntegrationsApi } from "@/components/marketing/sections/integrations-api"
+import { Provenance } from "@/components/marketing/sections/provenance"
+import { RepeatingDocs } from "@/components/marketing/sections/repeating-docs"
+import { Repositioning } from "@/components/marketing/sections/repositioning"
 import { Security } from "@/components/marketing/sections/security"
+import { Sharing } from "@/components/marketing/sections/sharing"
+import { SolutionsTeaser } from "@/components/marketing/sections/solutions-teaser"
 import { TrustStrip } from "@/components/marketing/sections/trust-strip"
+import { Workflow } from "@/components/marketing/sections/workflow"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: { absolute: "DocuBite — Turn documents and dictation into data you can trust" },
-  description: "DocuBite reads invoices, receipts and bank statements — scans, photos and handwriting included — into a live sheet where every value traces to its source. No document to scan? Dictate it instead and get back a proper report, not just a transcript.",
+  title: { absolute: "DocuBite — Turn documents into data you can trust" },
+  description: "DocuBite reads invoices, receipts and bank statements — scans, photos and handwriting included — into a live sheet where every value traces to its source. Self-serve, no credit card required.",
 }
 
-/** The light chooser WP6 asks for: a visitor picks accounting or clinical here, then gets the
- * deep pitch on its own page (app/(marketing)/accounting, app/(marketing)/clinical) — this used
- * to carry every section for both at once, which is exactly the mixed positioning the split
- * exists to fix. */
+/** The app is finance-only, so the homepage carries the same pitch the old /accounting page did —
+ * there is no other mode to choose. */
 export default function Home() {
   return <>
-    <Hero />
+    <Hero variant="accounting" />
     <TrustStrip />
-    <ModeChooser />
+    <ExtractionCore />
+    <Repositioning />
+    <AiBand />
+    <RepeatingDocs />
+    <FolderReport />
+    <Workflow />
+    <Provenance />
+    <Sharing />
+    <IntegrationsApi />
+    <SolutionsTeaser />
     <Security />
     <Faq />
     <CtaBand />

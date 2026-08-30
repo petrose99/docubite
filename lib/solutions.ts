@@ -1,4 +1,4 @@
-import { FileText, FlaskConical, HardHat, Landmark, Mic, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, Truck, type LucideIcon } from "lucide-react"
+import { FileText, Landmark, PenLine, Plug, Receipt, ScanLine, Sheet, ShieldCheck, type LucideIcon } from "lucide-react"
 
 /** The Solutions mega-menu and the /solutions/[slug] pages read from this one list, so a new
  * solution is a single entry here rather than a page plus a nav edit that can drift apart.
@@ -130,7 +130,8 @@ export type Industry = {
 }
 
 /** The industries teased on the homepage and detailed on /solutions#industries. Shared here (like
- * SOLUTIONS) so the two pages can never drift on which industries exist or what they're called. */
+ * SOLUTIONS) so the two pages can never drift on which industries exist or what they're called.
+ * DocuBite is finance-only, so this is a single entry. */
 export const INDUSTRIES: Industry[] = [
   {
     icon: Landmark,
@@ -148,69 +149,18 @@ export const INDUSTRIES: Industry[] = [
       "Total per supplier with the assistant, click any figure to its line",
     ],
   },
-  {
-    icon: FlaskConical,
-    name: "Healthcare & clinics",
-    tagline: "Less admin between the patient and the record.",
-    tags: ["Referral letters", "Lab result sheets", "Insurance claim forms", "Intake & consent forms"],
-    before: [
-      "Re-key referral and intake forms into the system by hand",
-      "Copy values off faxed, scanned or handwritten result sheets",
-      "Chase which form a value came from when a claim is queried",
-    ],
-    after: [
-      "Scan or upload the form — handwriting and faxes read fine",
-      "One template pulls the same fields every time, into a clean row",
-      "Every value stays pinned to the form it was read from, for the audit trail",
-    ],
-  },
-  {
-    icon: Truck,
-    name: "Logistics & supply chain",
-    tagline: "When the paperwork moves slower than the freight.",
-    tags: ["Bills of lading", "Delivery notes / PODs", "Packing lists", "Customs declarations"],
-    before: [
-      "Type BOL and delivery-note numbers off crumpled, signed paper",
-      "Match packing lists to invoices, line by line",
-      "Key customs fields under a clearance deadline",
-    ],
-    after: [
-      "Photograph the signed POD or drop the BOL PDF",
-      "Line items come out as rows — quantities and refs structured, not a blob",
-      "Ask the assistant to flag mismatches across the whole shipment folder, and diff this month's paperwork against last month's",
-    ],
-  },
-  {
-    icon: HardHat,
-    name: "Construction",
-    tagline: "Job-cost paperwork shouldn't lag the job by a month.",
-    tags: ["Subcontractor invoices", "Lien waivers", "Delivery tickets", "Timesheets", "Change orders"],
-    before: [
-      "Re-key subcontractor invoices against the wrong job or cost code",
-      "Chase down which lien waivers are conditional versus unconditional before releasing payment",
-      "Total timesheets and delivery tickets by hand at the end of the period",
-    ],
-    after: [
-      "Drop subcontractor invoices, waivers, tickets and timesheets in together",
-      "Retention, cost codes and waiver type land as their own fields, not buried in a scan",
-      "Ask the assistant which change orders are still pending approval, across every job",
-    ],
-  },
 ]
 
 /** The homepage's Product mega-menu, and the footer's Product column. Anchors into homepage
  * sections rather than dedicated pages — every target already exists and carries an id. */
 export type ProductLink = { href: string; name: string; tagline: string; icon: LucideIcon }
 
-// Anchors point at /accounting or /clinical, not the homepage — the homepage is a light chooser
-// (WP6) and no longer carries the deep sections these ids live on.
 export const PRODUCT_LINKS: ProductLink[] = [
-  { href: "/accounting#extraction", name: "Document extraction", tagline: "Invoices, receipts and scans into a live sheet", icon: FileText },
-  { href: "/clinical#dictation", name: "Dictation", tagline: "Speak a document into existence, nothing invented", icon: Mic },
-  { href: "/accounting#how", name: "AI in the sheet", tagline: "=AI() runs on your data, without leaving the cell", icon: Sheet },
-  { href: "/accounting#folders", name: "Folder reports", tagline: "Duplicates, gaps and what needs attention", icon: FileText },
-  { href: "/accounting#integrations", name: "Integrations & API", tagline: "QuickBooks, Xero, and a webhook-backed REST API", icon: Plug },
-  { href: "/accounting#security", name: "Security & compliance", tagline: "HIPAA mode, audit trail, malware scanning", icon: ShieldCheck },
+  { href: "/#extraction", name: "Document extraction", tagline: "Invoices, receipts and scans into a live sheet", icon: FileText },
+  { href: "/#how", name: "AI in the sheet", tagline: "=AI() runs on your data, without leaving the cell", icon: Sheet },
+  { href: "/#folders", name: "Folder reports", tagline: "Duplicates, gaps and what needs attention", icon: FileText },
+  { href: "/#integrations", name: "Integrations & API", tagline: "QuickBooks, Xero, and a webhook-backed REST API", icon: Plug },
+  { href: "/#security", name: "Security & compliance", tagline: "Audit trail, malware scanning", icon: ShieldCheck },
 ]
 
 export const getSolution = (slug: string) => SOLUTIONS.find((solution) => solution.slug === slug)

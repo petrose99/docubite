@@ -1,12 +1,11 @@
 import { DocTypeGrid, type DocCard } from "@/components/marketing/sections/doc-type-grid"
-import { INDUSTRIES } from "@/lib/solutions"
-import { ArrowRight, Check, Clock } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "Solutions",
-  description: "Pick the document, or the mess it arrived in, then see the before/after for your industry.",
+  description: "Pick the document, or the mess it arrived in, then see the before/after.",
 }
 
 const byType: DocCard[] = [
@@ -16,12 +15,6 @@ const byType: DocCard[] = [
   { name: "Bank statements", text: "Multi-page transaction tables into rows", icon: "Landmark" },
   { name: "Purchase orders", text: "PO number, supplier, line items, totals", icon: "Package" },
   { name: "Remittance advice", text: "Payer, payee, invoice allocations", icon: "Landmark" },
-  { name: "Referral letters", text: "Patient, referrer, reason, dates", icon: "Mail" },
-  { name: "Lab result sheets", text: "Test, value, reference range, date", icon: "FlaskConical" },
-  { name: "Insurance claims", text: "Claimant, policy no., amounts, codes", icon: "ShieldCheck" },
-  { name: "Bills of lading", text: "Shipper, consignee, container, weights", icon: "Truck" },
-  { name: "Delivery notes / PODs", text: "Order ref, items, quantities, signature", icon: "FileCheck" },
-  { name: "Packing lists", text: "SKU, description, quantity, cartons", icon: "ClipboardList" },
   { name: "Contracts & forms", text: "Parties, dates, terms, signatures", icon: "FileSignature" },
 ]
 
@@ -48,62 +41,13 @@ export default function SolutionsPage() {
 
     <section id="by-type" className="mx-auto max-w-6xl px-5 pt-11">
       <p className="text-xs font-semibold uppercase tracking-[.16em] text-stone-500">By document type</p>
-      <p className="mt-1.5 text-sm text-stone-500">A sample — from finance, healthcare and logistics. If yours isn&apos;t here, it&apos;s a custom template away.</p>
+      <p className="mt-1.5 text-sm text-stone-500">A sample. If yours isn&apos;t here, it&apos;s a custom template away.</p>
       <DocTypeGrid cards={byType} showCustomCard collapseAfter={8} />
 
       <p id="by-quality" className="mt-8 text-xs font-semibold uppercase tracking-[.16em] text-stone-500">By document quality</p>
       <DocTypeGrid cards={byQuality} />
-    </section>
 
-    <section id="industries" className="mx-auto max-w-6xl px-5 pt-20">
-      <p className="text-sm font-semibold uppercase tracking-[.16em] text-emerald-700">Industries</p>
-      <h2 className="mt-3 max-w-2xl font-display text-3xl font-bold tracking-[-0.03em] text-stone-950 sm:text-4xl">
-        If it&apos;s a document your team keys in by hand, it&apos;s a template in DocuBite.
-      </h2>
-      <p className="mt-4 max-w-xl text-[16.5px] leading-8 text-stone-600">
-        Here&apos;s the paperwork each team drowns in — and the day it stops being manual.
-      </p>
-
-      <div className="mt-10 flex flex-col gap-4">
-        {INDUSTRIES.map((industry) => (
-          <article key={industry.name} className="grid gap-8 rounded-[1.75rem] rounded-tr-lg border border-stone-200 bg-white p-6 sm:p-7 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
-            <div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700"><industry.icon className="h-[22px] w-[22px]" /></span>
-              <h3 className="mt-4 font-display text-[22px] font-bold tracking-[-0.02em] text-stone-950">{industry.name}</h3>
-              <p className="mt-2 text-[15px] leading-[1.55] text-stone-600">{industry.tagline}</p>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {industry.tags.map((tag) => (
-                  <span key={tag} className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600">{tag}</span>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[.08em] text-stone-400"><Clock className="h-3.5 w-3.5" />Today, by hand</p>
-                <ul className="mt-3 flex flex-col gap-2.5">
-                  {industry.before.map((item) => (
-                    <li key={item} className="flex gap-2 text-[13.5px] leading-[1.45] text-stone-500">
-                      <span className="mt-1.5 h-[5px] w-[5px] shrink-0 rounded-full bg-stone-300" />{item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[.08em] text-emerald-700"><Check className="h-3.5 w-3.5" />With DocuBite</p>
-                <ul className="mt-3 flex flex-col gap-2.5">
-                  {industry.after.map((item) => (
-                    <li key={item} className="flex gap-2 text-[13.5px] leading-[1.45] text-emerald-900">
-                      <Check className="mt-0.5 h-[15px] w-[15px] shrink-0 text-emerald-600" />{item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <p className="mt-5 max-w-xl text-sm leading-7 text-stone-500">
+      <p className="mt-8 max-w-xl text-sm leading-7 text-stone-500">
         Not on this list? Bring any recurring PDF, scan or photo — define its fields once with a custom template and DocuBite reads the rest the same way.
       </p>
     </section>

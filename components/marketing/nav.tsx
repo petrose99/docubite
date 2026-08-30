@@ -1,7 +1,7 @@
 "use client"
 
 import { Logo } from "@/components/marketing/logo"
-import { INDUSTRIES, PRODUCT_LINKS, SOLUTION_GROUPS, SOLUTIONS, solutionsByGroup } from "@/lib/solutions"
+import { PRODUCT_LINKS, SOLUTION_GROUPS, SOLUTIONS, solutionsByGroup } from "@/lib/solutions"
 import { ArrowRight, ChevronDown, Menu, X } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react"
 
 const solutionHref = (slug: string) => `/solutions/${slug}` as Route
 
-type MenuKey = "products" | "solutions" | "industries"
+type MenuKey = "products" | "solutions"
 
 /** The marketing header. Both dropdowns are hand-rolled on the outside-click/Escape pattern
  * already used by components/shell/account-menu.tsx — @radix-ui/react-navigation-menu would be a
@@ -67,16 +67,6 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             Solutions
             <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "solutions" ? "rotate-180" : ""}`} />
           </button>
-          <button
-            type="button"
-            onClick={() => setOpenMenu((value) => (value === "industries" ? null : "industries"))}
-            aria-expanded={openMenu === "industries"}
-            aria-haspopup="true"
-            className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-cream-100 hover:text-stone-950"
-          >
-            Industries
-            <ChevronDown aria-hidden className={`h-4 w-4 text-stone-400 transition-transform ${openMenu === "industries" ? "rotate-180" : ""}`} />
-          </button>
         </nav>
 
         <div className="ml-auto hidden items-center gap-3 lg:flex">
@@ -86,7 +76,6 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
             </Link>
           ) : (
             <>
-              <Link href="/pricing" className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-950">Pricing</Link>
               <Link href="/login" className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-950">Sign in</Link>
               <Link href="/demo" className="group inline-flex h-11 items-center gap-1.5 rounded-full bg-emerald-950 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900">
                 Book a demo<ArrowRight aria-hidden className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -154,24 +143,6 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
         </div>
       )}
 
-      {openMenu === "industries" && (
-        <div className="absolute inset-x-0 top-full hidden border-b border-cream-200 bg-white shadow-[0_28px_60px_-36px_rgba(41,37,36,.5)] lg:block">
-          <div className="mx-auto max-w-6xl px-5 py-8">
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.16em] text-stone-400">Industries</p>
-            <div className="grid gap-x-8 gap-y-1 md:grid-cols-3">
-              {INDUSTRIES.map((industry) => (
-                <Link key={industry.name} href={"/solutions#industries" as Route} className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-cream-100">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl rounded-tr-sm bg-emerald-50 text-emerald-700">
-                    <industry.icon className="h-4 w-4" />
-                  </span>
-                  <span className="text-sm font-semibold text-stone-900">{industry.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {mobileOpen && (
         <div className="border-t border-cream-200 bg-white lg:hidden">
           <div className="space-y-5 px-5 py-5">
@@ -202,27 +173,12 @@ export function MarketingNav({ workspaceHref }: { workspaceHref?: string }) {
                 ))}
               </ul>
             </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Industries</p>
-              <ul className="space-y-0.5">
-                {INDUSTRIES.map((industry) => (
-                  <li key={industry.name}>
-                    <Link href={"/solutions#industries" as Route} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-stone-700 hover:bg-cream-100">
-                      <industry.icon className="h-4 w-4 text-emerald-700" />{industry.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
             {workspaceHref ? (
               <Link href={workspaceHref as Route} className="flex h-11 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Open workspace</Link>
             ) : (
-              <div className="flex flex-col gap-3">
-                <Link href="/pricing" className="flex h-10 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Pricing</Link>
-                <div className="flex gap-3">
-                  <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
-                  <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Book a demo</Link>
-                </div>
+              <div className="flex gap-3">
+                <Link href="/login" className="flex h-10 flex-1 items-center justify-center rounded-full border border-stone-300 text-sm font-medium text-stone-800">Sign in</Link>
+                <Link href="/demo" className="flex h-10 flex-1 items-center justify-center rounded-full bg-emerald-950 text-sm font-semibold text-white">Book a demo</Link>
               </div>
             )}
           </div>
