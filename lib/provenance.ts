@@ -103,7 +103,7 @@ function valueToQuery(value: unknown): string {
 
 /** Normalises a block's pixel bbox into the page's 0-1 space, ordering the corners and clamping
  * to the page. Null when the block had no bbox or the page size is unknown. */
-function normalizeBbox(bbox: [number, number, number, number] | null, size: MineruPageSize | null): [number, number, number, number] | null {
+export function normalizeBbox(bbox: [number, number, number, number] | null, size: MineruPageSize | null): [number, number, number, number] | null {
   if (!bbox || !size) return null
   const [x0, y0, x1, y1] = bbox
   const nx0 = clamp01(x0 / size.width)

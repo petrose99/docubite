@@ -1,4 +1,6 @@
 import type { BlocksSidecar } from "@/lib/provenance"
+import { normalizeBbox } from "@/lib/provenance"
+import type { MineruPageSize } from "@/lib/mineru"
 import { createHash } from "crypto"
 
 /** Where a chunk came from in the source, so an answer can cite "invoice.pdf, p.3". `bbox` is the
@@ -27,6 +29,7 @@ export function contentHashFor(text: string, modelName: string): string {
   return createHash("sha256").update(`v1|${modelName}|search_document|${text}`).digest("hex")
 }
 
+/** Unions already page-normalized (0-1 space) bboxes. */
 function unionBbox(bboxes: [number, number, number, number][]): [number, number, number, number] {
   return [
     Math.min(...bboxes.map((b) => b[0])),
@@ -38,10 +41,12 @@ function unionBbox(bboxes: [number, number, number, number][]): [number, number,
 
 type Block = BlocksSidecar["blocks"][number]
 
-function blockChunk(blocks: Block[], modelName: string): Chunk {
+function blockChunk(blocks: Block[], pageSizes: MineruPageSize[], modelName: string): Chunk {
   const text = blocks.map((block) => block.text.trim()).join("\n\n")
   const pages = [...new Set(blocks.map((block) => block.page))].sort((a, b) => a - b)
-  const bboxes = blocks.map((block) => block.bbox).filter((bbox): bbox is [number, number, number, number] => bbox !== null)
+  const bboxes = blocks
+    .map((block) => normalizeBbox(block.bbox, pageSizes.find((size) => size.page === block.page) ?? null))
+    .filter((bbox): bbox is [number, number, number, number] => bbox !== null)
   const provenance: ChunkProvenance = { pages, ...(bboxes.length ? { bbox: unionBbox(bboxes) } : {}) }
   return { text, provenance, contentHash: contentHashFor(text, modelName) }
 }
@@ -77,7 +82,7 @@ export function chunkFromBlocks(sidecar: BlocksSidecar, modelName: string): Chun
   // Pass 2: emit each group, prepending the previous group's last block as the one-block overlap.
   const chunks = groups.map((indices, groupIndex) => {
     const withOverlap = groupIndex > 0 ? [groups[groupIndex - 1][groups[groupIndex - 1].length - 1], ...indices] : indices
-    return blockChunk(withOverlap.map((index) => usable[index]), modelName)
+    return blockChunk(withOverlap.map((index) => usable[index]), sidecar.pages, modelName)
   })
   return chunks.slice(0, MAX_CHUNKS)
 }

@@ -8,8 +8,8 @@ function block(page: number, text: string, bbox: [number, number, number, number
   return { page, bbox, text, type: "text" }
 }
 
-function sidecar(blocks: Block[]): BlocksSidecar {
-  return { version: 1, pages: [], blocks }
+function sidecar(blocks: Block[], pages: BlocksSidecar["pages"] = []): BlocksSidecar {
+  return { version: 1, pages, blocks }
 }
 
 /** A block of `n` characters carrying a unique marker, so its presence in a chunk can be asserted. */
@@ -60,11 +60,38 @@ describe("chunkFromBlocks", () => {
     expect((mixed?.provenance as ChunkProvenance).pages).toContain(2)
   })
 
-  it("records provenance pages and a union bbox", () => {
-    const chunks = chunkFromBlocks(sidecar([block(3, "on page three", [0.1, 0.2, 0.3, 0.4])]), "m")
+  it("records provenance pages and a union bbox, normalized into 0-1 page space", () => {
+    const chunks = chunkFromBlocks(
+      sidecar([block(3, "on page three", [10, 20, 30, 40])], [{ page: 3, width: 100, height: 200 }]),
+      "m",
+    )
     expect(chunks).toHaveLength(1)
     expect((chunks[0].provenance as ChunkProvenance).pages).toEqual([3])
-    expect((chunks[0].provenance as ChunkProvenance).bbox).toEqual([0.1, 0.2, 0.3, 0.4])
+    expect((chunks[0].provenance as ChunkProvenance).bbox).toEqual([0.1, 0.1, 0.3, 0.2])
+  })
+
+  it("unions bboxes from blocks with different page sizes, each normalized to its own page first", () => {
+    const chunks = chunkFromBlocks(
+      sidecar(
+        [block(1, filler("A", 3300), [0, 0, 50, 50]), block(1, filler("B", 3300), [50, 50, 100, 100])],
+        [{ page: 1, width: 100, height: 100 }],
+      ),
+      "m",
+    )
+    // Each block is its own chunk (both exceed the target), so check the union directly instead.
+    const bboxes = chunks.map((chunk) => (chunk.provenance as ChunkProvenance).bbox)
+    expect(bboxes).toEqual([[0, 0, 0.5, 0.5], [0, 0, 1, 1]])
+  })
+
+  it("drops a block's bbox from the union when its page size is unknown", () => {
+    const chunks = chunkFromBlocks(
+      sidecar([block(1, "known", [10, 10, 20, 20]), block(2, "unknown page size", [0, 0, 5, 5])], [
+        { page: 1, width: 100, height: 100 },
+      ]),
+      "m",
+    )
+    expect(chunks).toHaveLength(1)
+    expect((chunks[0].provenance as ChunkProvenance).bbox).toEqual([0.1, 0.1, 0.2, 0.2])
   })
 
   it("caps output at 512 chunks", () => {
