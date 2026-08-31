@@ -21,6 +21,39 @@ const ProvenancePdf = dynamic(() => import("./provenance-pdf"), { ssr: false, lo
  * With a `target`, a PDF renders through pdf.js with the value highlighted, and an image gets the
  * same overlay; without one (a cell the user typed, a document with no provenance), the file just
  * opens. Non-PDF, non-image types fall back to the browser's own inline viewer. */
+/** The viewer body — pdf.js / highlighted image / plain iframe fallback — with no modal chrome
+ * around it. Extracted so the pipeline's split-pane document detail (Phase 3) can embed it inline
+ * beside the review form, while the full-screen SourcePreview below reuses it unchanged for every
+ * caller that still wants the overlay (the sheet, folder report, run-diff dialog). */
+export function SourceViewer({ source, target }: { source: SourceDocument; target?: ProvenanceTarget | null }) {
+  const href = `/api/documents/${source.documentId}/source`
+  const isPdf = source.mimeType === "application/pdf" || (!source.mimeType && source.filename.toLowerCase().endsWith(".pdf"))
+  const isImage = source.mimeType?.startsWith("image/")
+  const positionUnavailable = !!target && !target.bbox
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {target && (target.quote || positionUnavailable) && (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
+          {target.quote && <span className="rounded bg-white/70 px-1.5 py-0.5 font-medium">“{target.quote}”</span>}
+          <span className="text-emerald-700">page {target.page}</span>
+          {positionUnavailable && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Matched on page {target.page} — exact position unavailable</span>}
+        </div>
+      )}
+      {isPdf ? (
+        <ProvenancePdf href={href} target={target} />
+      ) : isImage ? (
+        <ProvenanceImage href={href} filename={source.filename} target={target} />
+      ) : (
+        <iframe src={href} title={source.filename} className="min-h-0 flex-1 bg-stone-100" />
+      )}
+    </div>
+  )
+}
+
+/** Full-screen modal wrapper around SourceViewer — a document floating over the grid, with an
+ * open-in-new-tab / download / close header. See SourceViewer's own doc-comment for why the two
+ * are split. */
 export function SourcePreview({ source, target, onClose }: { source: SourceDocument; target?: ProvenanceTarget | null; onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -31,9 +64,6 @@ export function SourcePreview({ source, target, onClose }: { source: SourceDocum
   }, [onClose])
 
   const href = `/api/documents/${source.documentId}/source`
-  const isPdf = source.mimeType === "application/pdf" || (!source.mimeType && source.filename.toLowerCase().endsWith(".pdf"))
-  const isImage = source.mimeType?.startsWith("image/")
-  const positionUnavailable = !!target && !target.bbox
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-6" onClick={onClose}>
@@ -50,22 +80,7 @@ export function SourcePreview({ source, target, onClose }: { source: SourceDocum
             <X className="h-4 w-4" />
           </button>
         </div>
-
-        {target && (target.quote || positionUnavailable) && (
-          <div className="flex flex-wrap items-center gap-2 border-b bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
-            {target.quote && <span className="rounded bg-white/70 px-1.5 py-0.5 font-medium">“{target.quote}”</span>}
-            <span className="text-emerald-700">page {target.page}</span>
-            {positionUnavailable && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Matched on page {target.page} — exact position unavailable</span>}
-          </div>
-        )}
-
-        {isPdf ? (
-          <ProvenancePdf href={href} target={target} />
-        ) : isImage ? (
-          <ProvenanceImage href={href} filename={source.filename} target={target} />
-        ) : (
-          <iframe src={href} title={source.filename} className="min-h-0 flex-1 bg-stone-100" />
-        )}
+        <SourceViewer source={source} target={target} />
       </div>
     </div>
   )

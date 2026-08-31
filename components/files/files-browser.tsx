@@ -3,13 +3,17 @@
 import { createFileAction, createFolderAction, deleteFilesAction, deleteFolderAction, discardEmptyFileAction, duplicateFileAction, moveFilesAction, renameFileAction, renameFolderAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ExtractOverlay } from "@/components/extract/extract-overlay"
 import type { WorkspaceUsage } from "@/components/extract/types"
+import { useExtractionProgress } from "@/components/extract/use-extraction-progress"
 import { ShareDialog } from "@/components/files/share-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog } from "@/components/ui/dialog"
+import { highlightSnippet } from "@/components/shared/highlight-snippet"
+import { LastUpdated } from "@/components/shared/relative-time"
+import { useRowSelection } from "@/components/shared/use-row-selection"
 import { ArrowUpDown, ChevronRight, Copy, FileText, Folder, FolderPlus, FolderUp, Globe, Loader2, MoreHorizontal, Pencil, Search, Share2, Table2, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 export type FileRowData = {
@@ -41,33 +45,6 @@ export type ContentMatchRow = {
   inScope: boolean
 }
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-
-/** Marks the query's words in a snippet — case-insensitive, whole-run — so the reason a document
- * matched is visible. Pure: splits on a capture group so matched runs land at odd indices. */
-function highlightSnippet(snippet: string, query: string): ReactNode {
-  const words = query.trim().split(/\s+/).filter((word) => word.length >= 2)
-  if (!words.length) return snippet
-  const re = new RegExp(`(${words.map(escapeRegExp).join("|")})`, "gi")
-  return snippet.split(re).map((segment, index) =>
-    index % 2 === 1 ? <mark key={index} className="rounded-sm bg-amber-100 text-inherit">{segment}</mark> : segment,
-  )
-}
-
-const relativeTime = (iso: string) => {
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
-  if (seconds < 60) return "just now"
-  const units: Array<[number, Intl.RelativeTimeFormatUnit]> = [[60, "minute"], [3600, "hour"], [86_400, "day"], [604_800, "week"], [2_629_800, "month"], [31_557_600, "year"]]
-  let index = units.length - 1
-  while (index > 0 && seconds < units[index][0]) index--
-  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(-Math.floor(seconds / units[index][0]), units[index][1])
-}
-
-/** "33 minutes ago" is computed from the clock, so the server's render and the client's
- * hydration land on different strings whenever a minute ticks over between them. The mismatch
- * is expected and harmless here, so it is suppressed rather than papered over with an absolute
- * date; the exact timestamp stays available in the tooltip. */
-const LastUpdated = ({ iso }: { iso: string }) => <time dateTime={iso} title={new Date(iso).toISOString()} suppressHydrationWarning>{relativeTime(iso)}</time>
 
 /** Row action menu. Closes on outside click and Escape so it never survives a navigation. */
 function RowMenu({ items }: { items: Array<{ label: string; icon: typeof Pencil; destructive?: boolean; onSelect: () => void }> }) {
@@ -120,29 +97,22 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   const fileBase = pageBase
   const rows = tab === "shared" ? sharedFiles : files
 
-  const [marked, setMarked] = useState<Set<string>>(new Set())
-  const anchor = useRef<number | null>(null)
+  const { marked, markRow, toggleAll, clear: clearMarked, setMarked } = useRowSelection(rows)
   const [searchValue, setSearchValue] = useState(search)
   const [creating, setCreating] = useState(false)
   // The file an "Upload" just created, so the Extract overlay can open in place instead of
   // navigating into the (now upload-free) sheet.
   const [uploadFileId, setUploadFileId] = useState<string | null>(null)
+  // Owned here, not by the overlay itself, so closing the overlay doesn't stop polling a
+  // document queued moments before — see ExtractOverlay's doc comment.
+  const { statuses: uploadStatuses, track: trackUpload } = useExtractionProgress(workspaceId, [], undefined, documentSearchEnabled)
   const [busy, setBusy] = useState(false)
   const [newFolder, setNewFolder] = useState<{ name: string } | null>(null)
   const [renaming, setRenaming] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null)
   const [sharingFile, setSharingFile] = useState<FileRowData | null>(null)
   const [confirming, setConfirming] = useState<{ kind: "files"; ids: string[] } | { kind: "folder"; id: string; name: string } | null>(null)
 
-  // The list re-renders from the server after every mutation; marks that pointed at rows which
-  // no longer exist would otherwise keep inflating the "Delete (n)" count.
-  const [syncedRows, setSyncedRows] = useState(rows)
-  if (syncedRows !== rows) {
-    setSyncedRows(rows)
-    const live = new Set(rows.map((row) => row.id))
-    setMarked((previous) => new Set([...previous].filter((id) => live.has(id))))
-  }
-
-  // Same derived-state shape as syncedRows above: adopt the URL's query when it changes from
+  // Same derived-state shape useRowSelection uses internally: adopt the URL's query when it changes from
   // outside this component (back button, a link), without an effect round-trip.
   const [syncedSearch, setSyncedSearch] = useState(search)
   if (syncedSearch !== search) {
@@ -163,37 +133,6 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
     const timer = setTimeout(() => router.push(withParams({ q: searchValue || null })), 300)
     return () => clearTimeout(timer)
   }, [searchValue]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  /** Same state machine as the spreadsheet grid's row gutter: a plain click toggles one row and
-   * becomes the anchor, shift-click adds the range between the anchor and the clicked row. */
-  const markRow = (index: number, event: React.MouseEvent | React.KeyboardEvent) => {
-    const row = rows[index]
-    if (!row) return
-    const start = anchor.current
-    if ("shiftKey" in event && event.shiftKey && start !== null && start < rows.length) {
-      event.preventDefault()
-      window.getSelection()?.removeAllRanges()
-      const [from, to] = start <= index ? [start, index] : [index, start]
-      setMarked((previous) => {
-        const next = new Set(previous)
-        for (let cursor = from; cursor <= to; cursor++) next.add(rows[cursor].id)
-        return next
-      })
-      return
-    }
-    anchor.current = index
-    setMarked((previous) => {
-      const next = new Set(previous)
-      if (next.has(row.id)) next.delete(row.id)
-      else next.add(row.id)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    setMarked((previous) => (previous.size === rows.length ? new Set() : new Set(rows.map((row) => row.id))))
-    anchor.current = null
-  }
 
   /** The one way to create a file: creates it with no dialog — named "untitled", renamed inline
    * later — then opens the Extract overlay right here, which offers both a normal file picker
@@ -329,13 +268,14 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   }
 
   const contentRow = (match: ContentMatchRow) => {
-    const params = new URLSearchParams({ doc: match.documentId })
+    const params = new URLSearchParams()
     if (match.page != null) params.set("page", String(match.page))
     if (match.bbox) params.set("bb", match.bbox.join(","))
+    const query = params.toString()
     return <tr key={`content-${match.documentId}`} className="hover:bg-stone-50">
       <td className="border-b px-3 py-2"></td>
       <td colSpan={4} className="border-b px-3 py-2">
-        <Link href={`${fileBase}/${match.fileId}/sheet?${params.toString()}`} className="block">
+        <Link href={`/workspaces/${workspaceId}/documents/${match.documentId}${query ? `?${query}` : ""}`} className="block">
           <span className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />
             <span className="truncate font-medium text-stone-800" title={match.filename}>{match.filename}</span>
@@ -395,7 +335,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
         </select>
       </label>}
       <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1 font-medium text-red-600 hover:bg-red-50 disabled:opacity-50" disabled={busy} onClick={() => setConfirming({ kind: "files", ids: [...marked] })}><Trash2 className="h-3.5 w-3.5" />Delete ({marked.size})</button>
-      <button type="button" className="rounded-md px-2 py-1 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800" onClick={() => { setMarked(new Set()); anchor.current = null }}>Clear</button>
+      <button type="button" className="rounded-md px-2 py-1 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800" onClick={clearMarked}>Clear</button>
     </div>}
 
     <div className="min-h-0 flex-1 overflow-auto rounded-md border">
@@ -498,7 +438,8 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       template={null}
       usage={usage}
       sheetCount={0}
-      documentSearchEnabled={documentSearchEnabled}
+      statuses={uploadStatuses}
+      track={trackUpload}
       onClose={() => {
         const fileId = uploadFileId
         setUploadFileId(null)

@@ -51,7 +51,7 @@ type SeedTemplate = { code: string; name: string; documentType: string; multiRow
 export async function createFile(input: {
   workspaceId: string; userId: string; name?: string; folderId?: string | null
   templates?: readonly SeedTemplate[]
-  kind?: "sheet" | "dictation"
+  kind?: "sheet" | "dictation" | "pipeline"
 }) {
   const templates = input.templates ?? DEFAULT_DOCUMENT_TEMPLATES
   return prisma.documentFile.create({
@@ -115,6 +115,33 @@ export async function ensureDictationFile(workspaceId: string, userId: string) {
       },
     })
   }
+  return file
+}
+
+/** The workspace's pipeline container, created on first use — mirrors ensureDictationFile above,
+ * but seeded with the ordinary DEFAULT_DOCUMENT_TEMPLATES rather than a domain pack, since a
+ * pipeline upload is not domain-specific the way a dictation is. This is what lets a pipeline
+ * upload have a fileId/templateId (createDocumentFromBuffer requires both) without forcing the
+ * uploader to pick or create a spreadsheet file first.
+ *
+ * The DB's partial unique index on (workspace_id) WHERE kind = 'pipeline' makes creation safe
+ * under concurrent first loads, the same way it does for the dictation container.
+ *
+ * Also tops up the finance domain's optional worksheets (bank_statement, purchase_order,
+ * remittance_advice, supplier_statement) — not seeded by DEFAULT_DOCUMENT_TEMPLATES, since an
+ * ad-hoc file a user creates by hand shouldn't start with four empty tabs. The pipeline container
+ * is different: it is the one place every document type gets uploaded, so its "Document type"
+ * picker needs the full set to choose from, not just invoice/receipt/expense/generic. Idempotent
+ * via addDomainPackToFile — missing worksheets are added on every call, present ones untouched. */
+export async function ensurePipelineFile(workspaceId: string, userId: string) {
+  const existing = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "pipeline" } })
+  const file = existing ?? await createFile({ workspaceId, userId, name: "Pipeline", kind: "pipeline" })
+    .catch(async () => {
+      const raced = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "pipeline" } })
+      if (!raced) throw new Error("pipeline_file_unavailable")
+      return raced
+    })
+  await addDomainPackToFile(workspaceId, file.id, "finance")
   return file
 }
 

@@ -6,7 +6,7 @@ import config from "@/lib/config"
 import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues } from "@/lib/document-templates"
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
 import { projectDocumentFields } from "@/lib/field-projection"
-import { LOW_CONFIDENCE } from "@/lib/sheet-seed"
+import { LOW_CONFIDENCE, PIPELINE_STAGES, stageToStatusFilter, type PipelineStage } from "@/lib/documents/stages"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { recordFieldCorrection } from "@/models/field-corrections"
@@ -123,12 +123,78 @@ export async function createDocumentFromBuffer(input: {
   }
 }
 
-export async function listWorkspaceDocuments(workspaceId: string, filters: { status?: string; query?: string; templateId?: string; fileId?: string } = {}) {
-  const where: Prisma.DocumentWhereInput = { workspaceId, ...(filters.fileId ? { fileId: filters.fileId } : {}), ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}), ...(filters.query?.trim() ? { OR: [{ searchText: { contains: filters.query.trim(), mode: "insensitive" as const } }, { ocrText: { contains: filters.query.trim(), mode: "insensitive" as const } }] } : {}), ...(filters.templateId ? { templateId: filters.templateId } : {}) }
+/** The full where-fragment for one pipeline stage: stageToStatusFilter plus the two axes it can't
+ * express alone — archive (a boolean-ish timestamp, not a status) and the ready/approvals split
+ * (which depends on ReviewTask existence). Shared by every query that needs "is this document on
+ * stage X", so the list, its counts, and a content-search filter can never disagree. */
+function stageWhereClause(stage: PipelineStage): Prisma.DocumentWhereInput {
+  return {
+    ...stageToStatusFilter(stage),
+    ...(stage !== "archive" ? { archivedAt: null } : {}),
+    ...(stage === "approvals" ? { reviewTasks: { some: { status: { in: ["open", "in_review"] } } } } : {}),
+    ...(stage === "ready" ? { reviewTasks: { none: { status: { in: ["open", "in_review"] } } } } : {}),
+  }
+}
+
+/** `stage`, when given, narrows to a pipeline tab (lib/documents/stages.ts) instead of a raw
+ * status. It composes with (does not replace) `status`, though callers normally pass one or the
+ * other. Archive is its own axis: every stage except "archive" implicitly excludes an archived
+ * document, so a document doesn't linger on "Ready" after being archived from it. */
+export async function listWorkspaceDocuments(workspaceId: string, filters: { status?: string; query?: string; templateId?: string; fileId?: string; stage?: PipelineStage } = {}) {
+  const where: Prisma.DocumentWhereInput = {
+    workspaceId,
+    ...(filters.fileId ? { fileId: filters.fileId } : {}),
+    ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
+    ...(filters.stage ? stageWhereClause(filters.stage) : {}),
+    ...(filters.query?.trim() ? { OR: [{ searchText: { contains: filters.query.trim(), mode: "insensitive" as const } }, { ocrText: { contains: filters.query.trim(), mode: "insensitive" as const } }] } : {}),
+    ...(filters.templateId ? { templateId: filters.templateId } : {}),
+  }
   return prisma.document.findMany({ where, include: { template: true, templateVersion: true }, orderBy: { receivedAt: "desc" }, take: 100 })
 }
 
+/** Per-stage counts for the pipeline tabs, sharing stageWhereClause with listWorkspaceDocuments so
+ * a tab's badge count can never disagree with what clicking it shows. One query per stage (five
+ * total) rather than a single groupBy: the ready/approvals split depends on ReviewTask existence,
+ * which groupBy can't express in one pass over `status` alone. */
+export async function countDocumentsByStage(workspaceId: string): Promise<Record<PipelineStage, number>> {
+  const counts = await Promise.all(PIPELINE_STAGES.map((stage) => prisma.document.count({ where: { workspaceId, ...stageWhereClause(stage) } })))
+  return Object.fromEntries(PIPELINE_STAGES.map((stage, index) => [stage, counts[index]])) as Record<PipelineStage, number>
+}
+
+/** Of the given document ids, which currently belong to `stage` — used to narrow the workspace-
+ * wide content-search hits (lib/retrieval.ts::searchDocumentsByContent spans every document) down
+ * to the tab actually being viewed, the same way the ordinary filename/OCR-text match already is. */
+export async function documentIdsInStage(workspaceId: string, documentIds: string[], stage: PipelineStage): Promise<Set<string>> {
+  if (!documentIds.length) return new Set()
+  const rows = await prisma.document.findMany({ where: { workspaceId, id: { in: documentIds }, ...stageWhereClause(stage) }, select: { id: true } })
+  return new Set(rows.map((row) => row.id))
+}
+
 export const getWorkspaceDocument = (workspaceId: string, documentId: string) => prisma.document.findFirst({ where: { id: documentId, workspaceId }, include: { template: true, templateVersion: true } })
+
+/** Which of the given documents currently have a queued/processing DocumentProcessingJob — what
+ * the pipeline Inbox tab's inline spinner (documentStage's `hasActiveJob`) is driven by. */
+export async function activeJobDocumentIds(workspaceId: string, documentIds: string[]): Promise<Set<string>> {
+  if (!documentIds.length) return new Set()
+  const jobs = await prisma.documentProcessingJob.findMany({ where: { workspaceId, documentId: { in: documentIds }, status: { in: ["queued", "processing"] } }, select: { documentId: true } })
+  return new Set(jobs.map((job) => job.documentId).filter((id): id is string => id !== null))
+}
+
+/** Archives/unarchives a batch of documents — the pipeline's "Move to Archive" / "Restore" bulk
+ * action. A separate axis from `status` (see lib/documents/stages.ts), so this never touches
+ * status/reviewedData/confidence — restoring a document lands it back exactly where its status
+ * already placed it. */
+export async function setDocumentsArchived(workspaceId: string, documentIds: string[], archived: boolean) {
+  const result = await prisma.document.updateMany({ where: { workspaceId, id: { in: documentIds.slice(0, 100) } }, data: { archivedAt: archived ? new Date() : null } })
+  return { updated: result.count }
+}
+
+/** Sets/clears the pipeline list's manual "look at this" flag. Attributable like a transcript
+ * edit: flaggedAt and flaggedById are set or cleared together (see the schema's CHECK). */
+export async function setDocumentsFlagged(workspaceId: string, documentIds: string[], flagged: boolean, actorId: string) {
+  const result = await prisma.document.updateMany({ where: { workspaceId, id: { in: documentIds.slice(0, 100) } }, data: flagged ? { flaggedAt: new Date(), flaggedById: actorId } : { flaggedAt: null, flaggedById: null } })
+  return { updated: result.count }
+}
 
 /** Fire-and-forget: diffs old vs new field values and records each real scalar correction (WP1.3's
  * few-shot memory). Only scalar (string/number/boolean) values are recorded — an array field like
@@ -366,4 +432,28 @@ export async function requeueDocumentExtraction(workspaceId: string, documentId:
 
 export function documentDataForExport(document: Pick<Document, "filename" | "status" | "receivedAt" | "reviewedData">) {
   return { filename: document.filename, status: document.status, received_at: document.receivedAt.toISOString(), ...((document.reviewedData as Record<string, unknown> | null) || {}) }
+}
+
+/** Sets (or clears, on an empty string) the split-pane detail view's free-text note. */
+export async function updateDocumentNote(workspaceId: string, documentId: string, note: string) {
+  const trimmed = note.trim()
+  await prisma.document.update({ where: { id: documentId, workspaceId }, data: { note: trimmed || null } })
+  return { note: trimmed || null }
+}
+
+/** Merges exactly two documents on the pipeline list — the "duplicate scans of one invoice"
+ * case. The earlier-received document survives; any field the survivor is missing is backfilled
+ * from the other before it is deleted. Works across a `fileId` difference on purpose: dedup
+ * (`@@unique([fileId, sha256])`) is per file, so a real duplicate uploaded into two different
+ * files never trips it, and this is the tool for merging that pair by hand. */
+export async function mergeDocuments(workspaceId: string, documentIds: [string, string], actorId: string) {
+  const [a, b] = await Promise.all(documentIds.map((id) => getWorkspaceDocument(workspaceId, id)))
+  if (!a || !b) throw new Error("document_not_found")
+  const [survivor, loser] = a.receivedAt <= b.receivedAt ? [a, b] : [b, a]
+  const survivorData = (survivor.reviewedData as Record<string, unknown> | null) ?? (survivor.rawExtraction as Record<string, unknown> | null) ?? {}
+  const loserData = (loser.reviewedData as Record<string, unknown> | null) ?? (loser.rawExtraction as Record<string, unknown> | null) ?? {}
+  const merged = { ...loserData, ...survivorData }
+  await updateDocumentReview({ workspaceId, documentId: survivor.id, reviewedData: merged, actorId })
+  await deleteWorkspaceDocuments(workspaceId, [loser.id], actorId)
+  return { survivorId: survivor.id }
 }

@@ -19,7 +19,7 @@ export function DeleteDocumentButton({ workspaceId, fileId, documentId, filename
       const result = await deleteDocumentsAction(workspaceId, fileId, [documentId])
       if (!result.success) return void toast.error(result.error || "Delete failed")
       toast.success(`${filename} deleted`)
-      router.push(`/workspaces/${workspaceId}/files/${fileId}/sheet`)
+      router.push(`/workspaces/${workspaceId}/pipeline`)
       router.refresh()
     } catch {
       toast.error("Could not reach the server — nothing was deleted")

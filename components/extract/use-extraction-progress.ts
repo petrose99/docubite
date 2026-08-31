@@ -1,13 +1,13 @@
 "use client"
 
 import { getDocumentProcessingStatusAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { TERMINAL_STATUSES } from "@/lib/documents/stages"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 export type TrackedDocumentStatus = { status: string; errorCode: string | null; filename: string; searchable: boolean; indexing: boolean; flaggedFields: string[] }
 
-const TERMINAL_STATUSES = new Set(["ready_for_review", "needs_review", "reviewed", "failed"])
 const POLL_MS = 2500
 /** Backstop only. Whether to keep polling a settled document is now driven by the real `indexing`
  * flag (an actual queued/processing embed job, models/documents.ts::getDocumentsStatus) — this cap

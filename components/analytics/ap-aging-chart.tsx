@@ -66,7 +66,7 @@ export function ApAgingChart({ workspaceId, aging, formatMoney }: {
         ? <p className="text-sm text-stone-500">No unpaid invoices.</p>
         : <ul className="divide-y rounded border">
           {invoices.slice(0, OLDEST_UNPAID_LIMIT).map((invoice) => <li key={invoice.documentId}>
-            <Link href={`/workspaces/${workspaceId}/files/${invoice.fileId}/sheet?doc=${invoice.documentId}`}
+            <Link href={`/workspaces/${workspaceId}/documents/${invoice.documentId}`}
               className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-stone-50">
               <span className="min-w-0 flex-1 truncate font-medium text-stone-800">{invoice.vendor || invoice.filename}</span>
               <span className="shrink-0 text-stone-500">{formatMoney(invoice.total)}</span>

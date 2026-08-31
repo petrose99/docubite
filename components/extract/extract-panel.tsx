@@ -62,7 +62,7 @@ function UsageMeter({ usage }: { usage: WorkspaceUsage }) {
 
 /** Lido-style floating extraction panel: draggable, non-modal, so the sheet stays visible
  * behind it and freshly extracted rows appear next to it live. */
-export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
+export function ExtractPanel({ workspaceId, fileId, fileName, template, templates, onSelectTemplate, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
   workspaceId: string
   fileId: string
   /** The file's current display name. Drives auto-naming below: only a file still called
@@ -70,6 +70,13 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, s
    * that already has a real name, picked up here to add more documents to, is left alone. */
   fileName: string
   template: SheetTemplate | null
+  /** Every worksheet offered as a "Document type" choice — undefined/one entry means no picker
+   * (the panel's only ever had the one worksheet it was mounted with, as the Files hub still is
+   * today). Selecting a different one calls onSelectTemplate, which remounts this whole panel
+   * against the new worksheet (see ExtractOverlay's `key`) — so the picker is disabled once
+   * anything is staged, rather than silently discarding an in-progress batch. */
+  templates?: SheetTemplate[]
+  onSelectTemplate?: (id: string) => void
   usage: WorkspaceUsage
   sheetCount: number
   onClose: () => void
@@ -548,6 +555,15 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, s
       <section>
         <h3 className="text-sm font-bold text-stone-900">Files</h3>
         <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF or image)</p>
+        {templates && templates.length > 1 && <div className="mb-3">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500" htmlFor="extract-document-type">Document type</label>
+          <select id="extract-document-type" className={inputClass} value={template?.id ?? ""} disabled={staged.length > 0}
+            title={staged.length > 0 ? "Reset files to change document type" : undefined}
+            onChange={(event) => onSelectTemplate?.(event.target.value)}>
+            {templates.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-stone-400">Sets which worksheet — and which record type your accounting export sees — these documents are filed under.</p>
+        </div>}
         {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
           {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}

@@ -14,7 +14,7 @@ import { registerAiFormulas } from "./custom-functions"
 import { DocumentListPanel, type ActiveFilter, type DocumentGroup } from "./document-list-panel"
 import { appendExtractionRows } from "./extraction-bridge"
 import { FormulaBuilder } from "./formula-builder"
-import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "./source-preview"
+import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "@/components/viewer/source-preview"
 import type { SaveState } from "./univer-sheet"
 import { UniverSheetLoader } from "./univer-sheet-loader"
 

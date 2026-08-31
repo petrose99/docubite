@@ -1,17 +1,19 @@
 "use client"
 
 import { getCellProvenanceAction, getFolderReportAction, summarizeFolderReportAction } from "@/app/(app)/workspaces/[workspaceId]/sheet-actions"
-import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "@/components/sheet/source-preview"
+import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "@/components/viewer/source-preview"
 import type { FolderReport as FolderReportData } from "@/components/extract/types"
 import { Dialog } from "@/components/ui/dialog"
+import { normalizeStatus } from "@/lib/documents/stages"
 import { Crosshair, Loader2, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 const statusDot = (status: string) => {
-  if (status === "failed") return "bg-red-500"
-  if (status === "needs_review") return "bg-amber-500"
-  if (status === "ready_for_review" || status === "reviewed") return "bg-emerald-500"
+  const normalized = normalizeStatus(status)
+  if (normalized === "failed") return "bg-red-500"
+  if (normalized === "needs_review") return "bg-amber-500"
+  if (normalized === "ready_for_review" || normalized === "reviewed") return "bg-emerald-500"
   return "bg-stone-300"
 }
 
