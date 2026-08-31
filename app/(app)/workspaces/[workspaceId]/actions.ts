@@ -15,7 +15,6 @@ import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
 import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueAdaptiveExtraction, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
 import { addDomainPackToFile, createFile, createFolder, deleteFileIfEmpty, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
-import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
@@ -363,13 +362,17 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
 /* ------------------------------------------------------------------ files and folders --- */
 
 /** Matches Lido's asymmetry: `New file` creates and navigates with no dialog, so this returns
- * the id the client pushes to; `New folder` opens a name modal first. */
+ * the id the client pushes to; `New folder` opens a name modal first.
+ *
+ * Starts with no worksheets at all — a person building their own sheet defines its fields from
+ * scratch in the Extract Data panel, rather than starting from a pre-seeded Invoice/Receipt/Expense
+ * receipt/Custom document set they didn't ask for. */
 export async function createFileAction(workspaceId: string, folderId: string | null): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: seedTemplatesForIndustry("finance") })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: [] })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }

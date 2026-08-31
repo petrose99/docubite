@@ -11,8 +11,7 @@ import type { MatchedShape, SheetTemplate, StagedFile, WorkspaceUsage } from "@/
 import type { TrackedDocumentStatus } from "@/components/extract/use-extraction-progress"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
-import { parsePageRange } from "@/lib/page-range"
-import { ChevronsUpDown, CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
+import { CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -98,9 +97,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   // A ZIP/photo upload that failed for want of a field forces the setup section open even with
   // nothing staged — see ensureSheetSaved.
   const [setupRevealed, setSetupRevealed] = useState(false)
-  const [pageRange, setPageRange] = useState("")
-  const [pageRangeError, setPageRangeError] = useState(false)
-  const [promptExpanded, setPromptExpanded] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [shapeChecking, setShapeChecking] = useState(false)
@@ -303,10 +299,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   /** Declines the offer — the panel is left with no fields, for the person to configure by hand. */
   const startFresh = () => setMatchedShape(null)
 
-  const validatePageRange = (value: string) => {
-    try { parsePageRange(value); setPageRangeError(false); return true } catch { setPageRangeError(true); return false }
-  }
-
   async function ensureSheetSaved(): Promise<string | null> {
     if (savedTemplateId && !dirty) return savedTemplateId
     // A ZIP or a photo capture processes immediately on picking, with no staged preview first —
@@ -323,7 +315,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
 
   async function uploadRows(rows: StagedFile[]) {
     if (!rows.length) return
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -337,7 +328,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         const formData = new FormData()
         formData.append("files", row.file)
         formData.set("templateId", templateId)
-        formData.set("pageRange", pageRange.trim())
         if (batchId) formData.set("uploadBatchId", batchId)
         // Per-file so one failed upload never aborts the rest of the batch.
         let uploaded: { id: string; filename: string; duplicate: boolean } | undefined
@@ -369,7 +359,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
    * exact same polling this panel already has — the returned document ids feed onDocumentsQueued
    * exactly like uploadRows' do, so a ZIP batch's progress shows up the same way. */
   async function uploadZip(file: File) {
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -400,7 +389,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
    * tagged with where it came from. No staging step: a capture is already a deliberate one-shot
    * action the way a ZIP drop is, not a batch worth previewing first. */
   async function uploadCameraCapture(file: File) {
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -588,35 +576,11 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{shapeChecking ? "Checking for a matching setup…" : "Add at least one field below before processing."}</p>}
       </section>
 
-      {hasFile && <>
-        <section>
-          <h3 className="text-sm font-bold text-stone-900">Fields</h3>
-          <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
-          <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
-        </section>
-
-        <section>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-stone-900">Extra instructions</h3>
-            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-stone-700" onClick={() => setPromptExpanded((value) => !value)}><ChevronsUpDown className="h-3.5 w-3.5" />{promptExpanded ? "Collapse" : "Expand"} editor</button>
-          </div>
-          <p className="mb-2 text-xs text-stone-500">Any additional guidance for the extraction</p>
-          <textarea className={inputClass} rows={promptExpanded ? 10 : 3} placeholder="e.g. Extract each line item as a separate row. Amounts are plain numbers without currency symbols." value={prompt} onChange={(event) => { setPrompt(event.target.value); markDirty() }} />
-        </section>
-
-        <section className="space-y-2.5 pb-1">
-          <div className="flex items-center gap-2">
-            <label className="shrink-0 text-sm font-medium text-stone-700" htmlFor="extract-page-range">Page range:</label>
-            <input id="extract-page-range" className={`${inputClass} ${pageRangeError ? "border-red-400 ring-1 ring-red-300" : ""}`} placeholder="Leave blank for all pages, or e.g. 1-3,5" value={pageRange} onChange={(event) => setPageRange(event.target.value)} onBlur={(event) => validatePageRange(event.target.value)} />
-          </div>
-          {pageRangeError && <p className="text-xs text-red-500">Use page numbers and ranges like 1-3,5</p>}
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700">
-            <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={multiRow} onChange={(event) => { setMultiRow(event.target.checked); markDirty() }} />
-            Extract multiple rows per document
-          </label>
-          <p className="-mt-1 text-xs text-stone-400">One spreadsheet row per line item, with document details repeated.</p>
-        </section>
-      </>}
+      {hasFile && <section>
+        <h3 className="text-sm font-bold text-stone-900">Fields</h3>
+        <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
+        <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
+      </section>}
     </div>
 
     <ConfirmDialog
