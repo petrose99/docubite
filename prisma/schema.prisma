@@ -45,6 +45,8 @@ model User {
   fileShares            DocumentFileShare[]
   signedReports         DocumentReportDraft[]
   editedTranscripts     Document[]            @relation("TranscriptEditor")
+  flaggedDocuments      Document[]            @relation("DocumentFlagger")
+  listPreferences       UserListPreference[]
   decidedFieldSuggestions FieldSuggestion[]   @relation("FieldSuggestionDecider")
   createdApiKeys        WorkspaceApiKey[]     @relation("ApiKeyCreator")
   createdIntegrationConnections IntegrationConnection[] @relation("IntegrationConnectionCreator")
@@ -128,6 +130,7 @@ model Workspace {
   approvalWorkflowStages ApprovalWorkflowStage[]
   expenseClaims ExpenseClaim[]
   expenseClaimItems ExpenseClaimItem[]
+  listPreferences UserListPreference[]
 
   @@map("workspaces")
 }
@@ -420,6 +423,17 @@ model Document {
   /// has never seen it, which is what makes the extraction-into-sheet bridge idempotent across
   /// reloads and tabs closed mid-processing.
   sheetAppliedAt    DateTime?                @map("sheet_applied_at")
+  /// Pipeline redesign: archive is a separate axis from `status`, not a status value — a document
+  /// can be archived at any lifecycle point, and modelling it as a boolean-ish timestamp avoids
+  /// rewriting `status` history. Null means not archived. See lib/documents/stages.ts.
+  archivedAt        DateTime?                @map("archived_at")
+  /// A reviewer's manual "look at this" flag on the pipeline list, independent of status/confidence.
+  /// Attributable like transcriptEdited* below: a flag without a flagger would be half a record.
+  flaggedAt         DateTime?                @map("flagged_at")
+  flaggedById       String?                  @map("flagged_by_id") @db.Uuid
+  /// Free-text reviewer note on the pipeline's split-pane detail view — separate from
+  /// reviewedData/codingData, which are both values read off (or coded onto) the document itself.
+  note              String?
   createdAt         DateTime                 @default(now()) @map("created_at")
   updatedAt         DateTime                 @updatedAt @map("updated_at")
   workspace         Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -430,6 +444,7 @@ model Document {
   appliedRule       AutomationRule?          @relation(fields: [appliedRuleId], references: [id], onDelete: SetNull)
   checkResults      DocumentCheckResult[]
   transcriptEditedBy User?                   @relation("TranscriptEditor", fields: [transcriptEditedById], references: [id], onDelete: SetNull)
+  flaggedBy         User?                    @relation("DocumentFlagger", fields: [flaggedById], references: [id], onDelete: SetNull)
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
   chunks            DocumentChunk[]
@@ -450,6 +465,7 @@ model Document {
   @@index([fileId, receivedAt])
   @@index([shapeId])
   @@index([fileId, uploadBatchId])
+  @@index([workspaceId, archivedAt])
   @@map("documents")
 }
 
@@ -1391,4 +1407,25 @@ model BankMatch {
   @@index([workspaceId, statementDocumentId])
   @@index([workspaceId, matchedDocumentId])
   @@map("bank_matches")
+}
+
+/// Pipeline redesign: per-user, per-workspace, per-view column/filter/sort preferences for the
+/// document pipeline list (Inbox / To review / Ready / Approvals / Archive all share one shell —
+/// `viewKey` is what lets each tab remember its own layout). Server-side because a column
+/// preference set on one device must survive a switch to another; localStorage cannot do that.
+model UserListPreference {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  viewKey     String    @map("view_key")
+  columns     Json
+  filters     Json
+  sort        Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, viewKey])
+  @@map("user_list_preferences")
 }

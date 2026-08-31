@@ -53,3 +53,21 @@ export async function listWorkspaceAuditEvents(workspaceId: string, limit = 100)
     documentFilename: event.document?.filename ?? null,
   }))
 }
+
+/** One document's own history — the split-pane detail view's History tab. Same shape as
+ * listWorkspaceAuditEvents, scoped to a single documentId instead of the whole workspace. */
+export async function listDocumentAuditEvents(workspaceId: string, documentId: string, limit = 50) {
+  const events = await prisma.documentAuditEvent.findMany({
+    where: { workspaceId, documentId },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(limit, 1), 200),
+    select: { id: true, type: true, createdAt: true, actor: { select: { name: true, email: true } } },
+  })
+  return events.map((event) => ({
+    id: event.id,
+    type: event.type,
+    label: auditEventLabel(event.type),
+    createdAt: event.createdAt,
+    actorName: event.actor?.name || event.actor?.email || null,
+  }))
+}

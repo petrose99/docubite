@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, ClipboardCheck, Files, Mic, Receipt, Settings } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, ListChecks, Mic, Receipt, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -12,7 +12,11 @@ import { usePathname } from "next/navigation"
  * A string in the registry rather than the component itself keeps lib/modules free of a React/UI
  * dependency — it's read by server code (capabilities, seeds) that has no business importing icons.
  * Settings-tagged module items (Rules, Tax, Approvals) don't render here at all — they show up in
- * components/shell/settings-nav.tsx instead, next to the settings pages they actually lead to. */
+ * components/shell/settings-nav.tsx instead, next to the settings pages they actually lead to.
+ * The review-queue module's own "Review" entry is filtered out below the same way: the pipeline's
+ * Approvals tab is that surface now, and /review/[reviewTaskId] itself stays reachable from the
+ * document detail page's "Send for review" / "view review task" link — it just no longer needs a
+ * standing rail entry of its own. */
 const ICONS: Record<string, typeof Files> = {
   inbox: ClipboardCheck,
   mic: Mic,
@@ -47,13 +51,18 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
   const moduleWorkItems = MODULES
     .filter((module) => enabled.has(module.key))
     .flatMap((module) => module.navItems ?? [])
-    .filter((item) => !item.href.startsWith("settings/"))
+    .filter((item) => !item.href.startsWith("settings/") && item.href !== "review")
     .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, exact: false }))
 
   // Home is every workspace's unconditional first entry — exact-matched so it doesn't stay lit on
   // every page under it, unlike Files (which stays lit through a file's hub and sheet too).
+  // Pipeline is the new primary upload→review surface (replacing folder-scoped navigation as the
+  // main destination); Files is demoted below it — still available for the rare case someone
+  // wants the underlying spreadsheet/ingestion-container view, but no longer where the app points
+  // first. See the pipeline redesign plan, Phases 2 & 6.
   const workItems = [
     { href: base, label: "Home", icon: BarChart3, exact: true },
+    { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
     ...moduleWorkItems,
     { href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false },

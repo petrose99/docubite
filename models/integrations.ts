@@ -6,6 +6,7 @@ import { encryptSecret } from "@/lib/secret-crypto"
 import { assertUrlSafe } from "@/lib/url-safety"
 import { isWebhookEventType } from "@/lib/webhooks"
 import { getDocumentFieldValues } from "@/models/document-field-values"
+import { stageToStatusFilter, type PipelineStage } from "@/lib/documents/stages"
 
 /** There is no plan tier gating the integrations surface anymore — every workspace has it,
  * subject only to the deployment-level gate (config.integrations.enabled). */
@@ -119,12 +120,16 @@ export async function redeliverWorkspaceWebhookDelivery(workspaceId: string, del
  * then id (id breaks ties and is the stable cursor). `cursor` is the last id of the previous page. */
 export async function listDocumentsForApi(
   workspaceId: string,
-  filters: { status?: string; updatedSince?: Date; cursor?: string; limit?: number } = {}
+  filters: { status?: string; stage?: PipelineStage; updatedSince?: Date; cursor?: string; limit?: number } = {}
 ) {
   const take = Math.min(Math.max(filters.limit ?? 50, 1), 100)
   const where: Prisma.DocumentWhereInput = {
     workspaceId,
+    // `status` is the original, back-compat filter every existing Zapier subscription depends on
+    // — an exact match on the raw persisted value, unchanged. `stage` is additive: a caller can
+    // opt into the pipeline's tab vocabulary instead, which composes with (not replaces) status.
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.stage ? stageToStatusFilter(filters.stage) : {}),
     ...(filters.updatedSince ? { updatedAt: { gte: filters.updatedSince } } : {}),
   }
   const rows = await prisma.document.findMany({

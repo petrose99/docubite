@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { REVIEWED_OR_READY_STATUSES } from "@/lib/documents/stages"
 import { REVIEW_TASK_STATUSES } from "@/models/review-tasks"
 
 /** Read-only finance-inbox queries, shared by the finance agent's ai-chat tools
@@ -15,7 +16,7 @@ export async function getInboxSummary(workspaceId: string) {
   const [statusCounts, failingChecks, unmatchedRecent] = await Promise.all([
     prisma.reviewTask.groupBy({ by: ["status"], where: { workspaceId }, _count: { _all: true } }),
     prisma.documentCheckResult.count({ where: { workspaceId, status: "fail" } }),
-    prisma.document.count({ where: { workspaceId, appliedRuleId: null, status: { in: ["reviewed", "extracted"] } } }),
+    prisma.document.count({ where: { workspaceId, appliedRuleId: null, status: { in: [...REVIEWED_OR_READY_STATUSES] } } }),
   ])
   const byStatus = Object.fromEntries(REVIEW_TASK_STATUSES.map((status) => [status, 0])) as Record<string, number>
   for (const row of statusCounts) byStatus[row.status] = row._count._all

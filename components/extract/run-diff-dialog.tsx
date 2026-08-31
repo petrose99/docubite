@@ -1,7 +1,7 @@
 "use client"
 
 import { getCellProvenanceAction, getShapeDiffAction } from "@/app/(app)/workspaces/[workspaceId]/sheet-actions"
-import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "@/components/sheet/source-preview"
+import { SourcePreview, type ProvenanceTarget, type SourceDocument } from "@/components/viewer/source-preview"
 import { Dialog } from "@/components/ui/dialog"
 import type { RunDiff } from "@/lib/run-diff"
 import { Crosshair, Loader2 } from "lucide-react"
