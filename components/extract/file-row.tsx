@@ -2,7 +2,7 @@
 
 import { DocumentPreview } from "@/components/documents/document-preview"
 import type { StagedFile } from "@/components/extract/types"
-import { AlertTriangle, Check, Copy, Download, Eye, FileSearch, GitCompare, Loader2, Play, RotateCw, Trash2, X } from "lucide-react"
+import { AlertTriangle, Check, Copy, Download, Eye, FileSearch, GitCompare, Loader2, Play, RotateCw, Sparkles, Trash2, X } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
@@ -53,12 +53,13 @@ function StatusBadge({ staged }: { staged: StagedFile }) {
 
 /** One file in the panel's Files section, mirroring Lido's row: name, status, then eye
  * (preview overlay), download, extract-or-reprocess, and delete controls. */
-export function FileRow({ staged, sourceUrl, busy, onExtract, onReprocess, onRemove, onDiff }: {
+export function FileRow({ staged, sourceUrl, busy, onExtract, onReprocess, onReextractAdaptively, onRemove, onDiff }: {
   staged: StagedFile
   sourceUrl: string | null
   busy: boolean
   onExtract: () => void
   onReprocess: () => void
+  onReextractAdaptively: () => void
   onRemove: () => void
   onDiff?: () => void
 }) {
@@ -86,6 +87,7 @@ export function FileRow({ staged, sourceUrl, busy, onExtract, onReprocess, onRem
       {staged.status === "staged" && <button type="button" className="ml-1 rounded-md border border-stone-300 px-2 py-0.5 text-xs font-medium hover:bg-white disabled:opacity-50" disabled={busy} onClick={onExtract} title="Extract this file now"><span className="inline-flex items-center gap-1"><Play className="h-3 w-3" />Extract</span></button>}
       {onDiff && (staged.status === "done" || staged.status === "attention") && staged.documentId && <button type="button" className="rounded p-1 hover:bg-stone-200 hover:text-stone-800" title="Diff vs the last document of this shape" onClick={onDiff}><GitCompare className="h-4 w-4" /></button>}
       {(staged.status === "done" || staged.status === "attention" || staged.status === "failed" || staged.status === "duplicate") && staged.documentId && <button type="button" className="rounded p-1 hover:bg-stone-200 hover:text-stone-800 disabled:opacity-50" disabled={busy} title="Re-process" onClick={onReprocess}><RotateCw className="h-4 w-4" /></button>}
+      {(staged.status === "done" || staged.status === "attention") && staged.documentId && <button type="button" className="rounded p-1 hover:bg-stone-200 hover:text-stone-800 disabled:opacity-50" disabled={busy} title="Re-extract adaptively — discover this document's real line-item columns" onClick={onReextractAdaptively}><Sparkles className="h-4 w-4" /></button>}
       <button type="button" className="rounded p-1 hover:bg-red-100 hover:text-red-600 disabled:opacity-50" disabled={working} title="Remove" onClick={onRemove}><Trash2 className="h-4 w-4" /></button>
     </div>
 

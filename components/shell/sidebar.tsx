@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, ClipboardCheck, Files, ListChecks, Mic, Receipt, Settings } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, ListChecks, Mic, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -16,11 +16,11 @@ import { usePathname } from "next/navigation"
  * The review-queue module's own "Review" entry is filtered out below the same way: the pipeline's
  * Approvals tab is that surface now, and /review/[reviewTaskId] itself stays reachable from the
  * document detail page's "Send for review" / "view review task" link — it just no longer needs a
- * standing rail entry of its own. */
+ * standing rail entry of its own. Expenses is filtered out the same way — still reachable at its
+ * own route, just no longer a standing rail entry. */
 const ICONS: Record<string, typeof Files> = {
   inbox: ClipboardCheck,
   mic: Mic,
-  receipt: Receipt,
 }
 
 /** Lido's left rail. The repo had no sidebar component at all — the nav was inline in two
@@ -32,7 +32,7 @@ const ICONS: Record<string, typeof Files> = {
  *
  * Home, Files, module entries, then a single Settings link — the ~10 individual settings links
  * that used to sit here flat now live as tabs on the settings pages themselves (SettingsNav), so
- * this rail doesn't scroll. Module nav entries (Review, Dictate, Expenses) come from
+ * this rail doesn't scroll. Module nav entries (Dictate) come from
  * `enabledModuleKeys` — the workspace's resolved capability set (lib/modules/capabilities.ts) —
  * rather than ad-hoc per-feature booleans. */
 export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
@@ -51,7 +51,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
   const moduleWorkItems = MODULES
     .filter((module) => enabled.has(module.key))
     .flatMap((module) => module.navItems ?? [])
-    .filter((item) => !item.href.startsWith("settings/") && item.href !== "review")
+    .filter((item) => !item.href.startsWith("settings/") && item.href !== "review" && item.href !== "expenses")
     .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, exact: false }))
 
   // Home is every workspace's unconditional first entry — exact-matched so it doesn't stay lit on

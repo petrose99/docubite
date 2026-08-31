@@ -5,7 +5,7 @@ import { ActionState } from "@/lib/actions"
 import { recordDocumentAudit } from "@/lib/audit"
 import config from "@/lib/config"
 import { processDocumentJob } from "@/lib/document-processing"
-import { sampleDocumentPages, suggestFieldsFromBuffer, suggestFieldsFromContents } from "@/lib/document-suggest"
+import { sampleDocumentPages } from "@/lib/document-suggest"
 import { DocumentFieldDefinition, documentTemplateFieldsSchema, parseTemplateFields } from "@/lib/document-templates"
 import { buildShapeSignature, matchShape } from "@/lib/shape-match"
 import { listShapesForMatch } from "@/models/extraction-shapes"
@@ -13,9 +13,8 @@ import { createIngestionItem } from "@/lib/ingestion"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
-import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
+import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueAdaptiveExtraction, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
 import { addDomainPackToFile, createFile, createFolder, deleteFileIfEmpty, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
-import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
@@ -218,14 +217,11 @@ export async function markDocumentsReviewedAction(workspaceId: string, fileId: s
   } catch (error) { return { success: false, error: errorMessage(error, "Review failed") } }
 }
 
-/** Samples the first staged file and either recognises it as a previously-seen shape — offering
- * that setup back with no LLM call and no credit spent — or proposes fresh columns (or one column
- * when the user described it in plain English), which costs one AI extraction credit.
- *
- * The quota is charged only on the paths that actually call the LLM: matching a saved shape is
- * free, which is what lets a workspace re-run the same kind of document all month without burning
- * a suggestion credit each time. Single-column requests never match and always suggest. */
-export async function suggestTemplateFieldsAction(workspaceId: string, formData: FormData): Promise<ActionState<SuggestResult>> {
+/** Samples the first staged file and checks whether it recognises it as a previously-seen shape,
+ * offering that setup back so the same kind of document doesn't need its columns re-built by hand
+ * every time. No AI field suggestion is generated — a document that matches nothing just gets no
+ * offer, and the person configures fields themselves. */
+export async function matchDocumentShapeAction(workspaceId: string, formData: FormData): Promise<ActionState<SuggestResult>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
@@ -236,28 +232,21 @@ export async function suggestTemplateFieldsAction(workspaceId: string, formData:
     const buffer = Buffer.from(await file.arrayBuffer())
     validateDocumentInput(buffer, file.type)
     await scanDocumentBuffer(buffer, file.type)
-    const singleColumn = String(formData.get("singleColumn") || "").trim() || undefined
-    // "Start fresh" on the same-shape card sets this to force an LLM suggestion past any match.
-    const skipShapeMatch = formData.get("skipShapeMatch") === "1"
 
-    if (!singleColumn) {
-      const contents = await sampleDocumentPages({ buffer, mimeType: file.type, filename: file.name })
-      const firstPageText = contents.find((content) => content.page === 1)?.text ?? contents[0]?.text ?? ""
-      const matched = skipShapeMatch ? null : matchShape(await listShapesForMatch(workspaceId), buildShapeSignature({ firstPageText }))
-      if (matched) {
-        const parsed = documentTemplateFieldsSchema.safeParse(matched.fields)
-        if (parsed.success) {
-          const lastFilename = matched.lastDocumentId
-            ? (await prisma.document.findFirst({ where: { id: matched.lastDocumentId, workspaceId }, select: { filename: true } }))?.filename ?? null
-            : null
-          return { success: true, data: { suggestion: null, matchedShape: { id: matched.id, name: matched.name, docType: matched.docType ?? "", entity: matched.entity ?? "", fields: parsed.data, prompt: matched.prompt ?? "", multiRow: matched.multiRow, lastRunAt: matched.updatedAt.toISOString(), lastFilename } } }
-        }
+    const contents = await sampleDocumentPages({ buffer, mimeType: file.type, filename: file.name })
+    const firstPageText = contents.find((content) => content.page === 1)?.text ?? contents[0]?.text ?? ""
+    const matched = matchShape(await listShapesForMatch(workspaceId), buildShapeSignature({ firstPageText }))
+    if (matched) {
+      const parsed = documentTemplateFieldsSchema.safeParse(matched.fields)
+      if (parsed.success) {
+        const lastFilename = matched.lastDocumentId
+          ? (await prisma.document.findFirst({ where: { id: matched.lastDocumentId, workspaceId }, select: { filename: true } }))?.filename ?? null
+          : null
+        return { success: true, data: { matchedShape: { id: matched.id, name: matched.name, docType: matched.docType ?? "", entity: matched.entity ?? "", fields: parsed.data, prompt: matched.prompt ?? "", multiRow: matched.multiRow, lastRunAt: matched.updatedAt.toISOString(), lastFilename } } }
       }
-      return { success: true, data: { suggestion: await suggestFieldsFromContents(contents), matchedShape: null } }
     }
-
-    return { success: true, data: { suggestion: await suggestFieldsFromBuffer({ buffer, mimeType: file.type, filename: file.name, singleColumn }), matchedShape: null } }
-  } catch (error) { return { success: false, error: errorMessage(error, "Suggestion failed") } }
+    return { success: true, data: { matchedShape: null } }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not check for a matching setup") } }
 }
 
 const extractionSheetPayload = z.object({ name: z.string().trim().min(2).max(80), fields: z.unknown(), prompt: z.string().max(2000), multiRow: z.boolean() })
@@ -325,6 +314,20 @@ export async function reprocessDocumentAction(workspaceId: string, fileId: strin
   } catch (error) { return { success: false, error: errorMessage(error, "Re-process failed") } }
 }
 
+/** Re-processes one document with adaptive line-item discovery forced on, for a document that
+ * extracted wrong under its template's fixed line-item columns. Mirrors reprocessDocumentAction
+ * exactly, save for calling requeueAdaptiveExtraction instead of requeueDocumentExtraction. */
+export async function reextractAdaptivelyAction(workspaceId: string, fileId: string, documentId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    const job = await requeueAdaptiveExtraction(workspaceId, documentId)
+    after(() => processDocumentJob(job.id).catch(() => {}))
+    await revalidateSheet(workspaceId, fileId)
+    return { success: true, data: null }
+  } catch (error) { return { success: false, error: errorMessage(error, "Re-extract failed") } }
+}
+
 export async function setWorkspaceAiAction(workspaceId: string, enabled: boolean): Promise<ActionState<null>> {
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
@@ -359,13 +362,17 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
 /* ------------------------------------------------------------------ files and folders --- */
 
 /** Matches Lido's asymmetry: `New file` creates and navigates with no dialog, so this returns
- * the id the client pushes to; `New folder` opens a name modal first. */
+ * the id the client pushes to; `New folder` opens a name modal first.
+ *
+ * Starts with no worksheets at all — a person building their own sheet defines its fields from
+ * scratch in the Extract Data panel, rather than starting from a pre-seeded Invoice/Receipt/Expense
+ * receipt/Custom document set they didn't ask for. */
 export async function createFileAction(workspaceId: string, folderId: string | null): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: seedTemplatesForIndustry("finance") })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: [] })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }

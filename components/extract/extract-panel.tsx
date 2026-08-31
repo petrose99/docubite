@@ -1,6 +1,6 @@
 "use client"
 
-import { deleteDocumentsAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { deleteDocumentsAction, matchDocumentShapeAction, reextractAdaptivelyAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
 import { downscaleImage } from "@/components/extract/downscale-image"
 import { FileRow } from "@/components/extract/file-row"
@@ -11,8 +11,7 @@ import type { MatchedShape, SheetTemplate, StagedFile, WorkspaceUsage } from "@/
 import type { TrackedDocumentStatus } from "@/components/extract/use-extraction-progress"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
-import { parsePageRange } from "@/lib/page-range"
-import { ChevronsUpDown, CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
+import { CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -98,12 +97,9 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   // A ZIP/photo upload that failed for want of a field forces the setup section open even with
   // nothing staged — see ensureSheetSaved.
   const [setupRevealed, setSetupRevealed] = useState(false)
-  const [pageRange, setPageRange] = useState("")
-  const [pageRangeError, setPageRangeError] = useState(false)
-  const [promptExpanded, setPromptExpanded] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [aiBusy, setAiBusy] = useState(false)
+  const [shapeChecking, setShapeChecking] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirming, setConfirming] = useState<{ kind: "row"; row: StagedFile } | { kind: "all"; count: number } | null>(null)
   // A saved shape the first upload was recognised as, offered before any fields are set up.
@@ -113,7 +109,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   // The most recent multi-file upload, so its folder report can be opened from the header.
   const [lastBatch, setLastBatch] = useState<{ id: string; size: number } | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
-  const autoSuggested = useRef(false)
+  const shapeChecked = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
@@ -248,13 +244,30 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     addEntries(fileArray.map((file) => ({ file })))
   }, [acceptFile, addEntries])
 
-  // Lido pre-fills fields from the first document without being asked; do the same, but
-  // only for a sheet that has no fields yet so an existing setup is never overwritten.
+  /** Checks the first staged document against previously-saved shapes, offering a match back as a
+   * "same as last time?" card. Never generates new fields — a document that matches nothing simply
+   * gets no offer. */
+  async function checkForMatchingShape(file: File) {
+    setShapeChecking(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const result = await matchDocumentShapeAction(workspaceId, formData)
+      if (!result.success || !result.data) return
+      if (result.data.matchedShape && !fields.length) setMatchedShape(result.data.matchedShape)
+    } catch {
+      // Best effort — a failed shape check just means no offer, never an error the user has to act on.
+    } finally { setShapeChecking(false) }
+  }
+
+  // Checks whether the first staged document matches a previously-seen shape, offering that setup
+  // back — but only for a sheet that has no fields yet, so an existing setup is never overwritten,
+  // and only once per panel. No AI field suggestion is ever generated here.
   useEffect(() => {
     const first = staged.find((row) => row.file)
-    if (!first || fields.length || autoSuggested.current || aiBusy) return
-    autoSuggested.current = true
-    void runSuggestion(first, undefined)
+    if (!first?.file || fields.length || shapeChecked.current || shapeChecking) return
+    shapeChecked.current = true
+    void checkForMatchingShape(first.file)
   }, [staged]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A file created by this same "Upload" click starts out "untitled" (there was never a naming
@@ -271,40 +284,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     void renameFileAction(workspaceId, fileId, deriveFileName(first))
   }, [staged, fileName, workspaceId, fileId])
 
-  async function runSuggestion(row: StagedFile, singleColumn: string | undefined, opts?: { fresh?: boolean }) {
-    if (!row.file) return
-    setAiBusy(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", row.file)
-      if (singleColumn) formData.set("singleColumn", singleColumn)
-      if (opts?.fresh) formData.set("skipShapeMatch", "1")
-      const result = await suggestTemplateFieldsAction(workspaceId, formData)
-      if (!result.success || !result.data) { toast.error(result.error || "Suggestion failed"); return }
-      // A recognised shape short-circuits the LLM: offer it as a card instead of applying columns,
-      // but only for a fresh sheet — a panel that already has columns just carries on.
-      if (result.data.matchedShape && !singleColumn && !fields.length) { setMatchedShape(result.data.matchedShape); return }
-      const suggestion = result.data.suggestion
-      if (!suggestion) return
-      if (singleColumn) {
-        const taken = new Set(fields.map((field) => field.key))
-        const fresh = suggestion.fields.filter((field) => !taken.has(field.key))
-        if (!fresh.length) { toast.info("That field already exists") ; return }
-        setFields((previous) => [...previous, ...fresh.slice(0, 1)])
-      } else {
-        const taken = new Set(fields.map((field) => field.key))
-        const fresh = suggestion.fields.filter((field) => !taken.has(field.key))
-        setFields((previous) => [...previous, ...fresh])
-        if (suggestion.prompt && !prompt.trim()) setPrompt(suggestion.prompt)
-        if (suggestion.name && !template && name.startsWith("Sheet ")) setName(suggestion.name)
-        toast.success("Fields suggested from your document", { description: "Review the chips, then process your files." })
-      }
-      markDirty()
-    } catch {
-      toast.error("Could not reach the server — no fields were suggested")
-    } finally { setAiBusy(false) }
-  }
-
   /** Applies a recognised shape's whole setup to the panel — the point of the "same as last time"
    * offer is that one click reproduces the columns, prompt, and row mode of the last run. */
   const useMatchedShape = () => {
@@ -317,16 +296,8 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     markDirty()
   }
 
-  /** Declines the offer and asks the LLM for a fresh setup instead, forcing past the match. */
-  const startFresh = () => {
-    setMatchedShape(null)
-    const first = staged.find((row) => row.file)
-    if (first) void runSuggestion(first, undefined, { fresh: true })
-  }
-
-  const validatePageRange = (value: string) => {
-    try { parsePageRange(value); setPageRangeError(false); return true } catch { setPageRangeError(true); return false }
-  }
+  /** Declines the offer — the panel is left with no fields, for the person to configure by hand. */
+  const startFresh = () => setMatchedShape(null)
 
   async function ensureSheetSaved(): Promise<string | null> {
     if (savedTemplateId && !dirty) return savedTemplateId
@@ -344,7 +315,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
 
   async function uploadRows(rows: StagedFile[]) {
     if (!rows.length) return
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -358,7 +328,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         const formData = new FormData()
         formData.append("files", row.file)
         formData.set("templateId", templateId)
-        formData.set("pageRange", pageRange.trim())
         if (batchId) formData.set("uploadBatchId", batchId)
         // Per-file so one failed upload never aborts the rest of the batch.
         let uploaded: { id: string; filename: string; duplicate: boolean } | undefined
@@ -390,7 +359,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
    * exact same polling this panel already has — the returned document ids feed onDocumentsQueued
    * exactly like uploadRows' do, so a ZIP batch's progress shows up the same way. */
   async function uploadZip(file: File) {
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -421,7 +389,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
    * tagged with where it came from. No staging step: a capture is already a deliberate one-shot
    * action the way a ZIP drop is, not a batch worth previewing first. */
   async function uploadCameraCapture(file: File) {
-    if (!validatePageRange(pageRange)) { toast.error("Check the page range — e.g. 1-3,5"); return }
     setBusy(true)
     try {
       const templateId = await ensureSheetSaved()
@@ -452,6 +419,18 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
       onDocumentsQueued([row.documentId])
     } catch {
       toast.error("Could not reach the server — nothing was re-processed")
+    }
+  }
+
+  const reextractAdaptively = async (row: StagedFile) => {
+    if (!row.documentId) return
+    try {
+      const result = await reextractAdaptivelyAction(workspaceId, fileId, row.documentId)
+      if (!result.success) { toast.error(result.error || "Re-extract failed"); return }
+      setStaged((previous) => previous.map((current) => (current.localId === row.localId ? { ...current, status: "queued", error: null } : current)))
+      onDocumentsQueued([row.documentId])
+    } catch {
+      toast.error("Could not reach the server — nothing was re-extracted")
     }
   }
 
@@ -565,7 +544,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
           <p className="mt-1 text-xs text-stone-400">Sets which worksheet — and which record type your accounting export sees — these documents are filed under.</p>
         </div>}
         {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
-          {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
+          {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onReextractAdaptively={() => void reextractAdaptively(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}
         <button type="button" className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
           onClick={() => inputRef.current?.click()}
@@ -594,38 +573,14 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         <button type="button" className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50" disabled={busy || !processable.length || !fields.length} onClick={() => void uploadRows(processable)}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Process all files{processable.length > 1 ? ` (${processable.length})` : ""}
         </button>
-        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{aiBusy ? "Analyzing your document to suggest fields…" : "Add at least one field below before processing."}</p>}
+        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{shapeChecking ? "Checking for a matching setup…" : "Add at least one field below before processing."}</p>}
       </section>
 
-      {hasFile && <>
-        <section>
-          <h3 className="text-sm font-bold text-stone-900">Fields</h3>
-          <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
-          <ColumnChips fields={fields} aiBusy={aiBusy} aiReady={staged.some((row) => row.file)} onChange={(next) => { setFields(next); markDirty() }} onAiSuggest={() => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, undefined, { fresh: true }) }} onAiColumn={(description) => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, description) }} />
-        </section>
-
-        <section>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-stone-900">Extra instructions</h3>
-            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-stone-700" onClick={() => setPromptExpanded((value) => !value)}><ChevronsUpDown className="h-3.5 w-3.5" />{promptExpanded ? "Collapse" : "Expand"} editor</button>
-          </div>
-          <p className="mb-2 text-xs text-stone-500">Any additional guidance for the extraction</p>
-          <textarea className={inputClass} rows={promptExpanded ? 10 : 3} placeholder="e.g. Extract each line item as a separate row. Amounts are plain numbers without currency symbols." value={prompt} onChange={(event) => { setPrompt(event.target.value); markDirty() }} />
-        </section>
-
-        <section className="space-y-2.5 pb-1">
-          <div className="flex items-center gap-2">
-            <label className="shrink-0 text-sm font-medium text-stone-700" htmlFor="extract-page-range">Page range:</label>
-            <input id="extract-page-range" className={`${inputClass} ${pageRangeError ? "border-red-400 ring-1 ring-red-300" : ""}`} placeholder="Leave blank for all pages, or e.g. 1-3,5" value={pageRange} onChange={(event) => setPageRange(event.target.value)} onBlur={(event) => validatePageRange(event.target.value)} />
-          </div>
-          {pageRangeError && <p className="text-xs text-red-500">Use page numbers and ranges like 1-3,5</p>}
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700">
-            <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={multiRow} onChange={(event) => { setMultiRow(event.target.checked); markDirty() }} />
-            Extract multiple rows per document
-          </label>
-          <p className="-mt-1 text-xs text-stone-400">One spreadsheet row per line item, with document details repeated.</p>
-        </section>
-      </>}
+      {hasFile && <section>
+        <h3 className="text-sm font-bold text-stone-900">Fields</h3>
+        <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
+        <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
+      </section>}
     </div>
 
     <ConfirmDialog
