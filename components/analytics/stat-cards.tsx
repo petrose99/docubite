@@ -3,9 +3,9 @@ import Link from "next/link"
 function StatCard({ label, value, hint, href, valueClassName }: { label: string; value: string; hint?: string; href?: string; valueClassName?: string }) {
   const className = `rounded border p-4 ${href ? "block transition-colors hover:border-emerald-400 hover:bg-emerald-50/40" : ""}`
   const inner = <>
-    <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</div>
-    <div className={`mt-1 text-2xl font-bold ${valueClassName ?? "text-stone-900"}`}>{value}</div>
-    {hint && <div className="mt-1 text-xs text-stone-500">{hint}</div>}
+    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={`mt-1 text-2xl font-bold ${valueClassName ?? "text-slate-900"}`}>{value}</div>
+    {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
   </>
   return href ? <Link href={href} className={className}>{inner}</Link> : <div className={className}>{inner}</div>
 }

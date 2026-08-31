@@ -46,7 +46,7 @@ export function SettingsNav({ workspaceId, enabledModuleKeys, integrationsEnable
     {items.map((item) => {
       const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
       return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
-        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-stone-100 text-emerald-800" : "text-stone-600 hover:bg-stone-100/60 hover:text-stone-900"}`}>
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-slate-100 text-emerald-800" : "text-slate-600 hover:bg-slate-100/60 hover:text-slate-900"}`}>
         <item.icon className="h-4 w-4 shrink-0" />{item.label}
       </Link>
     })}

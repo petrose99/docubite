@@ -46,10 +46,10 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
       </CardHeader>
       <CardContent>
         {!rules.length
-          ? <p className="text-sm text-stone-500">No rules yet.</p>
+          ? <p className="text-sm text-slate-500">No rules yet.</p>
           : <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b text-left text-stone-500">
+                <tr className="border-b text-left text-slate-500">
                   <th className="py-2 pr-4 font-medium">Name</th>
                   <th className="py-2 pr-4 font-medium">Matches</th>
                   <th className="py-2 pr-4 font-medium">Assigns</th>
@@ -63,10 +63,10 @@ export default async function AutomationRulesPage({ params }: { params: Promise<
                   const actions = rule.actions as unknown as RuleActions
                   return <tr key={rule.id} className="border-b last:border-0">
                     <td className="py-2 pr-4 font-medium">{rule.name}</td>
-                    <td className="py-2 pr-4 text-stone-600">Supplier {matcher.type === "exact" ? "is" : "contains"} &ldquo;{matcher.value}&rdquo;</td>
-                    <td className="py-2 pr-4 text-stone-600">{Object.entries(actions.codingData || {}).map(([key, value]) => `${key}: ${value}`).join(", ")}</td>
-                    <td className="py-2 pr-4 text-stone-600">{rule.hitCount}</td>
-                    <td className="py-2">{owner ? <AutomationRuleActiveToggle workspaceId={workspaceId} ruleId={rule.id} active={rule.isActive} /> : <span className="text-xs text-stone-500">{rule.isActive ? "Active" : "Inactive"}</span>}</td>
+                    <td className="py-2 pr-4 text-slate-600">Supplier {matcher.type === "exact" ? "is" : "contains"} &ldquo;{matcher.value}&rdquo;</td>
+                    <td className="py-2 pr-4 text-slate-600">{Object.entries(actions.codingData || {}).map(([key, value]) => `${key}: ${value}`).join(", ")}</td>
+                    <td className="py-2 pr-4 text-slate-600">{rule.hitCount}</td>
+                    <td className="py-2">{owner ? <AutomationRuleActiveToggle workspaceId={workspaceId} ruleId={rule.id} active={rule.isActive} /> : <span className="text-xs text-slate-500">{rule.isActive ? "Active" : "Inactive"}</span>}</td>
                   </tr>
                 })}
               </tbody>

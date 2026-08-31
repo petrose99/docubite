@@ -8,12 +8,12 @@ const BUCKET_LABELS: Record<AgingBucketKey, string> = {
 }
 
 const BUCKET_BAR: Record<AgingBucketKey, string> = {
-  current: "bg-emerald-600", d1_30: "bg-amber-400", d31_60: "bg-amber-500", d61_90: "bg-orange-500", d90_plus: "bg-red-500", no_due_date: "bg-stone-300",
+  current: "bg-emerald-600", d1_30: "bg-amber-400", d31_60: "bg-amber-500", d61_90: "bg-orange-500", d90_plus: "bg-red-500", no_due_date: "bg-slate-300",
 }
 
 const BUCKET_BADGE: Record<AgingBucketKey, string> = {
   current: "bg-emerald-50 text-emerald-700", d1_30: "bg-amber-50 text-amber-700", d31_60: "bg-amber-100 text-amber-800",
-  d61_90: "bg-orange-100 text-orange-800", d90_plus: "bg-red-100 text-red-700", no_due_date: "bg-stone-100 text-stone-600",
+  d61_90: "bg-orange-100 text-orange-800", d90_plus: "bg-red-100 text-red-700", no_due_date: "bg-slate-100 text-slate-600",
 }
 
 const OLDEST_UNPAID_LIMIT = 8
@@ -34,8 +34,8 @@ export function ApAgingChart({ workspaceId, aging, formatMoney }: {
 
   return <section className="space-y-4">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <h2 className="text-lg font-semibold text-stone-900">AP aging</h2>
-      <span className="text-sm text-stone-500">Total outstanding: <span className="font-semibold text-stone-800">{formatMoney(totalOutstanding)}</span></span>
+      <h2 className="text-lg font-semibold text-slate-900">AP aging</h2>
+      <span className="text-sm text-slate-500">Total outstanding: <span className="font-semibold text-slate-800">{formatMoney(totalOutstanding)}</span></span>
     </div>
 
     <div className="space-y-2">
@@ -44,38 +44,38 @@ export function ApAgingChart({ workspaceId, aging, formatMoney }: {
         const percent = bucket.total > 0 ? Math.max(Math.round((bucket.total / max) * 100), 2) : 0
         return <div key={key} className="space-y-1">
           <div className="flex items-baseline justify-between text-sm">
-            <span className="font-medium text-stone-700">{BUCKET_LABELS[key]}</span>
-            <span className="text-stone-500">{formatMoney(bucket.total)} · {bucket.count} invoice{bucket.count === 1 ? "" : "s"}</span>
+            <span className="font-medium text-slate-700">{BUCKET_LABELS[key]}</span>
+            <span className="text-slate-500">{formatMoney(bucket.total)} · {bucket.count} invoice{bucket.count === 1 ? "" : "s"}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
             <div className={`h-full rounded-full ${BUCKET_BAR[key]}`} style={{ width: `${percent}%` }} />
           </div>
         </div>
       })}
       {noDueDate.count > 0 && <div className="space-y-1 border-t pt-2">
         <div className="flex items-baseline justify-between text-sm">
-          <span className="font-medium text-stone-500">{BUCKET_LABELS.no_due_date}</span>
-          <span className="text-stone-500">{formatMoney(noDueDate.total)} · {noDueDate.count} invoice{noDueDate.count === 1 ? "" : "s"}</span>
+          <span className="font-medium text-slate-500">{BUCKET_LABELS.no_due_date}</span>
+          <span className="text-slate-500">{formatMoney(noDueDate.total)} · {noDueDate.count} invoice{noDueDate.count === 1 ? "" : "s"}</span>
         </div>
       </div>}
     </div>
 
     <div className="space-y-1">
-      <h3 className="text-sm font-semibold text-stone-700">Oldest unpaid</h3>
+      <h3 className="text-sm font-semibold text-slate-700">Oldest unpaid</h3>
       {invoices.length === 0
-        ? <p className="text-sm text-stone-500">No unpaid invoices.</p>
+        ? <p className="text-sm text-slate-500">No unpaid invoices.</p>
         : <ul className="divide-y rounded border">
           {invoices.slice(0, OLDEST_UNPAID_LIMIT).map((invoice) => <li key={invoice.documentId}>
             <Link href={`/workspaces/${workspaceId}/documents/${invoice.documentId}`}
-              className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-stone-50">
-              <span className="min-w-0 flex-1 truncate font-medium text-stone-800">{invoice.vendor || invoice.filename}</span>
-              <span className="shrink-0 text-stone-500">{formatMoney(invoice.total)}</span>
-              <span className="shrink-0 text-xs text-stone-400">{invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "No due date"}</span>
+              className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50">
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{invoice.vendor || invoice.filename}</span>
+              <span className="shrink-0 text-slate-500">{formatMoney(invoice.total)}</span>
+              <span className="shrink-0 text-xs text-slate-400">{invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "No due date"}</span>
               <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${BUCKET_BADGE[invoice.bucket]}`}>{BUCKET_LABELS[invoice.bucket]}</span>
             </Link>
           </li>)}
         </ul>}
-      {truncated && <p className="text-xs text-stone-500">Showing the first 500 unpaid invoices.</p>}
+      {truncated && <p className="text-xs text-slate-500">Showing the first 500 unpaid invoices.</p>}
     </div>
   </section>
 }

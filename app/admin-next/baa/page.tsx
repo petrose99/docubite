@@ -22,18 +22,18 @@ export default async function BaaCoveragePage() {
 
   return <main className="mx-auto max-w-3xl space-y-6 p-6">
     <header>
-      <h1 className="text-2xl font-bold text-stone-900">BAA coverage</h1>
-      <p className="mt-1 text-sm text-stone-600">
+      <h1 className="text-2xl font-bold text-slate-900">BAA coverage</h1>
+      <p className="mt-1 text-sm text-slate-600">
         Every hipaaMode workspace, and whether a signed BAA covering the deployment&apos;s external ASR provider has
         been confirmed for it. Dictation is blocked for a workspace here until this is checked.
       </p>
     </header>
 
     {workspaces.length === 0
-      ? <p className="text-sm text-stone-500">No hipaaMode workspaces yet.</p>
+      ? <p className="text-sm text-slate-500">No hipaaMode workspaces yet.</p>
       : <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b text-left text-stone-500">
+            <tr className="border-b text-left text-slate-500">
               <th className="py-2 pr-4 font-medium">Workspace</th>
               <th className="py-2 font-medium">BAA coverage</th>
             </tr>

@@ -1,6 +1,6 @@
-"use client"
+﻿"use client"
 
-/** Shown on a bank_statement or supplier_statement document view (the caller enforces that — see
+/** Shown on a bank_statement or supplier_statement document view (the caller enforces that â€” see
  * the document page). One row per suggested/decided BankMatch, kind-aware labels so the same panel
  * serves both WP2.1 (bank) and WP2.3 (supplier_statement) reconciliation. */
 
@@ -28,7 +28,7 @@ const KIND_LABELS: Record<string, { title: string; rowNoun: string }> = {
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   const pct = Math.round(confidence * 100)
-  const tone = confidence >= 0.85 ? "text-emerald-700 bg-emerald-100" : confidence >= 0.7 ? "text-amber-700 bg-amber-100" : "text-stone-600 bg-stone-100"
+  const tone = confidence >= 0.85 ? "text-emerald-700 bg-emerald-100" : confidence >= 0.7 ? "text-indigo-700 bg-indigo-100" : "text-slate-600 bg-slate-100"
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{pct}%</span>
 }
 
@@ -62,14 +62,14 @@ export function MatchPanel({ workspaceId, statementDocumentId, kind, matches }: 
       </CardHeader>
       <CardContent>
         {!matches.length
-          ? <p className="text-sm text-stone-500">No matches yet.</p>
+          ? <p className="text-sm text-slate-500">No matches yet.</p>
           : <ul className="divide-y">
               {matches.map((match) => (
                 <li key={match.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span className="min-w-0">
                     <span className="font-medium">#{match.transactionIndex + 1}</span>{" "}
-                    <span className="text-stone-600">→ {match.matchedDocument.filename}</span>
-                    {match.dateDeltaDays !== null && <span className="ml-2 text-xs text-stone-500">{Math.round(match.dateDeltaDays)}d apart</span>}
+                    <span className="text-slate-600">â†’ {match.matchedDocument.filename}</span>
+                    {match.dateDeltaDays !== null && <span className="ml-2 text-xs text-slate-500">{Math.round(match.dateDeltaDays)}d apart</span>}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <ConfidenceBadge confidence={match.confidence} />
@@ -79,7 +79,7 @@ export function MatchPanel({ workspaceId, statementDocumentId, kind, matches }: 
                         <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => decide(match.id, "rejected")}>Reject</Button>
                       </>
                     ) : (
-                      <span className={`text-xs font-medium ${match.status === "accepted" ? "text-emerald-700" : "text-stone-500"}`}>{match.status}</span>
+                      <span className={`text-xs font-medium ${match.status === "accepted" ? "text-emerald-700" : "text-slate-500"}`}>{match.status}</span>
                     )}
                   </span>
                 </li>

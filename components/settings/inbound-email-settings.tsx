@@ -15,7 +15,7 @@ export function InboundEmailAddress({ address }: { address: string }) {
     } catch { toast.error("Could not copy to clipboard") }
   }
   return <div className="flex items-center gap-2">
-    <code className="rounded bg-stone-100 px-2 py-1 text-sm">{address}</code>
+    <code className="rounded bg-slate-100 px-2 py-1 text-sm">{address}</code>
     <button type="button" onClick={() => void copy()} className="text-xs font-medium text-emerald-700 hover:underline">{copied ? "Copied" : "Copy"}</button>
   </div>
 }
@@ -38,7 +38,7 @@ export function AddAllowedSenderForm({ workspaceId }: { workspaceId: string }) {
 
   return <form action={submit} className="flex items-end gap-2">
     <div className="flex-1">
-      <label className="block text-xs font-medium text-stone-500">Email address or @domain</label>
+      <label className="block text-xs font-medium text-slate-500">Email address or @domain</label>
       <input name="pattern" required className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" placeholder="bookkeeper@firm.com or @firm.com" />
     </div>
     <button type="submit" disabled={pending} className="rounded-md bg-emerald-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">Add</button>

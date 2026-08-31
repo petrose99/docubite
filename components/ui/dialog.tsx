@@ -25,14 +25,14 @@ export function Dialog({ open, title, description, width = "max-w-md", onClose, 
   if (!open || typeof document === "undefined") return null
 
   return createPortal(
-    <div role="presentation" className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-stone-900/50 p-6 pt-[10vh]" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-900/50 p-6 pt-[10vh]" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} className={`w-full ${width} overflow-hidden rounded-xl bg-white shadow-2xl`} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold text-stone-900">{title}</h2>
-            {description && <p className="mt-1 text-sm text-stone-500">{description}</p>}
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
           </div>
-          <button type="button" className="-mr-1 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></button>
+          <button type="button" className="-mr-1 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></button>
         </div>
         {children}
       </div>

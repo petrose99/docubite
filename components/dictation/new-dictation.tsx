@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { createDictationAction } from "@/app/(app)/workspaces/[workspaceId]/dictation-actions"
 import { DictationRecorder, type DictationResult } from "@/components/dictation/dictation-recorder"
@@ -11,7 +11,7 @@ import { toast } from "sonner"
 const AUDIO_TYPES = "audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/flac"
 const AUDIO_TYPE_LIST = AUDIO_TYPES.split(",")
 
-/** Must match MAX_AUDIO_BYTES in dictation-actions.ts — checked here too so an oversized file gets
+/** Must match MAX_AUDIO_BYTES in dictation-actions.ts â€” checked here too so an oversized file gets
  * an immediate toast instead of uploading fully only to be rejected server-side. */
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
@@ -39,7 +39,7 @@ export function NewDictation({ workspaceId, templates }: {
       // Leaving this blank is deliberate: with no fixed template name to fall back on for a
       // multi-industry dictation, a typed title beats a generic default, and an untyped one falls
       // through to the server's timestamp-only fallback (dictation-actions.ts) rather than a
-      // composed "{template name} — {stamp}" that no longer names anything specific.
+      // composed "{template name} â€” {stamp}" that no longer names anything specific.
       if (title.trim()) formData.append("filename", title.trim())
 
       const result = await createDictationAction(workspaceId, formData)
@@ -49,7 +49,7 @@ export function NewDictation({ workspaceId, templates }: {
       }
       // Straight to the verify screen. Transcription is still running; that page shows it running
       // rather than making the user watch a list and guess when to click in.
-      toast.success(`${note} Transcribing…`)
+      toast.success(`${note} Transcribingâ€¦`)
       router.push(`/workspaces/${workspaceId}/dictation/${result.data.documentId}`)
     } finally {
       setSaving(false)
@@ -66,14 +66,14 @@ export function NewDictation({ workspaceId, templates }: {
   }
 
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-stone-900">New dictation</h2>
-          <p className="mt-0.5 text-xs text-stone-500">Choose the report type first — it sets the vocabulary and the fields.</p>
+          <h2 className="text-sm font-semibold text-slate-900">New dictation</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Choose the report type first â€” it sets the vocabulary and the fields.</p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
             Title
             <input
               type="text"
@@ -81,15 +81,15 @@ export function NewDictation({ workspaceId, templates }: {
               disabled={saving}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Leave blank and we'll suggest one"
-              className="w-56 rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
+              className="w-56 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
           </label>
-          <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
             Report type
             <select
               value={templateId}
               disabled={saving}
               onChange={(event) => setTemplateId(event.target.value)}
-              className="rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm text-stone-900 focus:border-emerald-400 focus:outline-none disabled:opacity-50">
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none disabled:opacity-50">
               {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
             </select>
           </label>
@@ -98,15 +98,15 @@ export function NewDictation({ workspaceId, templates }: {
 
       <div className="mt-3">
         {saving
-          ? <p className="flex items-center gap-2 rounded-lg border border-stone-200 p-3 text-sm text-stone-600">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />Saving the recording…
+          ? <p className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />Saving the recordingâ€¦
             </p>
           : <>
               <DictationRecorder workspaceId={workspaceId} disabled={!templateId} onComplete={submit} />
               {/* Not everything is dictated at a desk. A recording made on a handheld dictaphone or
                   a phone is the same audio taking the same transcribe job, and with audio removed
                   from the extract panel this page is now the only place it can be brought in. */}
-              <div className="mt-2 flex items-center gap-2 text-xs text-stone-500">
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                 <span>Already have a recording?</span>
                 <button
                   type="button"

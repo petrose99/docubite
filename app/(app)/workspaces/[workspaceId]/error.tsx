@@ -13,10 +13,10 @@ export default function WorkspaceError({ error, reset }: { error: Error & { dige
 
   return <main className="flex flex-1 items-center justify-center p-8">
     <div className="max-w-md space-y-4 text-center">
-      <AlertTriangle className="mx-auto h-12 w-12 text-amber-500" />
-      <h1 className="text-2xl font-bold text-stone-900">This page could not be loaded</h1>
-      <p className="text-sm text-stone-500">Something went wrong on our side. Your documents are safe — try again, and if it keeps happening, reload the page.</p>
-      {error.digest && <p className="font-mono text-xs text-stone-400">Reference: {error.digest}</p>}
+      <AlertTriangle className="mx-auto h-12 w-12 text-indigo-600" />
+      <h1 className="text-2xl font-bold text-slate-900">This page could not be loaded</h1>
+      <p className="text-sm text-slate-500">Something went wrong on our side. Your documents are safe — try again, and if it keeps happening, reload the page.</p>
+      {error.digest && <p className="font-mono text-xs text-slate-400">Reference: {error.digest}</p>}
       <div className="flex justify-center gap-2 pt-2">
         <Button type="button" onClick={reset}>Try again</Button>
         <Button asChild variant="outline"><Link href="/workspaces">Back to workspaces</Link></Button>

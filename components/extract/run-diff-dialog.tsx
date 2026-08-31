@@ -42,7 +42,7 @@ export function RunDiffDialog({ workspaceId, documentId, onClose }: { workspaceI
   }
 
   const crosshair = (targetDocumentId: string, fieldKey: string) => (
-    <button type="button" onClick={() => void openSource(targetDocumentId, fieldKey)} className="ml-auto shrink-0 rounded p-1 text-stone-400 hover:bg-white hover:text-emerald-700" title="Open source at this value"><Crosshair className="h-3.5 w-3.5" /></button>
+    <button type="button" onClick={() => void openSource(targetDocumentId, fieldKey)} className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-white hover:text-emerald-700" title="Open source at this value"><Crosshair className="h-3.5 w-3.5" /></button>
   )
 
   const diff = data?.diff
@@ -52,17 +52,18 @@ export function RunDiffDialog({ workspaceId, documentId, onClose }: { workspaceI
     <>
       <Dialog open title={status === "ready" && data ? `Changes vs last ${data.shapeName}` : "Run diff"} description={status === "ready" && data ? `Compared with ${data.prevFilename}` : undefined} width="max-w-lg" onClose={onClose}>
         <div className="max-h-[60vh] space-y-3 overflow-y-auto px-5 py-4 text-sm">
-          {status === "loading" && <div className="flex items-center gap-2 text-stone-500"><Loader2 className="h-4 w-4 animate-spin" />Comparing…</div>}
-          {status === "error" && <p className="text-stone-500">Could not build the diff.</p>}
-          {status === "none" && <p className="text-stone-500">This is the first document of its shape — there is nothing to compare it against yet.</p>}
+          {status === "loading" && <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Comparing…</div>}
+          {status === "error" && <p className="text-slate-500">Could not build the diff.</p>}
+          {status === "none" && <p className="text-slate-500">This is the first document of its shape — there is nothing to compare it against yet.</p>}
           {status === "ready" && diff && (
             <>
-              {nothing && <p className="text-stone-500">Identical to the previous run — no fields changed.</p>}
+              {nothing && <p className="text-slate-500">Identical to the previous run — no fields changed.</p>}
 
               {diff.changed.map((change) => (
+                // kept amber: diff legend uses emerald=added/red=removed/amber=changed
                 <div key={`c-${change.key}`} className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1.5">
                   <span className="font-medium text-amber-900">{change.label}</span>
-                  <span className="text-stone-400 line-through">{show(change.before)}</span>
+                  <span className="text-slate-400 line-through">{show(change.before)}</span>
                   <span className="font-semibold text-amber-900">{show(change.after)}</span>
                   {data && crosshair(documentId, change.key)}
                 </div>
@@ -81,13 +82,13 @@ export function RunDiffDialog({ workspaceId, documentId, onClose }: { workspaceI
                 <div key={`m-${entry.key}`} className="flex items-center gap-2 rounded-md bg-red-50 px-2.5 py-1.5">
                   <span className="font-medium text-red-900">{entry.label}</span>
                   <span className="rounded bg-white/70 px-1 text-red-800">gone</span>
-                  <span className="text-stone-500 line-through">{show(entry.before)}</span>
+                  <span className="text-slate-500 line-through">{show(entry.before)}</span>
                   {data && crosshair(data.prevDocumentId, entry.key)}
                 </div>
               ))}
 
               {diff.items && (diff.items.addedRows > 0 || diff.items.removedRows > 0 || diff.items.changedCells > 0) && (
-                <div className="rounded-md bg-stone-100 px-2.5 py-1.5 text-stone-700">
+                <div className="rounded-md bg-slate-100 px-2.5 py-1.5 text-slate-700">
                   Line items:{" "}
                   {[
                     diff.items.addedRows ? `+${diff.items.addedRows} row${diff.items.addedRows === 1 ? "" : "s"}` : null,

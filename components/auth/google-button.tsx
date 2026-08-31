@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
@@ -14,9 +14,9 @@ function GoogleGlyph() {
   )
 }
 
-/** Rendered only where the server has told the page that Google is configured — see
+/** Rendered only where the server has told the page that Google is configured â€” see
  * isGoogleAuthEnabled in lib/config.ts. That flag tracks GOOGLE_CLIENT_ID/SECRET being set in this
- * app's own env, which is a UI-only signal now — the actual Google provider registration lives on
+ * app's own env, which is a UI-only signal now â€” the actual Google provider registration lives on
  * the Supabase project's dashboard, not in this codebase, so the two have to be kept in sync by
  * hand (see the comment on isGoogleAuthEnabled). If they drift, this button sends someone to a
  * Supabase-side error page rather than a 404, but it still fails visibly either way. */
@@ -31,10 +31,10 @@ export function GoogleButton({ callbackURL = "/workspaces", label = "Continue wi
     setBusy(true)
     onError?.("")
     try {
-      // Resolves into a redirect to Google, so there is no success path to handle here — only
+      // Resolves into a redirect to Google, so there is no success path to handle here â€” only
       // the failure to start it, in which case the button has to become usable again. The
       // destination after Google redirects back is always /auth/callback, which exchanges the
-      // code for a session and then forwards to callbackURL — see that route for why.
+      // code for a session and then forwards to callbackURL â€” see that route for why.
       const supabase = createClient()
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(callbackURL)}`
       const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } })
@@ -50,9 +50,9 @@ export function GoogleButton({ callbackURL = "/workspaces", label = "Continue wi
       type="button"
       onClick={() => void signIn()}
       disabled={busy}
-      className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-stone-300 bg-white text-sm font-semibold text-stone-800 shadow-sm transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-2 disabled:opacity-60"
+      className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-2 disabled:opacity-60"
     >
-      <GoogleGlyph />{busy ? "Redirecting…" : label}
+      <GoogleGlyph />{busy ? "Redirectingâ€¦" : label}
     </button>
   )
 }

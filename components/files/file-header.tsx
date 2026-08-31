@@ -48,12 +48,12 @@ export function FileHeader({ workspaceId, fileId, name, linkAccess, status, back
   }
 
   return <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-    <Link href={backHref ?? `/workspaces/${workspaceId}/files`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800">
+    <Link href={backHref ?? `/workspaces/${workspaceId}/files`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800">
       <ArrowLeft className="h-4 w-4" />{backLabel ?? "Files"}
     </Link>
     <input
       aria-label="File name"
-      className="min-w-0 max-w-xs flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-stone-900 hover:border-stone-200 focus:border-stone-300 focus:outline-none"
+      className="min-w-0 max-w-xs flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-slate-900 hover:border-slate-200 focus:border-slate-300 focus:outline-none"
       value={value}
       onChange={(event) => setValue(event.target.value)}
       onBlur={() => void commit()}
@@ -61,9 +61,9 @@ export function FileHeader({ workspaceId, fileId, name, linkAccess, status, back
         if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur() }
         if (event.key === "Escape") { setValue(saved); event.currentTarget.blur() }
       }} />
-    {linkAccess !== "none" && <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500"><Globe className="h-3 w-3" />Shared</span>}
+    {linkAccess !== "none" && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500"><Globe className="h-3 w-3" />Shared</span>}
     {status}
-    <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50" onClick={() => setSharing(true)}>
+    <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setSharing(true)}>
       <Share2 className="h-3.5 w-3.5" />Share
     </button>
     <ShareDialog workspaceId={workspaceId} fileId={fileId} fileName={saved} open={sharing} onClose={() => { setSharing(false); router.refresh() }} />

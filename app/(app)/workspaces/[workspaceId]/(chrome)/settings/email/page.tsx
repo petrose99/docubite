@@ -50,7 +50,7 @@ export default async function InboundEmailSettingsPage({ params }: { params: Pro
       <CardContent className="space-y-4">
         {owner && <AddAllowedSenderForm workspaceId={workspaceId} />}
         {!senders.length
-          ? <p className="text-sm text-stone-500">No additional senders allowed yet.</p>
+          ? <p className="text-sm text-slate-500">No additional senders allowed yet.</p>
           : <ul className="divide-y">
               {senders.map((sender) => <li key={sender.id} className="flex items-center justify-between py-2 text-sm">
                 <span>{sender.pattern}</span>

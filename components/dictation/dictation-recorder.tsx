@@ -40,6 +40,9 @@ export type DictationResult = { blob: Blob; mimeType: string; durationMs: number
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024
 const WARN_AT_BYTES = MAX_AUDIO_BYTES * 0.9
 
+/** Number of bars in the live waveform, matching the canvas's `wave` control. */
+const WAVE_BAR_COUNT = 28
+
 export function DictationRecorder({ workspaceId, onComplete, disabled }: {
   workspaceId: string
   /** Called with the complete recording when the user stops. */
@@ -51,6 +54,8 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
   const [elapsedMs, setElapsedMs] = useState(0)
   const [nearingLimit, setNearingLimit] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [levels, setLevels] = useState<number[]>(() => new Array(WAVE_BAR_COUNT).fill(0))
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -65,13 +70,32 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
   // re-registering the handler.
   const stopRef = useRef<() => void>(() => {})
 
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const rafRef = useRef<number | null>(null)
+
+  /** Stops the waveform's animation loop and releases the analyser's AudioContext. Does not touch
+   * the MediaStream — that's `teardown`'s job — so the two can be called independently if the
+   * visualizer ever needs to outlive the mic (it currently doesn't). */
+  const stopVisualizer = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    analyserRef.current = null
+    void audioContextRef.current?.close().catch(() => {})
+    audioContextRef.current = null
+    setLevels(new Array(WAVE_BAR_COUNT).fill(0))
+  }, [])
+
   /** Releases the microphone. Called on stop AND on unmount — a recorder left running because the
    * panel closed would keep the browser's recording indicator lit indefinitely. */
   const teardown = useCallback(() => {
     recorderRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
-  }, [])
+    stopVisualizer()
+  }, [stopVisualizer])
 
   useEffect(() => () => teardown(), [teardown])
 
@@ -111,6 +135,39 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
     }
   }, [workspaceId])
 
+  /** Wires an AnalyserNode to the same MediaStream already captured for recording, then drives
+   * `levels` off it via rAF while recording. Not connected to `audioContext.destination` — this is
+   * visualization only, never monitoring/echo. Safari needs the `webkitAudioContext` fallback; if
+   * neither constructor exists, the visualizer is skipped and the text-only preview still works. */
+  const startVisualizer = useCallback((stream: MediaStream) => {
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) return
+    try {
+      const audioContext = new Ctor()
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 64
+      audioContext.createMediaStreamSource(stream).connect(analyser)
+      audioContextRef.current = audioContext
+      analyserRef.current = analyser
+
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        const currentAnalyser = analyserRef.current
+        if (!currentAnalyser) return
+        currentAnalyser.getByteFrequencyData(data)
+        const bars = new Array(WAVE_BAR_COUNT)
+        for (let i = 0; i < WAVE_BAR_COUNT; i++) {
+          bars[i] = data[Math.floor((i / WAVE_BAR_COUNT) * data.length)] / 255
+        }
+        setLevels(bars)
+        rafRef.current = requestAnimationFrame(tick)
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    } catch {
+      /* visualizer is non-essential — the text-only interim preview still works without it */
+    }
+  }, [])
+
   const start = useCallback(async () => {
     setError(null)
     const mimeType = pickMimeType()
@@ -118,6 +175,7 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
       streamRef.current = stream
+      startVisualizer(stream)
       const recorder = new MediaRecorder(stream, { mimeType })
       recorderRef.current = recorder
       chunksRef.current = []
@@ -161,7 +219,7 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
       else setError("Could not access the microphone.")
       teardown()
     }
-  }, [sendInterimWindow, teardown])
+  }, [sendInterimWindow, teardown, startVisualizer])
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current
@@ -184,7 +242,7 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
 
   return (
-    <div className="rounded-lg border border-stone-200 p-3">
+    <div className="rounded-lg border border-slate-200 p-3">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -195,20 +253,21 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
           {recording ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
           {recording ? "Stop and transcribe" : "Dictate"}
         </button>
-        {recording && <span className="flex items-center gap-2 text-sm tabular-nums text-stone-600"><span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />{clock}</span>}
+        {recording && <span className="flex items-center gap-2 text-sm tabular-nums text-slate-600"><span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />{clock}</span>}
+        {recording && <WaveBars levels={levels} />}
       </div>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       {recording && nearingLimit && (
-        <p className="mt-2 text-sm text-amber-600">Approaching the maximum recording length — this will stop and save automatically soon.</p>
+        <p className="mt-2 text-sm text-indigo-600">Approaching the maximum recording length — this will stop and save automatically soon.</p>
       )}
 
       {recording && (
         <div className="mt-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Live preview — not saved</p>
-          <p className="mt-1 max-h-24 overflow-y-auto text-sm text-stone-500">{interim || "Listening…"}</p>
-          <p className="mt-2 text-xs text-stone-400">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Live preview — not saved</p>
+          <p className="mt-1 max-h-24 overflow-y-auto text-sm text-slate-500">{interim || "Listening…"}</p>
+          <p className="mt-2 text-xs text-slate-400">
             The full recording is transcribed again when you stop; this preview is only to confirm the microphone is working.
           </p>
         </div>
@@ -218,8 +277,27 @@ export function DictationRecorder({ workspaceId, onComplete, disabled }: {
           recording to onComplete, and what happens next is the caller's business, not a claim this
           component is in a position to make. */}
       {!recording && !!elapsedMs && (
-        <p className="mt-2 text-sm text-stone-500">Recorded {Math.max(1, Math.round(elapsedMs / 1000))}s.</p>
+        <p className="mt-2 text-sm text-slate-500">Recorded {Math.max(1, Math.round(elapsedMs / 1000))}s.</p>
       )}
+    </div>
+  )
+}
+
+/** Fixed set of bars driven by live analyser amplitude. Idle bars sit at a low slate height;
+ * active bars scale with amplitude in emerald — purely decorative, never blocks the text preview. */
+function WaveBars({ levels }: { levels: number[] }) {
+  return (
+    <div className="flex h-6 flex-1 items-center gap-[3px]" aria-hidden="true">
+      {levels.map((level, index) => (
+        <span
+          key={index}
+          className="w-[3px] flex-1 rounded-full bg-slate-300 transition-[height] duration-75"
+          style={{
+            height: `${Math.max(15, level * 100)}%`,
+            backgroundColor: level > 0.08 ? "#10B981" : undefined,
+          }}
+        />
+      ))}
     </div>
   )
 }

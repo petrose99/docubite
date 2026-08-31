@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic"
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return <div className="rounded border p-4">
-    <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</div>
-    <div className="mt-1 text-2xl font-bold text-stone-900">{value}</div>
-    {hint && <div className="mt-1 text-xs text-stone-500">{hint}</div>}
+    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="mt-1 text-2xl font-bold text-slate-900">{value}</div>
+    {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
   </div>
 }
 
@@ -28,8 +28,8 @@ export default async function AnalyticsPage() {
 
   return <main className="mx-auto max-w-4xl space-y-6 p-6">
     <header>
-      <h1 className="text-2xl font-bold text-stone-900">Product analytics</h1>
-      <p className="mt-1 text-sm text-stone-600">Trailing 7 days, from first-party events only — see lib/analytics.ts.</p>
+      <h1 className="text-2xl font-bold text-slate-900">Product analytics</h1>
+      <p className="mt-1 text-sm text-slate-600">Trailing 7 days, from first-party events only — see lib/analytics.ts.</p>
     </header>
 
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

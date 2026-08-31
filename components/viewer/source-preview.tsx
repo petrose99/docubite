@@ -11,7 +11,7 @@ export type { ProvenanceTarget }
 /** pdf.js and the canvas rendering it drives are browser-only and weigh far more than the rest of
  * the sheet; loaded through next/dynamic({ ssr: false }) so none of it reaches the server render or
  * the main bundle until a PDF is actually previewed. */
-const ProvenancePdf = dynamic(() => import("./provenance-pdf"), { ssr: false, loading: () => <div className="flex flex-1 items-center justify-center bg-stone-100 text-sm text-stone-400">Loading viewer…</div> })
+const ProvenancePdf = dynamic(() => import("./provenance-pdf"), { ssr: false, loading: () => <div className="flex flex-1 items-center justify-center bg-slate-100 text-sm text-slate-400">Loading viewer…</div> })
 
 /** The document a row came from, floating over the grid, optionally scrolled and highlighted to
  * the exact spot a value was read from.
@@ -37,7 +37,7 @@ export function SourceViewer({ source, target }: { source: SourceDocument; targe
         <div className="flex flex-wrap items-center gap-2 border-b bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
           {target.quote && <span className="rounded bg-white/70 px-1.5 py-0.5 font-medium">“{target.quote}”</span>}
           <span className="text-emerald-700">page {target.page}</span>
-          {positionUnavailable && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Matched on page {target.page} — exact position unavailable</span>}
+          {positionUnavailable && <span className="ml-auto rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800">Matched on page {target.page} — exact position unavailable</span>}
         </div>
       )}
       {isPdf ? (
@@ -45,7 +45,7 @@ export function SourceViewer({ source, target }: { source: SourceDocument; targe
       ) : isImage ? (
         <ProvenanceImage href={href} filename={source.filename} target={target} />
       ) : (
-        <iframe src={href} title={source.filename} className="min-h-0 flex-1 bg-stone-100" />
+        <iframe src={href} title={source.filename} className="min-h-0 flex-1 bg-slate-100" />
       )}
     </div>
   )
@@ -66,17 +66,17 @@ export function SourcePreview({ source, target, onClose }: { source: SourceDocum
   const href = `/api/documents/${source.documentId}/source`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" onClick={onClose}>
       <div className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center gap-2 border-b px-3 py-2">
-          <span className="truncate text-sm font-semibold text-stone-800" title={source.filename}>{source.filename}</span>
-          <a href={href} target="_blank" rel="noreferrer" className="ml-auto rounded p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Open in a new tab">
+          <span className="truncate text-sm font-semibold text-slate-800" title={source.filename}>{source.filename}</span>
+          <a href={href} target="_blank" rel="noreferrer" className="ml-auto rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Open in a new tab">
             <ExternalLink className="h-4 w-4" />
           </a>
-          <a href={href} download={source.filename} className="rounded p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Download">
+          <a href={href} download={source.filename} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Download">
             <Download className="h-4 w-4" />
           </a>
-          <button type="button" aria-label="Close preview" className="rounded p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" onClick={onClose}>
+          <button type="button" aria-label="Close preview" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={onClose}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -91,7 +91,7 @@ export function SourcePreview({ source, target, onClose }: { source: SourceDocum
 function ProvenanceImage({ href, filename, target }: { href: string; filename: string; target?: ProvenanceTarget | null }) {
   const box = target?.bbox
   return (
-    <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-stone-100 p-4">
+    <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-slate-100 p-4">
       <div className="relative inline-block">
         <style>{"@keyframes dbProvPulse{0%{background:rgba(52,211,153,0.55)}100%{background:rgba(52,211,153,0.25)}}"}</style>
         {/* eslint-disable-next-line @next/next/no-img-element */}

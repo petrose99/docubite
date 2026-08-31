@@ -44,12 +44,12 @@ export default async function SharedFilePage({ params }: { params: Promise<{ fil
       ? "You can try changes here — they are not saved to the original file"
       : "You are viewing a read-only copy"
 
-  return <main className="flex min-h-screen flex-col bg-white text-stone-900">
+  return <main className="flex min-h-screen flex-col bg-white text-slate-900">
     <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
       <span className="text-sm font-bold">{config.app.title}</span>
-      <span className="truncate text-sm font-semibold text-stone-700" title={file.name}>{file.name}</span>
-      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">{modeLabel}</span>
-      {access === "owner" && <Link href={`/workspaces/${file.workspaceId}/files/${file.id}/sheet`} className="ml-auto rounded-md border px-2.5 py-1 text-sm font-medium text-stone-700 hover:bg-stone-50">Open in your workspace</Link>}
+      <span className="truncate text-sm font-semibold text-slate-700" title={file.name}>{file.name}</span>
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{modeLabel}</span>
+      {access === "owner" && <Link href={`/workspaces/${file.workspaceId}/files/${file.id}/sheet`} className="ml-auto rounded-md border px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50">Open in your workspace</Link>}
     </header>
 
     <SharedSheet

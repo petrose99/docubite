@@ -80,9 +80,9 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
 
   if (!reportTemplateName) {
     return (
-      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-stone-900">Report</h2>
-        <p className="mt-1.5 text-sm text-stone-500">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">Report</h2>
+        <p className="mt-1.5 text-sm text-slate-500">
           This workspace has no report template, so there is no format to draft into. Add one in Settings → Report templates.
         </p>
       </section>
@@ -90,11 +90,11 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
   }
 
   return (
-    <section className="flex flex-col rounded-xl border border-stone-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-2.5">
-        <h2 className="text-sm font-semibold text-stone-900">Report</h2>
+    <section className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+        <h2 className="text-sm font-semibold text-slate-900">Report</h2>
         {draft && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${signed ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${signed ? "bg-emerald-50 text-emerald-800" : "bg-indigo-50 text-indigo-800"}`}>
             v{draft.version} · {signed ? "signed" : "draft"}
           </span>
         )}
@@ -104,7 +104,7 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
               type="button"
               disabled={disabled || busy !== null}
               onClick={() => void run("draft", () => createReportDraftAction(workspaceId, documentId), draft ? "New draft created" : "Draft created")}
-              className="flex items-center gap-1.5 rounded-md border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+              className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50">
               {busy === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               {draft ? "Re-draft" : "Draft report"}
             </button>
@@ -122,7 +122,7 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
       </header>
 
       {!draft && (
-        <p className="px-4 py-8 text-sm text-stone-500">
+        <p className="px-4 py-8 text-sm text-slate-500">
           {disabled
             ? "A report can be drafted once the recording has been transcribed."
             : `Draft a ${reportTemplateName.toLowerCase()} from the fields and transcript. Nothing is finalised until you sign it.`}
@@ -144,7 +144,7 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
               like a signed report without any. */}
           <Completeness report={draft.completeness} signed={signed} />
 
-          <pre className="max-h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-stone-200 bg-stone-50 p-3 font-mono text-xs leading-relaxed text-stone-800">
+          <pre className="max-h-[26rem] overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-relaxed text-slate-800">
             {draft.renderedText}
           </pre>
 
@@ -153,7 +153,7 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
               <button
                 type="button"
                 onClick={() => setEditing((open) => !open)}
-                className="flex items-center gap-1.5 text-xs font-medium text-stone-500 transition-colors hover:text-stone-800">
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-800">
                 <PencilLine className="h-3.5 w-3.5" />{editing ? "Hide section editing" : "Edit narrative sections"}
               </button>
 
@@ -161,26 +161,26 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
                 <div className="mt-2 space-y-2.5">
                   {sections.map((section) => (
                     <div key={section.key}>
-                      <label htmlFor={`section-${section.key}`} className="text-xs font-medium text-stone-700">{section.title}</label>
+                      <label htmlFor={`section-${section.key}`} className="text-xs font-medium text-slate-700">{section.title}</label>
                       <textarea
                         id={`section-${section.key}`}
                         rows={3}
                         value={narrative[section.key] ?? ""}
                         onChange={(event) => setNarrative((state) => ({ ...state, [section.key]: event.target.value }))}
-                        className="mt-1 w-full resize-y rounded-md border border-stone-200 p-2 text-xs leading-relaxed text-stone-800 focus:border-emerald-400 focus:outline-none" />
+                        className="mt-1 w-full resize-y rounded-md border border-slate-200 p-2 text-xs leading-relaxed text-slate-800 focus:border-emerald-400 focus:outline-none" />
                     </div>
                   ))}
                   {/* The synoptic block is absent from this list on purpose: it is rendered
                       deterministically from the extracted values, and typing over it would sever the
                       only link between what the report says and what was dictated. Correct the field. */}
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-slate-400">
                     Only the prose is editable. The synoptic block comes from the fields — correct it there.
                   </p>
                   <button
                     type="button"
                     disabled={busy !== null}
                     onClick={() => void run("save", () => updateDraftNarrativeAction(workspaceId, draft.id, narrative), "Sections saved")}
-                    className="flex items-center gap-1.5 rounded-md bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-stone-900 disabled:opacity-50">
+                    className="flex items-center gap-1.5 rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-900 disabled:opacity-50">
                     {busy === "save" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Save sections
                   </button>
                 </div>
@@ -189,7 +189,7 @@ export function ReportPane({ workspaceId, documentId, draft, draftHistory, secti
           )}
 
           {draftHistory.length > 1 && (
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-slate-400">
               {draftHistory.length} versions. Earlier drafts are kept, so what a signer saw stays recoverable.
             </p>
           )}
@@ -231,7 +231,7 @@ function Completeness({ report, signed }: { report: DictationDraft["completeness
     )
   }
   return (
-    <div className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+    <div className="rounded-md bg-indigo-50 px-2.5 py-2 text-xs text-indigo-900">
       <p className="flex items-center gap-1.5 font-medium"><TriangleAlert className="h-3.5 w-3.5 shrink-0" />{signed ? "Signed with these gaps" : "Before signing"}</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
         {report.missingRequired?.length > 0 && <li>Required, not dictated: {report.missingRequired.join(", ")}</li>}

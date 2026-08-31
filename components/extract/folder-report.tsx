@@ -12,9 +12,9 @@ import { toast } from "sonner"
 const statusDot = (status: string) => {
   const normalized = normalizeStatus(status)
   if (normalized === "failed") return "bg-red-500"
-  if (normalized === "needs_review") return "bg-amber-500"
+  if (normalized === "needs_review") return "bg-indigo-500"
   if (normalized === "ready_for_review" || normalized === "reviewed") return "bg-emerald-500"
-  return "bg-stone-300"
+  return "bg-slate-300"
 }
 
 /** The folder report for one upload batch: the documents grouped by kind, the duplicates, the
@@ -70,8 +70,8 @@ export function FolderReport({ workspaceId, fileId, uploadBatchId, onClose }: { 
     <>
       <Dialog open title="Folder report" description={report ? `${report.total} document${report.total === 1 ? "" : "s"}, ${report.settled} processed` : undefined} width="max-w-2xl" onClose={onClose}>
         <div className="max-h-[65vh] space-y-4 overflow-y-auto px-5 py-4 text-sm">
-          {status === "loading" && <div className="flex items-center gap-2 text-stone-500"><Loader2 className="h-4 w-4 animate-spin" />Building report…</div>}
-          {status === "error" && <p className="text-stone-500">Could not build the report.</p>}
+          {status === "loading" && <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Building report…</div>}
+          {status === "error" && <p className="text-slate-500">Could not build the report.</p>}
           {status === "ready" && report && (
             <>
               <div className="flex items-start gap-2 rounded-md bg-emerald-50 p-2.5">
@@ -83,17 +83,17 @@ export function FolderReport({ workspaceId, fileId, uploadBatchId, onClose }: { 
               </div>
 
               <section>
-                <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">Groups</h3>
+                <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">Groups</h3>
                 <div className="space-y-2">
                   {report.groups.map((group) => (
-                    <div key={group.key} className="rounded-md border border-stone-200 p-2.5">
+                    <div key={group.key} className="rounded-md border border-slate-200 p-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-stone-800">{group.docType || "Unlabelled"}{group.entity ? ` · ${group.entity}` : ""}</span>
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">{group.count}</span>
+                        <span className="font-semibold text-slate-800">{group.docType || "Unlabelled"}{group.entity ? ` · ${group.entity}` : ""}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{group.count}</span>
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {group.documents.map((document) => (
-                          <button key={document.id} type="button" onClick={() => openDocument(document)} className="inline-flex items-center gap-1.5 rounded border border-stone-200 px-1.5 py-0.5 text-xs text-stone-700 hover:border-emerald-300 hover:bg-emerald-50" title="Open source">
+                          <button key={document.id} type="button" onClick={() => openDocument(document)} className="inline-flex items-center gap-1.5 rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-700 hover:border-emerald-300 hover:bg-emerald-50" title="Open source">
                             <span className={`h-1.5 w-1.5 rounded-full ${statusDot(document.status)}`} />
                             <span className="max-w-[10rem] truncate">{document.filename}</span>
                           </button>
@@ -101,7 +101,7 @@ export function FolderReport({ workspaceId, fileId, uploadBatchId, onClose }: { 
                       </div>
                       {group.gaps.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
-                          {group.gaps.map((gap) => <span key={gap} className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">{gap} missing</span>)}
+                          {group.gaps.map((gap) => <span key={gap} className="rounded bg-indigo-100 px-1.5 py-0.5 text-xs text-indigo-800">{gap} missing</span>)}
                         </div>
                       )}
                     </div>
@@ -111,12 +111,12 @@ export function FolderReport({ workspaceId, fileId, uploadBatchId, onClose }: { 
 
               {report.duplicates.length > 0 && (
                 <section>
-                  <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">Duplicates</h3>
+                  <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">Duplicates</h3>
                   <div className="space-y-1">
                     {report.duplicates.map((pair, index) => (
-                      <div key={`${pair.a}-${pair.b}-${index}`} className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-amber-900">
+                      <div key={`${pair.a}-${pair.b}-${index}`} className="flex items-center gap-2 rounded-md bg-indigo-50 px-2.5 py-1.5 text-indigo-900">
                         <span className="max-w-[12rem] truncate">{pair.aFilename}</span>
-                        <span className="text-amber-500">·</span>
+                        <span className="text-indigo-500">·</span>
                         <span className="max-w-[12rem] truncate">{pair.bFilename}</span>
                         <span className="ml-auto rounded bg-white/70 px-1.5 py-0.5 text-xs font-medium">{pair.kind === "exact" ? "exact copy" : `${Math.round(pair.score * 100)}% similar`}</span>
                       </div>
@@ -127,7 +127,7 @@ export function FolderReport({ workspaceId, fileId, uploadBatchId, onClose }: { 
 
               {report.issues.length > 0 && (
                 <section>
-                  <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">Needs attention</h3>
+                  <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">Needs attention</h3>
                   <div className="space-y-1">
                     {report.issues.map((issue, index) => (
                       <div key={`${issue.documentId}-${index}`} className="flex items-center gap-2 rounded-md bg-red-50 px-2.5 py-1.5 text-red-900">

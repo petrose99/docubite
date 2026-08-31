@@ -36,15 +36,15 @@ function FieldEditor({ field, onSave }: { field: DocumentFieldDefinition; onSave
     setNewSub("")
   }
 
-  const inputClass = "w-full rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+  const inputClass = "w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
   return <div className="space-y-2.5">
     <div>
-      <label className="mb-1 block text-xs font-medium text-stone-500">Field name</label>
+      <label className="mb-1 block text-xs font-medium text-slate-500">Field name</label>
       <input className={inputClass} value={draft.label} onChange={(event) => patch({ label: event.target.value })} />
     </div>
     <div className="flex gap-2">
       <div className="flex-1">
-        <label className="mb-1 block text-xs font-medium text-stone-500">Type</label>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
         <select className={inputClass} value={draft.type} onChange={(event) => {
           const type = event.target.value as DocumentFieldDefinition["type"]
           patch({ type, options: type === "enum" ? draft.options || [] : undefined, itemFields: type === "array" ? draft.itemFields || [] : undefined })
@@ -53,30 +53,30 @@ function FieldEditor({ field, onSave }: { field: DocumentFieldDefinition; onSave
         </select>
       </div>
       <div className="flex items-end pb-1.5">
-        <label className="inline-flex items-center gap-1.5 text-sm text-stone-700"><input type="checkbox" className="accent-emerald-600" checked={draft.required} onChange={(event) => patch({ required: event.target.checked })} />Required</label>
+        <label className="inline-flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" className="accent-emerald-600" checked={draft.required} onChange={(event) => patch({ required: event.target.checked })} />Required</label>
       </div>
     </div>
     <div>
-      <label className="mb-1 block text-xs font-medium text-stone-500">Extraction instruction</label>
+      <label className="mb-1 block text-xs font-medium text-slate-500">Extraction instruction</label>
       <textarea className={inputClass} rows={2} placeholder="Tell the AI exactly what to read, e.g. “Total including tax”" value={draft.instruction} onChange={(event) => patch({ instruction: event.target.value })} />
     </div>
     {draft.type === "enum" && <div>
-      <label className="mb-1 block text-xs font-medium text-stone-500">Allowed values (comma-separated)</label>
+      <label className="mb-1 block text-xs font-medium text-slate-500">Allowed values (comma-separated)</label>
       <input className={inputClass} placeholder="paid, unpaid, overdue" value={(draft.options || []).join(", ")} onChange={(event) => patch({ options: event.target.value.split(",").map((option) => option.trim()).filter(Boolean) })} />
     </div>}
-    {draft.type === "array" && <div className="rounded-md border border-stone-200 bg-stone-50 p-2">
-      <p className="mb-1.5 text-xs font-medium text-stone-500">Table columns (one spreadsheet column each)</p>
+    {draft.type === "array" && <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+      <p className="mb-1.5 text-xs font-medium text-slate-500">Table columns (one spreadsheet column each)</p>
       <div className="space-y-1.5">
         {(draft.itemFields || []).map((item, index) => <div key={item.key} className="flex items-center gap-1.5">
-          <input className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-xs" value={item.label} onChange={(event) => patchItem(index, { label: event.target.value })} />
-          <select className="rounded border border-stone-300 px-1 py-1 text-xs" value={item.type} onChange={(event) => patchItem(index, { type: event.target.value as DocumentItemFieldDefinition["type"] })}>
+          <input className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs" value={item.label} onChange={(event) => patchItem(index, { label: event.target.value })} />
+          <select className="rounded border border-slate-300 px-1 py-1 text-xs" value={item.type} onChange={(event) => patchItem(index, { type: event.target.value as DocumentItemFieldDefinition["type"] })}>
             {ITEM_TYPES.map((type) => <option key={type} value={type}>{TYPE_LABELS[type]}</option>)}
           </select>
-          <button type="button" className="rounded p-0.5 text-stone-400 hover:text-red-600" onClick={() => patch({ itemFields: (draft.itemFields || []).filter((_, position) => position !== index) })}><X className="h-3.5 w-3.5" /></button>
+          <button type="button" className="rounded p-0.5 text-slate-400 hover:text-red-600" onClick={() => patch({ itemFields: (draft.itemFields || []).filter((_, position) => position !== index) })}><X className="h-3.5 w-3.5" /></button>
         </div>)}
         <div className="flex items-center gap-1.5">
-          <input className="min-w-0 flex-1 rounded border border-dashed border-stone-300 px-2 py-1 text-xs" placeholder="Add table column…" value={newSub} onChange={(event) => setNewSub(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSub() } }} />
-          <button type="button" className="rounded p-0.5 text-stone-400 hover:text-emerald-600" onClick={addSub}><Plus className="h-3.5 w-3.5" /></button>
+          <input className="min-w-0 flex-1 rounded border border-dashed border-slate-300 px-2 py-1 text-xs" placeholder="Add table column…" value={newSub} onChange={(event) => setNewSub(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSub() } }} />
+          <button type="button" className="rounded p-0.5 text-slate-400 hover:text-emerald-600" onClick={addSub}><Plus className="h-3.5 w-3.5" /></button>
         </div>
       </div>
     </div>}
@@ -105,11 +105,11 @@ export function ColumnChips({ fields, onChange }: {
         const isArray = field.type === "array"
         return <Popover key={field.key}>
           <PopoverTrigger asChild>
-            <button type="button" className={`group inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${isArray ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-stone-300 bg-white text-stone-800 hover:bg-stone-100"}`} title={field.instruction || field.label}>
+            <button type="button" className={`group inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${isArray ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"}`} title={field.instruction || field.label}>
               {isArray && <Table2 className="h-3.5 w-3.5" />}
               {field.label}
               {field.required && <span className="text-red-500">*</span>}
-              <span role="button" tabIndex={-1} aria-label={`Remove ${field.label}`} className="rounded-full p-0.5 text-stone-400 hover:bg-stone-300 hover:text-stone-700" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onChange(fields.filter((_, position) => position !== index)) }}><X className="h-3 w-3" /></span>
+              <span role="button" tabIndex={-1} aria-label={`Remove ${field.label}`} className="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover:text-slate-700" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onChange(fields.filter((_, position) => position !== index)) }}><X className="h-3 w-3" /></span>
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-80 p-3">
@@ -120,8 +120,8 @@ export function ColumnChips({ fields, onChange }: {
     </div>
 
     <div className="flex items-center gap-2">
-      <input className="min-w-0 flex-1 rounded-md border border-stone-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Enter field name" value={newColumn} onChange={(event) => setNewColumn(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addColumn() } }} />
-      <button type="button" className="shrink-0 rounded-md border border-stone-300 px-2.5 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 disabled:opacity-50" disabled={!newColumn.trim()} onClick={addColumn}>+ Add field</button>
+      <input className="min-w-0 flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="Enter field name" value={newColumn} onChange={(event) => setNewColumn(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addColumn() } }} />
+      <button type="button" className="shrink-0 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50" disabled={!newColumn.trim()} onClick={addColumn}>+ Add field</button>
     </div>
   </div>
 }

@@ -15,9 +15,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const inviteQuery = token ? `?invite=${encodeURIComponent(token)}` : ""
 
   return <>
-    <h1 className="font-display text-2xl font-bold tracking-[-0.02em] text-stone-950">Sign in to DocuBite</h1>
-    <p className="mt-1.5 mb-7 text-sm text-stone-500">
-      {invitedEmail ? <>Sign in as <strong className="font-medium text-stone-700">{invitedEmail}</strong> and you will join the workspace you were invited to.</> : "Welcome back."}
+    <h1 className="font-display text-2xl font-bold tracking-[-0.02em] text-slate-950">Sign in to DocuBite</h1>
+    <p className="mt-1.5 mb-7 text-sm text-slate-500">
+      {invitedEmail ? <>Sign in as <strong className="font-medium text-slate-700">{invitedEmail}</strong> and you will join the workspace you were invited to.</> : "Welcome back."}
     </p>
 
     <LoginForm

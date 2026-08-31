@@ -79,7 +79,7 @@ export function ReviewTaskDetail({ workspaceId, taskId, status, assigneeId, memb
 
   return <div className="space-y-4 rounded border p-4">
     <div>
-      <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">Assignee</label>
+      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Assignee</label>
       <select className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" defaultValue={assigneeId ?? ""} disabled={pending} onChange={(event) => void setAssignee(event.target.value)}>
         <option value="">Unassigned</option>
         {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
@@ -87,8 +87,8 @@ export function ReviewTaskDetail({ workspaceId, taskId, status, assigneeId, memb
     </div>
     {workflow ? (
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">{workflow.name}</label>
-        <p className="mt-1 text-sm text-stone-600">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">{workflow.name}</label>
+        <p className="mt-1 text-sm text-slate-600">
           Stage {workflow.currentStageIndex + 1} of {workflow.stages.length}: {workflow.stages[workflow.currentStageIndex]?.name}
           {workflow.stages[workflow.currentStageIndex]?.requireOwner ? " (owner only)" : ""}
         </p>
@@ -98,16 +98,16 @@ export function ReviewTaskDetail({ workspaceId, taskId, status, assigneeId, memb
               <button type="button" disabled={pending} className="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" onClick={() => void decideStage("approve")}>Approve stage</button>
               <button type="button" disabled={pending} className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50" onClick={() => void decideStage("reject")}>Reject</button>
             </div>
-          ) : <p className="mt-1.5 text-xs text-amber-700">Only a workspace owner can decide this stage.</p>
-        ) : <p className="mt-1.5 text-xs font-medium capitalize text-stone-600">{status.replace("_", " ")}</p>}
+          ) : <p className="mt-1.5 text-xs text-indigo-700">Only a workspace owner can decide this stage.</p>
+        ) : <p className="mt-1.5 text-xs font-medium capitalize text-slate-600">{status.replace("_", " ")}</p>}
       </div>
     ) : (
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-stone-500">Status</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</label>
         <div className="mt-1.5 flex flex-wrap gap-2">
           {["open", "in_review", "approved", "rejected"].map((option) => (
             <button key={option} type="button" disabled={pending || status === option}
-              className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold capitalize transition-colors ${status === option ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-stone-50"}`}
+              className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold capitalize transition-colors ${status === option ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
               onClick={() => void setStatus(option)}>
               {option.replace("_", " ")}
             </button>

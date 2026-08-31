@@ -60,50 +60,50 @@ export default async function FileHubPage({ params }: { params: Promise<{ worksp
             redesign Phase 5). The route and its code stay in place, reachable by direct URL, for
             an eventual deletion pass; see components/sheet/README.md. */}
         <FileHubUploadButton workspaceId={workspaceId} fileId={fileId} fileName={file.name} template={template} usage={usage} sheetCount={templates.length} documentSearchEnabled={config.embeddings.enabled} />
-        <Link href={`${base}/export?format=xlsx`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50">
+        <Link href={`${base}/export?format=xlsx`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
           <Download className="h-4 w-4" />Export xlsx
         </Link>
-        <Link href={`${base}/export?format=csv`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50">
+        <Link href={`${base}/export?format=csv`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
           <Download className="h-4 w-4" />Export csv
         </Link>
       </div>
 
       {hasReviewQueue && reviewTasks.length > 0 && <section className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Open review tasks</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Open review tasks</h2>
         <ul className="divide-y rounded border bg-white">
           {reviewTasks.map((task: Awaited<ReturnType<typeof listOpenReviewTasksForFile>>[number]) => <li key={task.id}>
-            <Link href={`/workspaces/${workspaceId}/review/${task.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50">
+            <Link href={`/workspaces/${workspaceId}/review/${task.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
               <ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-700" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">{task.document.filename}</span>
-              <span className="shrink-0 text-xs text-stone-400">{task.status === "in_review" ? "In review" : "Open"}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{task.document.filename}</span>
+              <span className="shrink-0 text-xs text-slate-400">{task.status === "in_review" ? "In review" : "Open"}</span>
             </Link>
           </li>)}
         </ul>
       </section>}
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Documents ({documents.length})</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Documents ({documents.length})</h2>
         {documents.length
           ? <ul className="divide-y rounded border bg-white">
               {documents.map((document: Awaited<ReturnType<typeof listWorkspaceDocuments>>[number]) => <li key={document.id}>
-                <Link href={`/workspaces/${workspaceId}/documents/${document.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50">
-                  <FileText className="h-4 w-4 shrink-0 text-stone-400" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">{document.filename}</span>
-                  {document.template && <span className="shrink-0 text-xs text-stone-400">{document.template.name}</span>}
-                  <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">{STATUS_LABEL[document.status] ?? document.status}</span>
+                <Link href={`/workspaces/${workspaceId}/documents/${document.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{document.filename}</span>
+                  {document.template && <span className="shrink-0 text-xs text-slate-400">{document.template.name}</span>}
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{STATUS_LABEL[document.status] ?? document.status}</span>
                 </Link>
               </li>)}
             </ul>
-          : <p className="rounded border border-dashed p-6 text-center text-sm text-stone-400">No documents yet — upload some to get started.</p>}
+          : <p className="rounded border border-dashed p-6 text-center text-sm text-slate-400">No documents yet — upload some to get started.</p>}
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Worksheets</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Worksheets</h2>
         <ul className="divide-y rounded border bg-white">
           {templates.map((template: Awaited<ReturnType<typeof getFileTemplates>>[number]) => <li key={template.id}>
-            <Link href={`/workspaces/${workspaceId}/settings/templates`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-stone-50">
-              <Table2 className="h-4 w-4 shrink-0 text-stone-400" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">{template.name}</span>
+            <Link href={`/workspaces/${workspaceId}/settings/templates`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
+              <Table2 className="h-4 w-4 shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{template.name}</span>
             </Link>
           </li>)}
         </ul>

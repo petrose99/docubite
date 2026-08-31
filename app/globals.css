@@ -3,41 +3,41 @@
 @custom-variant dark (&:where(.dark, .dark *));
 @config "../tailwind.config.ts";
 
-/* Warm paper cream for the marketing site only — the app shell keeps its stone/white tokens. */
+/* Warm paper cream for the marketing site only — the app shell keeps its slate/white tokens. */
 @theme {
   --color-cream-50: #FBF7F0;
   --color-cream-100: #F5EEE1;
   --color-cream-200: #EDE3D0;
 }
 
-/* The palette is emerald on a warm stone neutral ramp — the colours the app shell already uses
+/* The palette is emerald on a cool slate neutral ramp — the colours the app shell already uses
  * for its brand mark, active nav item and links. The stock shadcn tokens these replaced were a
  * near-black primary (240 5.9% 10%) on cool blue-grey neutrals, so every Button rendered flat
- * black against an emerald-and-stone chrome. Restyling the tokens rather than the components
+ * black against an emerald-and-slate chrome. Restyling the tokens rather than the components
  * fixes that everywhere at once — buttons, focus rings, badges, inputs. */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 24 10% 10%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 24 10% 10%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 24 10% 10%;
+    --popover-foreground: 222 47% 11%;
     /* emerald-700 / emerald-800 pair, matching the sidebar brand mark. */
     --primary: 163 88% 24%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 30 8% 96%;
-    --secondary-foreground: 24 10% 20%;
-    --muted: 30 8% 96%;
-    --muted-foreground: 25 6% 45%;
-    --accent: 30 8% 95%;
-    --accent-foreground: 24 10% 15%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 39% 20%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 94%;
+    --accent-foreground: 217 33% 17%;
     /* Deeper and less saturated than the stock 0 84% 60%, which read as alarm-red next to
      * emerald and made every "Remove" button shout louder than the primary action. */
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 20 6% 90%;
-    --input: 20 6% 88%;
+    --border: 214 32% 91%;
+    --input: 214 20% 82%;
     --ring: 163 84% 30%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -56,25 +56,25 @@
   }
 
   .dark {
-    --background: 24 10% 6%;
-    --foreground: 30 8% 96%;
-    --card: 24 9% 9%;
-    --card-foreground: 30 8% 96%;
-    --popover: 24 9% 9%;
-    --popover-foreground: 30 8% 96%;
+    --background: 222 47% 8%;
+    --foreground: 210 40% 96%;
+    --card: 222 40% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 40% 11%;
+    --popover-foreground: 210 40% 96%;
     /* Lifted to emerald-500 on dark: emerald-700 does not clear contrast on a near-black card. */
     --primary: 160 84% 39%;
-    --primary-foreground: 24 10% 6%;
-    --secondary: 24 6% 16%;
-    --secondary-foreground: 30 8% 96%;
-    --muted: 24 6% 16%;
-    --muted-foreground: 25 6% 64%;
-    --accent: 24 6% 18%;
-    --accent-foreground: 30 8% 96%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 19%;
+    --accent-foreground: 210 40% 96%;
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 24 6% 18%;
-    --input: 24 6% 20%;
+    --border: 217 33% 19%;
+    --input: 217 25% 22%;
     --ring: 160 74% 45%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;

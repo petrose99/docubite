@@ -26,20 +26,20 @@ export function ExpenseClaimForm({ workspaceId, receipts }: {
 
   return <form action={submit} className="space-y-3">
     <div>
-      <label className="block text-xs font-medium text-stone-500">Title (optional)</label>
+      <label className="block text-xs font-medium text-slate-500">Title (optional)</label>
       <input name="title" className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" placeholder="e.g. Client trip, August" />
     </div>
     <div>
-      <label className="block text-xs font-medium text-stone-500">Receipts</label>
+      <label className="block text-xs font-medium text-slate-500">Receipts</label>
       <div className="mt-1.5 max-h-56 space-y-1.5 overflow-y-auto rounded border p-2">
         {receipts.map((receipt) => (
-          <label key={receipt.id} className="flex items-center justify-between gap-3 rounded px-1.5 py-1 text-sm hover:bg-stone-50">
+          <label key={receipt.id} className="flex items-center justify-between gap-3 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
             <span className="flex items-center gap-2">
               <input type="checkbox" name="documentIds" value={receipt.id} />
               <span>{receipt.merchant}</span>
-              <span className="text-xs text-stone-400">{receipt.filename}</span>
+              <span className="text-xs text-slate-400">{receipt.filename}</span>
             </span>
-            {receipt.total !== null && <span className="shrink-0 font-mono text-xs text-stone-600">{receipt.total.toFixed(2)}</span>}
+            {receipt.total !== null && <span className="shrink-0 font-mono text-xs text-slate-600">{receipt.total.toFixed(2)}</span>}
           </label>
         ))}
       </div>

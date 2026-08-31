@@ -21,7 +21,7 @@ export function AutomationRuleActiveToggle({ workspaceId, ruleId, active }: { wo
   }
 
   return <button type="button" disabled={pending} onClick={() => void toggle()}
-    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-500"}`}>
+    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
     {active ? "Active" : "Inactive"}
   </button>
 }

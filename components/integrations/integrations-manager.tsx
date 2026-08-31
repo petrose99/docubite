@@ -145,9 +145,9 @@ function SecretReveal({ label, value, onDone }: { label: string; value: string; 
     }
   }
   return (
-    <div className="rounded-md border border-amber-300 bg-amber-50 p-3">
-      <p className="text-sm font-medium text-amber-900">{label}</p>
-      <p className="mt-1 text-xs text-amber-800">Copy it now — it won&apos;t be shown again.</p>
+    <div className="rounded-md border border-indigo-300 bg-indigo-50 p-3">
+      <p className="text-sm font-medium text-indigo-900">{label}</p>
+      <p className="mt-1 text-xs text-indigo-800">Copy it now — it won&apos;t be shown again.</p>
       <div className="mt-2 flex items-center gap-2">
         <code className="block flex-1 break-all rounded bg-white px-2 py-1 font-mono text-xs">{value}</code>
         <Button type="button" size="icon" variant="outline" onClick={copy} aria-label="Copy">
@@ -375,7 +375,7 @@ export function IntegrationsManager({
                   <tr key={d.id} className="border-b last:border-0">
                     <td className="py-2 pr-3 font-mono text-xs">{d.eventType}</td>
                     <td className="py-2 pr-3">
-                      <span className={d.status === "delivered" ? "text-emerald-700" : d.status === "failed" ? "text-red-600" : "text-amber-700"}>{d.status}</span>
+                      <span className={d.status === "delivered" ? "text-emerald-700" : d.status === "failed" ? "text-red-600" : "text-indigo-700"}>{d.status}</span>
                       {d.attempts > 1 && <span className="text-xs text-muted-foreground"> ·{d.attempts}×</span>}
                     </td>
                     <td className="py-2 pr-3 text-xs text-muted-foreground">{d.responseStatus ?? d.errorCode ?? "—"}</td>

@@ -36,7 +36,7 @@ export function ApprovalWorkflowRowControls({ workspaceId, workflowId, workflowN
 
   return <div className="flex items-center gap-2">
     <button type="button" disabled={pending} onClick={() => void toggle()}
-      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-500"}`}>
+      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
       {active ? "Active" : "Inactive"}
     </button>
     <button type="button" disabled={pending} onClick={() => setConfirmOpen(true)} className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50">Delete</button>

@@ -328,7 +328,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         linkAccess={linkAccess}
         backHref={`/workspaces/${workspaceId}/files/${fileId}`}
         backLabel="Back"
-        status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-stone-400"}`}>{label}</span> : null} />
+        status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-slate-400"}`}>{label}</span> : null} />
 
       <div className="flex min-h-0 flex-1">
         {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}

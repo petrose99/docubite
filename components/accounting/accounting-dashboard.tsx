@@ -9,6 +9,11 @@ import {
   setDefaultExpenseAccountAction,
   syncAccountingEntitiesAction,
 } from "@/app/(app)/workspaces/[workspaceId]/integration-connection-actions"
+import {
+  pushAllReadyDocumentsAction,
+  pushDocumentToAccountingAction,
+} from "@/app/(app)/workspaces/[workspaceId]/integration-push-actions"
+import type { ReadyToPushDocument } from "@/models/documents"
 import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
@@ -185,7 +190,105 @@ function SyncCard({ workspaceId, connection, lastSyncedAt, entityCounts, onChang
   )
 }
 
-export function AccountingDashboard({ workspaceId, isOwner, apiBase, connection, job, lastSyncedAt, entityCounts }: {
+/** Formats a bill total using the document's own currency when it has one, falling back to a plain
+ * number — a document without a recognized 3-letter currency code (normalizeBillFromDocument's
+ * currencyCode) still needs a readable amount rather than a thrown Intl error. */
+function formatAmount(total: number, currencyCode: string | null): string {
+  if (currencyCode) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode }).format(total)
+    } catch {
+      // fall through to plain formatting on an unrecognized code
+    }
+  }
+  return total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** The canvas's "Ready to push · N" batch surface: a row per reviewed, pushable document with a
+ * per-row Push button, plus a header Push all that runs the same push server-side for the whole
+ * set. Only rendered once the connection is itself pushable (active + default account chosen) —
+ * the caller (AccountingDashboard) gates on that the same way PushToAccountingCard does per document. */
+function ReadyToPushList({ workspaceId, connectionId, documents, onChanged }: {
+  workspaceId: string
+  connectionId: string
+  documents: ReadyToPushDocument[]
+  onChanged: () => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [pushingId, setPushingId] = useState<string | null>(null)
+
+  const pushOne = (documentId: string) => {
+    setPushingId(documentId)
+    startTransition(async () => {
+      const res = await pushDocumentToAccountingAction(workspaceId, documentId, connectionId)
+      setPushingId(null)
+      if (res.success) { toast.success(res.data?.status === "succeeded" ? "Pushed to accounting" : "Push queued"); onChanged() }
+      else toast.error(res.error || "Could not push this document")
+    })
+  }
+
+  const pushAll = () => startTransition(async () => {
+    const res = await pushAllReadyDocumentsAction(workspaceId, connectionId)
+    if (res.success) {
+      const { pushed, failed } = res.data ?? { pushed: 0, failed: 0 }
+      if (failed) toast.warning(`Pushed ${pushed}, ${failed} failed`)
+      else toast.success(`Pushed ${pushed} document${pushed === 1 ? "" : "s"}`)
+      onChanged()
+    } else {
+      toast.error(res.error || "Could not push documents")
+    }
+  })
+
+  if (!documents.length) return null
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>Ready to push · {documents.length}</CardTitle>
+        <Button type="button" size="sm" disabled={pending} onClick={pushAll}>
+          {pending && !pushingId ? "Pushing…" : "Push all"}
+        </Button>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Supplier</th>
+                <th className="px-4 py-2 font-medium">Document</th>
+                <th className="px-4 py-2 font-medium">Amount</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {documents.map((doc) => (
+                <tr key={doc.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-2">{doc.vendorName}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{doc.filename}</td>
+                  <td className="px-4 py-2 tabular-nums">{formatAmount(doc.total, doc.currencyCode)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-emerald-700 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                      disabled={pending}
+                      onClick={() => pushOne(doc.id)}
+                    >
+                      {pushingId === doc.id ? "Pushing…" : "Push"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function AccountingDashboard({ workspaceId, isOwner, apiBase, connection, job, lastSyncedAt, entityCounts, readyToPush }: {
   workspaceId: string
   isOwner: boolean
   apiBase: string
@@ -193,15 +296,21 @@ export function AccountingDashboard({ workspaceId, isOwner, apiBase, connection,
   job: ProvisionJob
   lastSyncedAt: Date | null
   entityCounts: { accounts: number; vendors: number }
+  readyToPush: ReadyToPushDocument[]
 }) {
   const router = useRouter()
   const onChanged = () => router.refresh()
+
+  const pushable = connection?.status === "active" && !!connection.defaultExpenseAccountId
 
   return (
     <div className="space-y-6">
       <ConnectionCard workspaceId={workspaceId} isOwner={isOwner} apiBase={apiBase} connection={connection} job={job} onChanged={onChanged} />
       {connection?.status === "active" && (
         <SyncCard workspaceId={workspaceId} connection={connection} lastSyncedAt={lastSyncedAt} entityCounts={entityCounts} onChanged={onChanged} />
+      )}
+      {pushable && connection && (
+        <ReadyToPushList workspaceId={workspaceId} connectionId={connection.id} documents={readyToPush} onChanged={onChanged} />
       )}
     </div>
   )

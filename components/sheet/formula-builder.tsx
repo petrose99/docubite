@@ -69,12 +69,12 @@ export function FormulaBuilder({ workspaceId, apiRef, onClose }: {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 rounded-lg border border-stone-200 bg-white shadow-xl">
+    <div className="fixed bottom-6 right-6 z-50 w-96 rounded-lg border border-slate-200 bg-white shadow-xl">
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <Sparkles className="h-4 w-4 text-emerald-700" />
-        <span className="text-sm font-semibold text-stone-800">AI Formula</span>
-        <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-xs text-stone-500">{target}</span>
-        <button type="button" aria-label="Close AI Formula" className="ml-auto rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700" onClick={onClose}>
+        <span className="text-sm font-semibold text-slate-800">AI Formula</span>
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">{target}</span>
+        <button type="button" aria-label="Close AI Formula" className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={onClose}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -85,7 +85,7 @@ export function FormulaBuilder({ workspaceId, apiRef, onClose }: {
           rows={2}
           value={request}
           placeholder="Total the amounts where the supplier is Acme…"
-          className="w-full resize-none rounded-md border border-stone-200 px-2.5 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
+          className="w-full resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
           onChange={(event) => setRequest(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void generate() }
@@ -105,7 +105,7 @@ export function FormulaBuilder({ workspaceId, apiRef, onClose }: {
             type="button"
             disabled={busy || !request.trim()}
             onClick={() => void generate()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-stone-200 px-2.5 py-1.5 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-40">
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{result ? "Try again" : "Generate"}
           </button>
           <button

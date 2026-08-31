@@ -28,13 +28,13 @@ export function ConfirmDialog({ open, title, description, confirmLabel = "Confir
   if (!open || typeof document === "undefined") return null
 
   return createPortal(
-    <div role="presentation" className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/50 p-6" onClick={() => { if (!busy) onCancel() }}>
+    <div role="presentation" className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-6" onClick={() => { if (!busy) onCancel() }}>
       <div role="alertdialog" aria-modal="true" aria-label={title} className="w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="px-5 pb-4 pt-5">
-          <h2 className="text-base font-semibold text-stone-900">{title}</h2>
-          {description && <p className="mt-1.5 text-sm text-stone-500">{description}</p>}
+          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          {description && <p className="mt-1.5 text-sm text-slate-500">{description}</p>}
         </div>
-        <div className="flex justify-end gap-2 border-t bg-stone-50 px-5 py-3">
+        <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-3">
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>Cancel</Button>
           <Button type="button" variant={destructive ? "destructive" : "default"} size="sm" autoFocus disabled={busy} onClick={onConfirm}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}{confirmLabel}

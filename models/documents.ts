@@ -7,9 +7,12 @@ import { findMissingRequiredFields, parseTemplateFields, validateDocumentValues 
 import { deleteDocumentSource, documentBlocksKey, documentStorageKey, putDocumentSource } from "@/lib/document-storage"
 import { projectDocumentFields } from "@/lib/field-projection"
 import { LOW_CONFIDENCE, PIPELINE_STAGES, stageToStatusFilter, type PipelineStage } from "@/lib/documents/stages"
+import { normalizeBillFromDocument } from "@/lib/integration-bill-mapping"
+import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import type { DocumentProvenance } from "@/lib/provenance"
 import { replaceDocumentFieldValues } from "@/models/document-field-values"
 import { recordFieldCorrection } from "@/models/field-corrections"
+import { listWorkspaceIntegrationPushes } from "@/models/integrations"
 import { emitWorkspaceEvent } from "@/lib/webhooks"
 import { kickWebhookDrain } from "@/lib/webhook-delivery"
 import { prisma } from "@/lib/db"
@@ -189,6 +192,43 @@ export async function documentIdsInStage(workspaceId: string, documentIds: strin
 }
 
 export const getWorkspaceDocument = (workspaceId: string, documentId: string) => prisma.document.findFirst({ where: { id: documentId, workspaceId }, include: { template: true, templateVersion: true } })
+
+export type ReadyToPushDocument = {
+  id: string
+  filename: string
+  vendorName: string
+  total: number
+  currencyCode: string | null
+}
+
+/** Documents on the "Ready" pipeline stage whose type is pushable to accounting and that don't
+ * already have a succeeded push to `connectionId` — the Accounting page's "Ready to push" batch
+ * list. A document with no usable total (normalizeBillFromDocument would refuse it, same check the
+ * single-document push action already applies) is silently excluded: it can't be pushed either
+ * way, so it doesn't belong on a "ready to push" list. */
+export async function listReadyToPushDocuments(workspaceId: string, connectionId: string): Promise<ReadyToPushDocument[]> {
+  const [{ pushableTemplateCodes }, documents, pushes] = await Promise.all([
+    getWorkspaceCapabilities(workspaceId),
+    listWorkspaceDocuments(workspaceId, { stage: "ready" }),
+    listWorkspaceIntegrationPushes(workspaceId),
+  ])
+  const succeededDocumentIds = new Set(
+    pushes.filter((push) => push.connectionId === connectionId && push.status === "succeeded").map((push) => push.documentId)
+  )
+  const results: ReadyToPushDocument[] = []
+  for (const doc of documents) {
+    const templateCode = doc.template?.code ?? null
+    if (!templateCode || !pushableTemplateCodes.includes(templateCode) || succeededDocumentIds.has(doc.id)) continue
+    const reviewedData = (doc.reviewedData as Record<string, unknown> | null) ?? (doc.rawExtraction as Record<string, unknown> | null) ?? {}
+    try {
+      const bill = normalizeBillFromDocument({ documentId: doc.id, filename: doc.filename, templateCode, reviewedData })
+      results.push({ id: doc.id, filename: doc.filename, vendorName: bill.vendorName, total: bill.total, currencyCode: bill.currencyCode })
+    } catch {
+      // no usable total — not push-ready
+    }
+  }
+  return results
+}
 
 /** Which of the given documents currently have a queued/processing DocumentProcessingJob — what
  * the pipeline Inbox tab's inline spinner (documentStage's `hasActiveJob`) is driven by. */
