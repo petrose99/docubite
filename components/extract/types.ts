@@ -12,9 +12,9 @@ export type WorkspaceUsage = { planName: string; documentsUsed: number; document
  * Carries the setup to re-apply plus the labels for the callout copy. */
 export type MatchedShape = { id: string; name: string; docType: string; entity: string; fields: DocumentFieldDefinition[]; prompt: string; multiRow: boolean; lastRunAt: string; lastFilename: string | null }
 
-/** What the suggestion action returns: either a matched shape (no LLM was called) or a fresh
- * LLM suggestion, never both. A single-column request always comes back as a suggestion. */
-export type SuggestResult = { suggestion: import("@/lib/document-suggest").SuggestedSheet | null; matchedShape: MatchedShape | null }
+/** What the shape-match action returns: a saved shape the upload was recognised as, or null when
+ * nothing matched. No AI field suggestion is ever generated here — see the pipeline redesign plan. */
+export type SuggestResult = { matchedShape: MatchedShape | null }
 
 /** One kind of document found in an upload batch: how it was classified, how many there are, the
  * documents themselves, and any months missing from a monthly series. */

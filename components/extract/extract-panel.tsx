@@ -1,6 +1,6 @@
 "use client"
 
-import { deleteDocumentsAction, reextractAdaptivelyAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { deleteDocumentsAction, matchDocumentShapeAction, reextractAdaptivelyAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
 import { downscaleImage } from "@/components/extract/downscale-image"
 import { FileRow } from "@/components/extract/file-row"
@@ -103,7 +103,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   const [promptExpanded, setPromptExpanded] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [aiBusy, setAiBusy] = useState(false)
+  const [shapeChecking, setShapeChecking] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirming, setConfirming] = useState<{ kind: "row"; row: StagedFile } | { kind: "all"; count: number } | null>(null)
   // A saved shape the first upload was recognised as, offered before any fields are set up.
@@ -113,7 +113,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   // The most recent multi-file upload, so its folder report can be opened from the header.
   const [lastBatch, setLastBatch] = useState<{ id: string; size: number } | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
-  const autoSuggested = useRef(false)
+  const shapeChecked = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
@@ -248,13 +248,30 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     addEntries(fileArray.map((file) => ({ file })))
   }, [acceptFile, addEntries])
 
-  // Lido pre-fills fields from the first document without being asked; do the same, but
-  // only for a sheet that has no fields yet so an existing setup is never overwritten.
+  /** Checks the first staged document against previously-saved shapes, offering a match back as a
+   * "same as last time?" card. Never generates new fields — a document that matches nothing simply
+   * gets no offer. */
+  async function checkForMatchingShape(file: File) {
+    setShapeChecking(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const result = await matchDocumentShapeAction(workspaceId, formData)
+      if (!result.success || !result.data) return
+      if (result.data.matchedShape && !fields.length) setMatchedShape(result.data.matchedShape)
+    } catch {
+      // Best effort — a failed shape check just means no offer, never an error the user has to act on.
+    } finally { setShapeChecking(false) }
+  }
+
+  // Checks whether the first staged document matches a previously-seen shape, offering that setup
+  // back — but only for a sheet that has no fields yet, so an existing setup is never overwritten,
+  // and only once per panel. No AI field suggestion is ever generated here.
   useEffect(() => {
     const first = staged.find((row) => row.file)
-    if (!first || fields.length || autoSuggested.current || aiBusy) return
-    autoSuggested.current = true
-    void runSuggestion(first, undefined)
+    if (!first?.file || fields.length || shapeChecked.current || shapeChecking) return
+    shapeChecked.current = true
+    void checkForMatchingShape(first.file)
   }, [staged]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A file created by this same "Upload" click starts out "untitled" (there was never a naming
@@ -271,40 +288,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     void renameFileAction(workspaceId, fileId, deriveFileName(first))
   }, [staged, fileName, workspaceId, fileId])
 
-  async function runSuggestion(row: StagedFile, singleColumn: string | undefined, opts?: { fresh?: boolean }) {
-    if (!row.file) return
-    setAiBusy(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", row.file)
-      if (singleColumn) formData.set("singleColumn", singleColumn)
-      if (opts?.fresh) formData.set("skipShapeMatch", "1")
-      const result = await suggestTemplateFieldsAction(workspaceId, formData)
-      if (!result.success || !result.data) { toast.error(result.error || "Suggestion failed"); return }
-      // A recognised shape short-circuits the LLM: offer it as a card instead of applying columns,
-      // but only for a fresh sheet — a panel that already has columns just carries on.
-      if (result.data.matchedShape && !singleColumn && !fields.length) { setMatchedShape(result.data.matchedShape); return }
-      const suggestion = result.data.suggestion
-      if (!suggestion) return
-      if (singleColumn) {
-        const taken = new Set(fields.map((field) => field.key))
-        const fresh = suggestion.fields.filter((field) => !taken.has(field.key))
-        if (!fresh.length) { toast.info("That field already exists") ; return }
-        setFields((previous) => [...previous, ...fresh.slice(0, 1)])
-      } else {
-        const taken = new Set(fields.map((field) => field.key))
-        const fresh = suggestion.fields.filter((field) => !taken.has(field.key))
-        setFields((previous) => [...previous, ...fresh])
-        if (suggestion.prompt && !prompt.trim()) setPrompt(suggestion.prompt)
-        if (suggestion.name && !template && name.startsWith("Sheet ")) setName(suggestion.name)
-        toast.success("Fields suggested from your document", { description: "Review the chips, then process your files." })
-      }
-      markDirty()
-    } catch {
-      toast.error("Could not reach the server — no fields were suggested")
-    } finally { setAiBusy(false) }
-  }
-
   /** Applies a recognised shape's whole setup to the panel — the point of the "same as last time"
    * offer is that one click reproduces the columns, prompt, and row mode of the last run. */
   const useMatchedShape = () => {
@@ -317,12 +300,8 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     markDirty()
   }
 
-  /** Declines the offer and asks the LLM for a fresh setup instead, forcing past the match. */
-  const startFresh = () => {
-    setMatchedShape(null)
-    const first = staged.find((row) => row.file)
-    if (first) void runSuggestion(first, undefined, { fresh: true })
-  }
+  /** Declines the offer — the panel is left with no fields, for the person to configure by hand. */
+  const startFresh = () => setMatchedShape(null)
 
   const validatePageRange = (value: string) => {
     try { parsePageRange(value); setPageRangeError(false); return true } catch { setPageRangeError(true); return false }
@@ -606,14 +585,14 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         <button type="button" className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50" disabled={busy || !processable.length || !fields.length} onClick={() => void uploadRows(processable)}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Process all files{processable.length > 1 ? ` (${processable.length})` : ""}
         </button>
-        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{aiBusy ? "Analyzing your document to suggest fields…" : "Add at least one field below before processing."}</p>}
+        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{shapeChecking ? "Checking for a matching setup…" : "Add at least one field below before processing."}</p>}
       </section>
 
       {hasFile && <>
         <section>
           <h3 className="text-sm font-bold text-stone-900">Fields</h3>
           <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
-          <ColumnChips fields={fields} aiBusy={aiBusy} aiReady={staged.some((row) => row.file)} onChange={(next) => { setFields(next); markDirty() }} onAiSuggest={() => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, undefined, { fresh: true }) }} onAiColumn={(description) => { const first = staged.find((row) => row.file); if (first) void runSuggestion(first, description) }} />
+          <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
         </section>
 
         <section>
