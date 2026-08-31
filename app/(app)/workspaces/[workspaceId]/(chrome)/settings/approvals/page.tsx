@@ -40,20 +40,20 @@ export default async function ApprovalWorkflowsPage({ params }: { params: Promis
       </CardHeader>
       <CardContent>
         {!workflows.length
-          ? <p className="text-sm text-stone-500">No workflows yet. Review tasks use the plain open/in review/approved/rejected flow until one is started on them.</p>
+          ? <p className="text-sm text-slate-500">No workflows yet. Review tasks use the plain open/in review/approved/rejected flow until one is started on them.</p>
           : <ul className="space-y-3">
               {workflows.map((workflow) => (
                 <li key={workflow.id} className="rounded border p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-stone-900">{workflow.name}</span>
+                    <span className="font-medium text-slate-900">{workflow.name}</span>
                     {owner
                       ? <ApprovalWorkflowRowControls workspaceId={workspaceId} workflowId={workflow.id} workflowName={workflow.name} active={workflow.active} />
-                      : <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-500">{workflow.active ? "Active" : "Inactive"}</span>}
+                      : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{workflow.active ? "Active" : "Inactive"}</span>}
                   </div>
-                  <ol className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
+                  <ol className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
                     {workflow.stages.map((stage, index) => (
                       <li key={stage.id} className="flex items-center gap-1.5">
-                        {index > 0 && <span className="text-stone-300">→</span>}
+                        {index > 0 && <span className="text-slate-300">→</span>}
                         <span className="rounded-full border px-2 py-0.5">{stage.name}{stage.requireOwner ? " (owner)" : ""}</span>
                       </li>
                     ))}

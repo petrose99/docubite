@@ -39,7 +39,7 @@ export default async function TaxSettingsPage({ params }: { params: Promise<{ wo
 
         {profile && <div className="space-y-2 rounded border p-4 text-sm">
           <p><span className="font-medium">Currency:</span> {profile.config.currency}</p>
-          <p><span className="font-medium">{profile.config.registrationNumberLabel}</span> format: <code className="rounded bg-stone-100 px-1.5 py-0.5">{profile.config.registrationNumberPattern}</code></p>
+          <p><span className="font-medium">{profile.config.registrationNumberLabel}</span> format: <code className="rounded bg-slate-100 px-1.5 py-0.5">{profile.config.registrationNumberPattern}</code></p>
           {profile.config.rates.length > 0 && <div>
             <span className="font-medium">Rates:</span>
             <ul className="mt-1 list-inside list-disc">

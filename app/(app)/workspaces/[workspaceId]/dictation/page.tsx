@@ -33,8 +33,8 @@ export default async function DictationPage({ params }: { params: Promise<{ work
   // it is just not switched on yet.
   if (!isAsrAllowed(membership.workspace)) {
     return <main className="mx-auto w-full max-w-2xl space-y-3 p-6 text-center">
-      <h1 className="text-2xl font-bold text-stone-900">Dictation is pending BAA coverage</h1>
-      <p className="text-sm text-stone-600">
+      <h1 className="text-2xl font-bold text-slate-900">Dictation is pending BAA coverage</h1>
+      <p className="text-sm text-slate-600">
         This workspace handles protected health information, and dictation sends audio to an external transcription
         provider. Recording is disabled here until a signed Business Associate Agreement covering that provider is
         confirmed for this workspace. Contact {config.app.supportEmail} to arrange one.
@@ -81,8 +81,8 @@ export default async function DictationPage({ params }: { params: Promise<{ work
           <Mic className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-stone-900">Dictation</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dictation</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Dictate a case, check the transcription against the audio, then draft and sign the report.
           </p>
         </div>

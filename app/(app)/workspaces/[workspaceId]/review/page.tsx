@@ -39,15 +39,15 @@ export default async function ReviewQueuePage({ params, searchParams }: {
 
   return <main className="mx-auto w-full max-w-6xl space-y-6 p-6">
     <header>
-      <h1 className="text-3xl font-bold text-stone-900">Review queue</h1>
-      <p className="mt-1 text-sm text-stone-500">Documents that need a person to look at them before they&apos;re trusted.</p>
+      <h1 className="text-3xl font-bold text-slate-900">Review queue</h1>
+      <p className="mt-1 text-sm text-slate-500">Documents that need a person to look at them before they&apos;re trusted.</p>
     </header>
 
     <nav className="flex gap-1 border-b">
       {STATUS_TABS.map((tab) => {
         const active = (statusParam ?? "open") === tab.value
         return <Link key={tab.value} href={tab.value === "open" ? `/workspaces/${workspaceId}/review` : `/workspaces/${workspaceId}/review?status=${tab.value}`}
-          className={`border-b-2 px-3 py-2 text-sm font-medium ${active ? "border-emerald-700 text-emerald-800" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          className={`border-b-2 px-3 py-2 text-sm font-medium ${active ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
           {tab.label}
         </Link>
       })}

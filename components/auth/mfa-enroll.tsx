@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { AuthField, SubmitButton } from "@/components/auth/fields"
 import { FormError } from "@/components/forms/error"
@@ -9,8 +9,8 @@ import { ShieldCheck, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
-/** F1: TOTP enrollment on /settings/security. Three states — no factor, enrolling (QR + code
- * shown, unverified until the first correct code), enrolled — with an unenroll action once one
+/** F1: TOTP enrollment on /settings/security. Three states â€” no factor, enrolling (QR + code
+ * shown, unverified until the first correct code), enrolled â€” with an unenroll action once one
  * exists. Supabase supports multiple factors per user; this UI only ever shows one at a time,
  * which matches how the app enforces hipaaMode's aal2 requirement (any verified factor clears it,
  * so there's no product reason to juggle several). */
@@ -76,7 +76,7 @@ export function MfaEnroll() {
   if (active) {
     return <div className="flex items-center justify-between gap-4 rounded border p-4">
       <span className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4 text-emerald-700" />Two-factor authentication is on</span>
-      <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50" disabled={busy} onClick={() => void unenroll(active.id)}>
+      <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={busy} onClick={() => void unenroll(active.id)}>
         <Trash2 className="h-3.5 w-3.5" />Turn off
       </button>
     </div>
@@ -87,13 +87,13 @@ export function MfaEnroll() {
       <p className="text-sm font-medium">Scan this with your authenticator app</p>
       {/* eslint-disable-next-line @next/next/no-img-element -- data: URI from Supabase, not an optimizable remote image */}
       <img src={enrolling.qrCode} alt="TOTP enrollment QR code" className="h-40 w-40" />
-      <p className="text-xs text-stone-500">Can&apos;t scan it? Enter this key instead: <code className="rounded bg-stone-100 px-1 py-0.5">{enrolling.secret}</code></p>
+      <p className="text-xs text-slate-500">Can&apos;t scan it? Enter this key instead: <code className="rounded bg-slate-100 px-1 py-0.5">{enrolling.secret}</code></p>
       <AuthField label="Code from your app">
         <Input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" pattern="[0-9]*" maxLength={6} required autoFocus />
       </AuthField>
       <div className="flex gap-2">
-        <SubmitButton busy={busy}>{busy ? "Verifying…" : "Confirm"}</SubmitButton>
-        <button type="button" className="rounded-md border px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50" onClick={() => { setEnrolling(null); setCode("") }}>Cancel</button>
+        <SubmitButton busy={busy}>{busy ? "Verifyingâ€¦" : "Confirm"}</SubmitButton>
+        <button type="button" className="rounded-md border px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => { setEnrolling(null); setCode("") }}>Cancel</button>
       </div>
       {error && <FormError>{error}</FormError>}
     </form>
@@ -105,7 +105,7 @@ export function MfaEnroll() {
       <span className="text-sm text-muted-foreground">Add an authenticator app as a second sign-in step. Required for workspaces with HIPAA mode on.</span>
     </span>
     <button type="button" className="shrink-0 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={busy} onClick={() => void startEnroll()}>
-      {busy ? "Starting…" : "Turn on"}
+      {busy ? "Startingâ€¦" : "Turn on"}
     </button>
   </div>
 }

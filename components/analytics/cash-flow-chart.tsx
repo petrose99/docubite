@@ -25,7 +25,7 @@ export function CashFlowChart({ months, formatMoney }: {
   const scale = (value: number) => (value / max) * plotHeight
 
   return <section className="space-y-2">
-    <h2 className="text-lg font-semibold text-stone-900">Cash flow trend</h2>
+    <h2 className="text-lg font-semibold text-slate-900">Cash flow trend</h2>
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label="Monthly outflow and bank inflow by month">
       <line x1={PADDING_X} y1={HEIGHT - PADDING_BOTTOM} x2={WIDTH - PADDING_X} y2={HEIGHT - PADDING_BOTTOM} stroke="#e7e5e4" />
       {months.map((month, index) => {
@@ -40,14 +40,14 @@ export function CashFlowChart({ months, formatMoney }: {
         </g>
       })}
     </svg>
-    <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-stone-600">
+    <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
       <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-700" />Outflow (documents + bank debits)</span>
-      {hasBankData && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-stone-400" />Bank inflow (credits)</span>}
+      {hasBankData && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-slate-400" />Bank inflow (credits)</span>}
     </div>
-    <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-stone-500">
+    <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
       {months.map((month) => <span key={month.month}>{month.month}: net {formatMoney(month.net)}</span>)}
     </div>
-    <p className="text-xs text-stone-500">
+    <p className="text-xs text-slate-500">
       Document totals and bank-statement amounts are independent series here and may double-count the same payment —
       reconciling them is what bank matching is for.
     </p>

@@ -10,6 +10,6 @@ export function highlightSnippet(snippet: string, query: string): ReactNode {
   if (!words.length) return snippet
   const re = new RegExp(`(${words.map(escapeRegExp).join("|")})`, "gi")
   return snippet.split(re).map((segment, index) =>
-    index % 2 === 1 ? <mark key={index} className="rounded-sm bg-amber-100 text-inherit">{segment}</mark> : segment,
+    index % 2 === 1 ? <mark key={index} className="rounded-sm bg-indigo-100 text-inherit">{segment}</mark> : segment,
   )
 }

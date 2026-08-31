@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { AuthDivider, AuthField, PasswordField, SubmitButton } from "@/components/auth/fields"
 import { GoogleButton } from "@/components/auth/google-button"
@@ -35,12 +35,12 @@ export function LoginForm({ defaultEmail, redirectTo = "/workspaces", googleEnab
         return
       }
       // The password step alone only ever reaches aal1. An account with a TOTP factor enrolled
-      // needs a second step before it has a session hipaaMode workspaces will accept — see
+      // needs a second step before it has a session hipaaMode workspaces will accept â€” see
       // /mfa/challenge, which this sends them to instead of redirectTo when one is pending.
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
       const needsChallenge = aal?.nextLevel === "aal2" && aal.nextLevel !== aal.currentLevel
       // A hard navigation, not router.push: the session cookie was minted a moment ago, and a
-      // client-side push would render the destination against the session-less cached payload —
+      // client-side push would render the destination against the session-less cached payload â€”
       // which on /invite/[token] shows "Invitation unavailable" to someone who just signed in.
       window.location.href = needsChallenge ? `/mfa/challenge?next=${encodeURIComponent(redirectTo)}` : redirectTo
     } catch (err) {
@@ -71,12 +71,12 @@ export function LoginForm({ defaultEmail, redirectTo = "/workspaces", googleEnab
           action={<Link href="/forgot-password" className="text-sm font-medium text-emerald-800 hover:underline">Forgot password?</Link>}
         />
 
-        <SubmitButton busy={busy}>{busy ? "Signing in…" : "Sign in"}</SubmitButton>
+        <SubmitButton busy={busy}>{busy ? "Signing inâ€¦" : "Sign in"}</SubmitButton>
 
         {error && <FormError>{error}</FormError>}
       </form>
 
-      <p className="text-center text-sm text-stone-500">
+      <p className="text-center text-sm text-slate-500">
         New here? <Link href={signupHref as Route} className="font-semibold text-emerald-800 hover:underline">Create an account</Link>
       </p>
     </div>

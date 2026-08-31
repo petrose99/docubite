@@ -217,9 +217,9 @@ export function UniverSheet({ fileId, snapshot, rev, readOnly = false, persist =
     <div className="docubite-sheet relative min-h-0 min-w-0 flex-1">
       <div ref={containerRef} className="absolute inset-0" />
       {stale && (
-        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-3 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-3 bg-indigo-50 px-4 py-2 text-sm text-indigo-900">
           <span>This sheet changed elsewhere. Your recent edits here are not being saved.</span>
-          <button className="rounded-md bg-amber-900 px-2 py-1 text-xs font-medium text-amber-50" onClick={() => window.location.reload()}>
+          <button className="rounded-md bg-indigo-900 px-2 py-1 text-xs font-medium text-indigo-50" onClick={() => window.location.reload()}>
             Reload
           </button>
         </div>

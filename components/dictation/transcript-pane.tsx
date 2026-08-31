@@ -70,15 +70,15 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
   }
 
   return (
-    <aside className="flex w-[22rem] shrink-0 flex-col border-r border-stone-200 bg-white">
-      <div className="border-b border-stone-100 px-4 py-3">
+    <aside className="flex w-[22rem] shrink-0 flex-col border-r border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-stone-900">Recording</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Recording</h2>
           {!readOnly && !transcribing && !editing && (
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800">
+              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
               <PencilLine className="h-3.5 w-3.5" />Correct
             </button>
           )}
@@ -92,7 +92,7 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
           onTimeUpdate={(event) => setPositionMs(event.currentTarget.currentTime * 1000)}
           className="mt-2.5 w-full" />
 
-        <p className="mt-2 text-xs text-stone-400">
+        <p className="mt-2 text-xs text-slate-400">
           {document.transcriptModel ? `Transcribed by ${document.transcriptModel}` : "Not transcribed yet"}
         </p>
 
@@ -100,7 +100,7 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
             claim from one drawn from an untouched ASR pass, and the person signing it should be
             the one deciding whether that matters. */}
         {document.transcriptEditedAt && (
-          <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+          <p className="mt-1.5 rounded-md bg-indigo-50 px-2 py-1.5 text-xs text-indigo-900">
             Transcript corrected by {document.transcriptEditedBy ?? "a member"} on{" "}
             {new Date(document.transcriptEditedAt).toLocaleString()} — it is no longer only what the microphone heard.
           </p>
@@ -109,7 +109,7 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {transcribing && (
-          <p className="flex items-center gap-2 text-sm text-stone-500"><Loader2 className="h-4 w-4 animate-spin" />Transcribing the recording…</p>
+          <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Transcribing the recording…</p>
         )}
 
         {!transcribing && editing && (
@@ -118,8 +118,8 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
               value={text}
               onChange={(event) => setText(event.target.value)}
               rows={18}
-              className="w-full resize-y rounded-md border border-stone-200 p-2.5 font-mono text-xs leading-relaxed text-stone-800 focus:border-emerald-400 focus:outline-none" />
-            <p className="text-xs text-stone-500">Saving re-reads the fields from the corrected text. The audio is not changed.</p>
+              className="w-full resize-y rounded-md border border-slate-200 p-2.5 font-mono text-xs leading-relaxed text-slate-800 focus:border-emerald-400 focus:outline-none" />
+            <p className="text-xs text-slate-500">Saving re-reads the fields from the corrected text. The audio is not changed.</p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -132,7 +132,7 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
                 type="button"
                 disabled={saving}
                 onClick={() => { setText(document.transcript); setEditing(false) }}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 disabled:opacity-50">
+                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50">
                 <X className="h-3.5 w-3.5" />Cancel
               </button>
             </div>
@@ -152,8 +152,8 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
                     audio.currentTime = segment.startMs / 1000
                     void audio.play().catch(() => {})
                   }}
-                  className={`flex w-full gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${index === activeIndex ? "bg-emerald-50 text-stone-900" : "text-stone-700 hover:bg-stone-100"}`}>
-                  <span className="shrink-0 pt-0.5 text-xs tabular-nums text-stone-400">{clock(segment.startMs)}</span>
+                  className={`flex w-full gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${index === activeIndex ? "bg-emerald-50 text-slate-900" : "text-slate-700 hover:bg-slate-100"}`}>
+                  <span className="shrink-0 pt-0.5 text-xs tabular-nums text-slate-400">{clock(segment.startMs)}</span>
                   <span className="min-w-0">{segment.text}</span>
                 </button>
               </li>
@@ -168,11 +168,11 @@ export function TranscriptPane({ workspaceId, document, audioRef, transcribing, 
             option, so the corrected text is shown flat instead. */}
         {!transcribing && !editing && !showSegments && (
           <>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
               {document.transcript || "No transcript."}
             </p>
             {document.transcriptEditedAt && !!document.segments.length && (
-              <p className="mt-3 text-xs text-stone-400">
+              <p className="mt-3 text-xs text-slate-400">
                 Timestamps are hidden because the text was corrected — the stored spans still describe the original transcription, not what you see here.
               </p>
             )}

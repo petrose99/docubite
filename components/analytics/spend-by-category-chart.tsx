@@ -13,8 +13,8 @@ export function SpendByCategoryChart({ workspaceId, rows, formatMoney }: {
 }) {
   if (!rows.length) {
     return <section className="space-y-2">
-      <h2 className="text-lg font-semibold text-stone-900">Spend by category</h2>
-      <p className="rounded border border-dashed p-6 text-center text-sm text-stone-500">
+      <h2 className="text-lg font-semibold text-slate-900">Spend by category</h2>
+      <p className="rounded border border-dashed p-6 text-center text-sm text-slate-500">
         No categorized spend yet. <Link href={`/workspaces/${workspaceId}/settings/rules`} className="font-medium text-emerald-700 hover:underline">Set up supplier rules</Link> to auto-code documents by account.
       </p>
     </section>
@@ -29,8 +29,8 @@ export function SpendByCategoryChart({ workspaceId, rows, formatMoney }: {
 
   return <section className="space-y-3">
     <div>
-      <h2 className="text-lg font-semibold text-stone-900">Spend by category</h2>
-      <p className="text-xs text-stone-500">Based on costs and expenses. Sales/revenue not tracked.</p>
+      <h2 className="text-lg font-semibold text-slate-900">Spend by category</h2>
+      <p className="text-xs text-slate-500">Based on costs and expenses. Sales/revenue not tracked.</p>
     </div>
     <div className="space-y-2">
       {bars.map((row) => {
@@ -38,11 +38,11 @@ export function SpendByCategoryChart({ workspaceId, rows, formatMoney }: {
         return <div key={row.category} className="space-y-1">
           <div className="flex items-baseline justify-between gap-2 text-sm">
             {row.category === "Uncategorized"
-              ? <Link href={`/workspaces/${workspaceId}/review`} className="font-medium text-stone-700 hover:text-emerald-700 hover:underline">Uncategorized</Link>
-              : <span className="truncate font-medium text-stone-700">{row.category}</span>}
-            <span className="shrink-0 text-stone-500">{formatMoney(row.totalSpend)} · {row.documentCount} doc{row.documentCount === 1 ? "" : "s"}</span>
+              ? <Link href={`/workspaces/${workspaceId}/review`} className="font-medium text-slate-700 hover:text-emerald-700 hover:underline">Uncategorized</Link>
+              : <span className="truncate font-medium text-slate-700">{row.category}</span>}
+            <span className="shrink-0 text-slate-500">{formatMoney(row.totalSpend)} · {row.documentCount} doc{row.documentCount === 1 ? "" : "s"}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
             <div className="h-full rounded-full bg-emerald-600" style={{ width: `${percent}%` }} />
           </div>
         </div>

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Check, Loader2, Undo2 } from "lucide-react"
 
@@ -6,7 +6,7 @@ import { Check, Loader2, Undo2 } from "lucide-react"
  *
  * Lido's arrangement, and the reason for it is that the writes land immediately: the user sees
  * the new column appear and needs a way to say "no" that does not depend on finding Ctrl+Z
- * before touching anything else. Nothing here blocks — the changes are already in the sheet and
+ * before touching anything else. Nothing here blocks â€” the changes are already in the sheet and
  * already saving; this only decides whether they keep the green on them. */
 export function PendingChangesBar({ count, busy, onUndo, onAccept }: {
   count: number
@@ -20,9 +20,9 @@ export function PendingChangesBar({ count, busy, onUndo, onAccept }: {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-stone-200 bg-white/95 py-2 pl-4 pr-2 shadow-lg backdrop-blur">
-        <span className="flex items-center gap-1.5 text-sm text-stone-700">
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />}
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-slate-200 bg-white/95 py-2 pl-4 pr-2 shadow-lg backdrop-blur">
+        <span className="flex items-center gap-1.5 text-sm text-slate-700">
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
           <strong className="font-semibold">{count}</strong>
           {count === 1 ? "change" : "changes"}
         </span>
@@ -30,7 +30,7 @@ export function PendingChangesBar({ count, busy, onUndo, onAccept }: {
           type="button"
           disabled={busy}
           onClick={onUndo}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 disabled:opacity-40">
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40">
           <Undo2 className="h-3.5 w-3.5" />Undo
         </button>
         <button

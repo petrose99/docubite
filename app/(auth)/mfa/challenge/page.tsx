@@ -10,8 +10,8 @@ export default async function MfaChallengePage({ searchParams }: { searchParams:
   const next = first(params.next) || "/workspaces"
 
   return <>
-    <h1 className="font-display text-2xl font-bold tracking-[-0.02em] text-stone-950">Verify it&apos;s you</h1>
-    <p className="mt-1.5 mb-7 text-sm text-stone-500">Enter the code from your authenticator app.</p>
+    <h1 className="font-display text-2xl font-bold tracking-[-0.02em] text-slate-950">Verify it&apos;s you</h1>
+    <p className="mt-1.5 mb-7 text-sm text-slate-500">Enter the code from your authenticator app.</p>
     <MfaChallengeForm next={next} />
   </>
 }

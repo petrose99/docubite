@@ -42,24 +42,24 @@ export function ApprovalWorkflowForm({ workspaceId }: { workspaceId: string }) {
 
   return <form action={submit} className="space-y-3 rounded border p-4">
     <div>
-      <label className="block text-xs font-medium text-stone-500">Workflow name</label>
+      <label className="block text-xs font-medium text-slate-500">Workflow name</label>
       <input name="name" required className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm" placeholder="e.g. Two-step finance approval" />
     </div>
     <div>
-      <label className="block text-xs font-medium text-stone-500">Stages, in order</label>
+      <label className="block text-xs font-medium text-slate-500">Stages, in order</label>
       <div className="mt-1.5 space-y-2">
         {stages.map((stage, index) => (
           <div key={stage.key} className="flex items-center gap-2">
-            <span className="w-5 shrink-0 text-right text-xs text-stone-400">{index + 1}.</span>
+            <span className="w-5 shrink-0 text-right text-xs text-slate-400">{index + 1}.</span>
             <input value={stage.name} onChange={(event) => updateStage(index, { name: event.target.value })} className="flex-1 rounded-md border px-2.5 py-1.5 text-sm" placeholder="e.g. Bookkeeper check" />
-            <label className="flex shrink-0 items-center gap-1.5 text-xs text-stone-600">
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600">
               <input type="checkbox" checked={stage.requireOwner} onChange={(event) => updateStage(index, { requireOwner: event.target.checked })} /> Owner only
             </label>
-            <button type="button" disabled={stages.length <= 1} onClick={() => removeStage(index)} className="shrink-0 rounded-md border px-2 py-1 text-xs text-stone-500 hover:bg-stone-50 disabled:opacity-40">Remove</button>
+            <button type="button" disabled={stages.length <= 1} onClick={() => removeStage(index)} className="shrink-0 rounded-md border px-2 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40">Remove</button>
           </div>
         ))}
       </div>
-      <button type="button" onClick={addStage} className="mt-2 rounded-md border px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50">+ Add stage</button>
+      <button type="button" onClick={addStage} className="mt-2 rounded-md border px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">+ Add stage</button>
     </div>
     <button type="submit" disabled={pending} className="rounded-md bg-emerald-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">Create workflow</button>
   </form>

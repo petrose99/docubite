@@ -185,11 +185,11 @@ export function SplitPane({
     </div>}
 
     <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4">
-      <div className="flex min-h-0 basis-[55%] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex min-h-0 basis-[52%] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <SourceViewer source={source} target={target} />
       </div>
 
-      <div className="flex min-h-0 basis-[45%] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex min-h-0 basis-[48%] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex gap-1 border-b bg-slate-50 px-3 pt-2">{tabButton("details", "Details")}{tabButton("note", "Note")}{tabButton("activity", "Activity")}</div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">

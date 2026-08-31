@@ -113,19 +113,19 @@ export function DictationWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center gap-3 border-b border-stone-200 bg-white px-4 py-2.5">
+      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <Link
           href={`/workspaces/${workspaceId}/dictation`}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900">
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4" />Dictation
         </Link>
         <div className="min-w-0">
           <DictationTitle workspaceId={workspaceId} documentId={document.id} filename={document.filename} suggestedTitle={document.suggestedTitle} />
-          <p className="truncate text-xs text-stone-500">
+          <p className="truncate text-xs text-slate-500">
             {document.templateName} · {new Date(document.receivedAt).toLocaleString()}
             {document.dictationRouting && (
               <span
-                className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-600"
+                className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
                 title={document.dictationRouting.commands.length ? `Spoken: ${document.dictationRouting.commands.join("; ")}` : undefined}>
                 {document.dictationRouting.intent !== "template" && document.dictationRouting.intent !== "general" && <>{document.dictationRouting.intent.replace(/_/g, " ")} · </>}
                 {document.dictationRouting.formatLabel}
@@ -136,12 +136,12 @@ export function DictationWorkspace({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {transcribing && <span className="flex items-center gap-1.5 text-xs text-stone-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />Transcribing…</span>}
+          {transcribing && <span className="flex items-center gap-1.5 text-xs text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" />Transcribing…</span>}
           {!transcribing && documentSearchEnabled && (
             searchable
-              ? <span className="flex items-center gap-1.5 text-xs text-stone-400" title="Indexed for document search"><FileSearch className="h-3.5 w-3.5" />Searchable</span>
+              ? <span className="flex items-center gap-1.5 text-xs text-slate-400" title="Indexed for document search"><FileSearch className="h-3.5 w-3.5" />Searchable</span>
               : indexing
-                ? <span className="flex items-center gap-1.5 text-xs text-stone-400" title="Being indexed for document search"><Loader2 className="h-3.5 w-3.5 animate-spin" />Indexing…</span>
+                ? <span className="flex items-center gap-1.5 text-xs text-slate-400" title="Being indexed for document search"><Loader2 className="h-3.5 w-3.5 animate-spin" />Indexing…</span>
                 : null
           )}
           {signed && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">Signed</span>}
@@ -153,7 +153,7 @@ export function DictationWorkspace({
               type="button"
               onClick={() => setAssistantOpen((open) => !open)}
               aria-pressed={assistantOpen}
-              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${assistantOpen ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-stone-200 text-stone-600 hover:bg-stone-50"}`}>
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${assistantOpen ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
               <Sparkles className="h-3.5 w-3.5" />Assistant
             </button>
           )}
@@ -185,7 +185,7 @@ export function DictationWorkspace({
           readOnly={signed}
           onSaved={() => router.refresh()} />
 
-        <div className="min-w-0 flex-1 overflow-y-auto bg-stone-50/60">
+        <div className="min-w-0 flex-1 overflow-y-auto bg-slate-50/60">
           <div className="mx-auto grid max-w-5xl gap-4 p-4 xl:grid-cols-2">
             {fieldSuggestions.length > 0 && (
               <div className="xl:col-span-2">
@@ -223,7 +223,7 @@ export function DictationWorkspace({
             apiRef={noGrid}
             surface="dictation"
             title="Assistant"
-            className="flex w-80 shrink-0 flex-col border-l bg-stone-50"
+            className="flex w-80 shrink-0 flex-col border-l bg-slate-50"
             documentSearchEnabled
             emptyHint="Ask about this dictation or anything else on record. Answers are quoted from the documents, never interpreted."
             intents={[
@@ -275,7 +275,7 @@ function ClarificationBanner({ workspaceId, documentId, reason, availableFormats
   if (dismissed) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+    <div className="flex flex-wrap items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-900">
       <span>
         {reason === "intent"
           ? "Wasn't sure what kind of dictation this is — pick a format and I'll draft it."
@@ -285,17 +285,17 @@ function ClarificationBanner({ workspaceId, documentId, reason, availableFormats
         value={formatName}
         disabled={saving}
         onChange={(event) => setFormatName(event.target.value)}
-        className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs text-stone-900 focus:border-amber-500 focus:outline-none disabled:opacity-50">
+        className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none disabled:opacity-50">
         {availableFormats.map((format) => <option key={format.name} value={format.name}>{format.label}</option>)}
       </select>
       <button
         type="button"
         disabled={saving || !formatName}
         onClick={resolve}
-        className="flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+        className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Use this"}
       </button>
-      <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="ml-auto rounded-md px-1.5 py-1 text-amber-700 hover:bg-amber-100">
+      <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="ml-auto rounded-md px-1.5 py-1 text-indigo-700 hover:bg-indigo-100">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -326,7 +326,7 @@ function SaveAsTemplateButton({ workspaceId, documentId }: { workspaceId: string
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-md border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-50">
+        className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50">
         <BookmarkPlus className="h-3.5 w-3.5" />Save as template
       </button>
     )
@@ -341,11 +341,11 @@ function SaveAsTemplateButton({ workspaceId, documentId }: { workspaceId: string
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter") void save(); if (event.key === "Escape") setOpen(false) }}
         placeholder="Template name"
-        className="w-40 rounded-md border border-stone-200 px-2 py-1 text-xs text-stone-900 placeholder:text-stone-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
+        className="w-40 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none disabled:opacity-50" />
       <button type="button" disabled={saving || !name.trim()} onClick={save} className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
       </button>
-      <button type="button" disabled={saving} onClick={() => setOpen(false)} className="rounded-md px-1.5 py-1 text-xs text-stone-500 hover:bg-stone-100">
+      <button type="button" disabled={saving} onClick={() => setOpen(false)} className="rounded-md px-1.5 py-1 text-xs text-slate-500 hover:bg-slate-100">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -398,11 +398,11 @@ function DictationTitle({ workspaceId, documentId, filename, suggestedTitle }: {
             if (event.key === "Enter") void rename(value)
             if (event.key === "Escape") { setValue(filename); setEditing(false) }
           }}
-          className="min-w-0 flex-1 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-sm font-semibold text-stone-900 focus:outline-none" />
+          className="min-w-0 flex-1 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-900 focus:outline-none" />
         <button type="button" disabled={saving} onClick={() => void rename(value)} className="flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
         </button>
-        <button type="button" disabled={saving} onClick={() => { setValue(filename); setEditing(false) }} className="flex h-6 w-6 items-center justify-center rounded text-stone-500 hover:bg-stone-100 disabled:opacity-50">
+        <button type="button" disabled={saving} onClick={() => { setValue(filename); setEditing(false) }} className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-50">
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -415,8 +415,8 @@ function DictationTitle({ workspaceId, documentId, filename, suggestedTitle }: {
         type="button"
         onClick={() => { setValue(filename); setEditing(true) }}
         className="group flex min-w-0 items-center gap-1.5 text-left">
-        <h1 className="truncate text-sm font-semibold text-stone-900">{filename}</h1>
-        <Pencil className="h-3 w-3 shrink-0 text-stone-300 opacity-0 transition-opacity group-hover:opacity-100" />
+        <h1 className="truncate text-sm font-semibold text-slate-900">{filename}</h1>
+        <Pencil className="h-3 w-3 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
       {suggestedTitle && suggestedTitle !== filename && (
         <button

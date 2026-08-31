@@ -102,19 +102,19 @@ export default function ProvenancePdf({ href, target }: { href: string; target?:
   }, [])
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col bg-stone-100">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-slate-100">
       <style>{"@keyframes dbProvPulse{0%{background:rgba(52,211,153,0.55)}100%{background:rgba(52,211,153,0.25)}}"}</style>
-      {status === "error" && <div className="flex flex-1 items-center justify-center text-sm text-stone-500">Could not render this PDF. <a href={href} target="_blank" rel="noreferrer" className="ml-1 text-emerald-700 underline">Open it directly</a>.</div>}
-      {status === "loading" && <div className="flex flex-1 items-center justify-center text-sm text-stone-400">Loading document…</div>}
+      {status === "error" && <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Could not render this PDF. <a href={href} target="_blank" rel="noreferrer" className="ml-1 text-emerald-700 underline">Open it directly</a>.</div>}
+      {status === "loading" && <div className="flex flex-1 items-center justify-center text-sm text-slate-400">Loading document…</div>}
       <div ref={hostRef} className={`min-h-0 flex-1 overflow-auto p-4 pb-16 ${status === "ready" ? "" : "hidden"}`} />
       {status === "ready" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-stone-200 bg-white/95 px-1.5 py-1 shadow-lg backdrop-blur">
-            <button type="button" onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Zoom out"><Minus className="h-4 w-4" /></button>
-            <span className="w-12 text-center text-xs tabular-nums text-stone-500">{Math.round(zoom * 100)}%</span>
-            <button type="button" onClick={() => setZoom((z) => Math.min(3, z + 0.2))} className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Zoom in"><Plus className="h-4 w-4" /></button>
-            <span className="mx-0.5 h-4 w-px bg-stone-200" />
-            <button type="button" onClick={fitWidth} className="rounded-full p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Fit width"><Maximize2 className="h-4 w-4" /></button>
+          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-slate-200 bg-white/95 px-1.5 py-1 shadow-lg backdrop-blur">
+            <button type="button" onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Zoom out"><Minus className="h-4 w-4" /></button>
+            <span className="w-12 text-center text-xs tabular-nums text-slate-500">{Math.round(zoom * 100)}%</span>
+            <button type="button" onClick={() => setZoom((z) => Math.min(3, z + 0.2))} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Zoom in"><Plus className="h-4 w-4" /></button>
+            <span className="mx-0.5 h-4 w-px bg-slate-200" />
+            <button type="button" onClick={fitWidth} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Fit width"><Maximize2 className="h-4 w-4" /></button>
           </div>
         </div>
       )}

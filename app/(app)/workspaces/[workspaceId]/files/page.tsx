@@ -66,10 +66,10 @@ export default async function FilesPage({ params, searchParams }: {
 
   return <main className="flex min-h-0 flex-1 flex-col">
     <header className="flex flex-wrap items-center gap-3 border-b px-6 py-4">
-      <h1 className="text-xl font-bold text-stone-900">Files</h1>
+      <h1 className="text-xl font-bold text-slate-900">Files</h1>
       <nav className="ml-4 flex items-center gap-1 text-sm">
-        <Link href={base} className={`rounded-md px-2.5 py-1 font-medium ${tab === "mine" ? "bg-stone-100 text-stone-900" : "text-stone-500 hover:text-stone-800"}`}>My Files</Link>
-        <Link href={`${base}?tab=shared`} className={`rounded-md px-2.5 py-1 font-medium ${tab === "shared" ? "bg-stone-100 text-stone-900" : "text-stone-500 hover:text-stone-800"}`}>Shared With Me</Link>
+        <Link href={base} className={`rounded-md px-2.5 py-1 font-medium ${tab === "mine" ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"}`}>My Files</Link>
+        <Link href={`${base}?tab=shared`} className={`rounded-md px-2.5 py-1 font-medium ${tab === "shared" ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"}`}>Shared With Me</Link>
       </nav>
     </header>
 

@@ -100,7 +100,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   return <aside className="flex w-56 shrink-0 flex-col gap-0.5 border-r bg-slate-100 px-2.5 py-3">
     <Link href={base} className="flex items-center gap-2 px-1.5 py-1">
       <BiteMark className="h-7 w-7 shrink-0" />
-      <span className="truncate text-sm font-bold text-slate-900">DocuBite</span>
+      <span className="truncate text-sm font-bold font-display text-slate-900">DocuBite</span>
     </Link>
 
     <div className="mb-1 mt-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>

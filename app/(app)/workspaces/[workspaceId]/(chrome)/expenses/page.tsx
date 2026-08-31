@@ -48,7 +48,7 @@ export default async function ExpenseClaimsPage({ params }: { params: Promise<{ 
       <CardContent>
         {unclaimedDocuments.length
           ? <ExpenseClaimForm workspaceId={workspaceId} receipts={unclaimedDocuments.map((document) => ({ id: document.id, filename: document.filename, ...receiptSummary(document) }))} />
-          : <p className="text-sm text-stone-500">No unclaimed expense receipts. Upload one as an &ldquo;Expense receipt&rdquo; document first.</p>}
+          : <p className="text-sm text-slate-500">No unclaimed expense receipts. Upload one as an &ldquo;Expense receipt&rdquo; document first.</p>}
       </CardContent>
     </Card>
 
@@ -59,7 +59,7 @@ export default async function ExpenseClaimsPage({ params }: { params: Promise<{ 
       </CardHeader>
       <CardContent>
         {!claims.length
-          ? <p className="text-sm text-stone-500">No claims yet.</p>
+          ? <p className="text-sm text-slate-500">No claims yet.</p>
           : <ul className="space-y-3">
               {claims.map((claim) => {
                 const currentStage = claim.workflow && claim.currentStageIndex !== null ? findCurrentStage(claim.workflow.stages, claim.currentStageIndex) : null

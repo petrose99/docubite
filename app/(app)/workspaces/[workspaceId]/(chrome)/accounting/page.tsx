@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { getEntityCounts, getLastSyncedAt } from "@/models/accounting-entities"
 import { getWorkspaceProvisionJob } from "@/models/bigcapital"
+import { listReadyToPushDocuments } from "@/models/documents"
 import { getWorkspaceIntegrationConnection } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
@@ -25,6 +26,11 @@ export default async function AccountingPage({ params }: { params: Promise<{ wor
     ? await Promise.all([getLastSyncedAt(connection.id), getEntityCounts(connection.id)])
     : [null, { accounts: 0, vendors: 0 }]
 
+  // Same "pushable" gate PushToAccountingCard uses on a single document: an active connection with
+  // a default expense account chosen. No point loading the ready list otherwise — nothing could push.
+  const pushable = connection?.status === "active" && !!connection.defaultExpenseAccountId
+  const readyToPush = pushable ? await listReadyToPushDocuments(workspaceId, connection.id) : []
+
   return <main className="space-y-6">
     <header>
       <h1 className="text-3xl font-bold">Accounting</h1>
@@ -39,6 +45,7 @@ export default async function AccountingPage({ params }: { params: Promise<{ wor
       job={job}
       lastSyncedAt={lastSyncedAt}
       entityCounts={entityCounts}
+      readyToPush={readyToPush}
     />
   </main>
 }

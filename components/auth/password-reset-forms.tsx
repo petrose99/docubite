@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { requestPasswordResetAction } from "@/app/(auth)/auth-actions"
 import { AuthField, PasswordField, SubmitButton } from "@/components/auth/fields"
@@ -24,13 +24,13 @@ export function ForgotPasswordForm() {
     try {
       // Routed through a server action, not the browser client directly, so the F14 rate-limit
       // backstop (lib/rate-limit.ts) can run first. /auth/callback exchanges the code the email
-      // link carries for a recovery session, then forwards here — see that route and
+      // link carries for a recovery session, then forwards here â€” see that route and
       // ResetPasswordForm below, which expects that session to already exist rather than taking a
       // bare token the way better-auth's reset did.
       await requestPasswordResetAction(email)
       // Shown whatever came back. A distinct "no such account" response would let anyone test
       // which addresses are registered, and requestPasswordResetAction already answers uniformly
-      // for that reason — success regardless of whether the account exists or the limit was hit.
+      // for that reason â€” success regardless of whether the account exists or the limit was hit.
       setSent(true)
     } catch {
       setError("Could not send the reset link. Please try again.")
@@ -43,9 +43,9 @@ export function ForgotPasswordForm() {
     return (
       <div className="text-center">
         <MailCheck className="mx-auto h-9 w-9 text-emerald-700" strokeWidth={1.6} />
-        <h2 className="mt-4 font-display text-xl font-bold tracking-[-0.02em] text-stone-900">Check your email</h2>
-        <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-stone-600">
-          If <strong className="font-medium text-stone-800">{email}</strong> has an account, a link to choose a new password is on its way. It expires in an hour.
+        <h2 className="mt-4 font-display text-xl font-bold tracking-[-0.02em] text-slate-900">Check your email</h2>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-600">
+          If <strong className="font-medium text-slate-800">{email}</strong> has an account, a link to choose a new password is on its way. It expires in an hour.
         </p>
         <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-emerald-800 hover:underline">Back to sign in</Link>
       </div>
@@ -57,9 +57,9 @@ export function ForgotPasswordForm() {
       <AuthField label="Email">
         <Input name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" autoFocus />
       </AuthField>
-      <SubmitButton busy={busy}>{busy ? "Sending…" : "Email me a reset link"}</SubmitButton>
+      <SubmitButton busy={busy}>{busy ? "Sendingâ€¦" : "Email me a reset link"}</SubmitButton>
       {error && <FormError>{error}</FormError>}
-      <p className="text-center text-sm text-stone-500">
+      <p className="text-center text-sm text-slate-500">
         Remembered it? <Link href="/login" className="font-semibold text-emerald-800 hover:underline">Sign in</Link>
       </p>
     </form>
@@ -68,7 +68,7 @@ export function ForgotPasswordForm() {
 
 /** No `token` prop, unlike the better-auth version: this page only ever renders after
  * /auth/callback has already exchanged the email link's code for a recovery session (cookies are
- * already set by the time this component mounts), so there is nothing left to pass in — the
+ * already set by the time this component mounts), so there is nothing left to pass in â€” the
  * updateUser call below reads that session the same way any other authenticated request would. */
 export function ResetPasswordForm() {
   const [password, setPassword] = useState("")
@@ -87,7 +87,7 @@ export function ResetPasswordForm() {
         return
       }
       // Straight to sign-in, not the workspace: updateUser leaves the recovery-scoped session in
-      // place, which is narrower than a normal sign-in — going through /login mints an ordinary one.
+      // place, which is narrower than a normal sign-in â€” going through /login mints an ordinary one.
       window.location.href = "/login"
     } catch {
       setError("Could not set that password. Please try again.")
@@ -99,8 +99,8 @@ export function ResetPasswordForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <PasswordField label="New password" name="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} />
-      <p className="-mt-2 text-xs text-stone-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
-      <SubmitButton busy={busy}>{busy ? "Saving…" : "Set new password"}</SubmitButton>
+      <p className="-mt-2 text-xs text-slate-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
+      <SubmitButton busy={busy}>{busy ? "Savingâ€¦" : "Set new password"}</SubmitButton>
       {error && <FormError>{error}</FormError>}
     </form>
   )

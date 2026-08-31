@@ -6,7 +6,7 @@ import { useState } from "react"
 
 type Row = { id: number; values: Record<string, unknown> }
 
-const cellInputClass = "w-full min-w-0 rounded-sm border-0 bg-transparent px-2 py-1.5 text-sm text-stone-800 outline-none focus:bg-emerald-50 focus:ring-1 focus:ring-inset focus:ring-emerald-500"
+const cellInputClass = "w-full min-w-0 rounded-sm border-0 bg-transparent px-2 py-1.5 text-sm text-slate-800 outline-none focus:bg-emerald-50 focus:ring-1 focus:ring-inset focus:ring-emerald-500"
 
 const hasValue = (value: unknown) => value !== undefined && value !== null && value !== ""
 
@@ -32,26 +32,26 @@ export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKe
   const addRow = () => setRows((current) => [...current, { id: (current.at(-1)?.id ?? -1) + 1, values: {} }])
   const removeRow = (id: number) => setRows((current) => (current.length > 1 ? current.filter((row) => row.id !== id) : current))
 
-  return <div className="overflow-hidden rounded-lg border border-stone-200">
+  return <div className="overflow-hidden rounded-lg border border-slate-200">
     <div className="overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-sm">
         <thead>
-          <tr className="bg-stone-50">
-            {columns.map((item) => <th key={item.key} scope="col" className={`border-b border-stone-200 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500 ${item.type === "number" ? "text-right" : "text-left"}`}>
+          <tr className="bg-slate-50">
+            {columns.map((item) => <th key={item.key} scope="col" className={`border-b border-slate-200 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 ${item.type === "number" ? "text-right" : "text-left"}`}>
               {item.label}{item.required ? " *" : ""}
             </th>)}
-            <th scope="col" className="w-8 border-b border-stone-200" />
+            <th scope="col" className="w-8 border-b border-slate-200" />
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => <tr key={row.id} className="group even:bg-stone-50/50 hover:bg-emerald-50/40">
+          {rows.map((row, index) => <tr key={row.id} className="group even:bg-slate-50/50 hover:bg-emerald-50/40">
             {columns.map((item) => {
               const inputId = `${fieldKey}-${row.id}-${item.key}`
               const name = `${fieldKey}[${index}][${item.key}]`
               const raw = row.values[item.key]
-              return <td key={item.key} className="border-b border-stone-100 p-0">
+              return <td key={item.key} className="border-b border-slate-100 p-0">
                 {item.type === "boolean" ? (
-                  <label className="flex h-full items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-stone-600">
+                  <label className="flex h-full items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-slate-600">
                     <input id={inputId} name={name} type="checkbox" className="h-3.5 w-3.5 accent-emerald-600" value="true" defaultChecked={raw === true} />
                   </label>
                 ) : item.type === "enum" ? (
@@ -66,9 +66,9 @@ export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKe
                 )}
               </td>
             })}
-            <td className="border-b border-stone-100 px-1 text-center">
+            <td className="border-b border-slate-100 px-1 text-center">
               <button type="button" aria-label="Remove row" title="Remove row" disabled={rows.length <= 1}
-                className="rounded p-1 text-stone-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+                className="rounded p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
                 onClick={() => removeRow(row.id)}>
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -78,7 +78,7 @@ export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKe
       </table>
     </div>
     <button type="button" onClick={addRow}
-      className="flex w-full items-center gap-1.5 border-t border-stone-200 bg-stone-50/50 px-2.5 py-1.5 text-xs font-medium text-stone-500 hover:bg-emerald-50 hover:text-emerald-700">
+      className="flex w-full items-center gap-1.5 border-t border-slate-200 bg-slate-50/50 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700">
       <Plus className="h-3.5 w-3.5" />Add row
     </button>
   </div>
