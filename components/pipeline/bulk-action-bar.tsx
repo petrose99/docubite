@@ -53,35 +53,35 @@ export function BulkActionBar({ workspaceId, stage, selectedIds, onDone }: { wor
     }
   }
 
-  return <div className="flex flex-wrap items-center gap-2 border-b bg-stone-50 px-6 py-2.5 text-sm">
-    <span className="font-medium text-stone-700">{selectedIds.length} selected</span>
+  return <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50 px-6 py-2.5 text-sm">
+    <span className="font-medium text-slate-700">{selectedIds.length} selected</span>
 
-    {stage !== "ready" && stage !== "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    {stage !== "ready" && stage !== "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       onClick={() => run("Moved to Ready", () => moveDocumentsToStageAction(workspaceId, selectedIds, "ready"))}>
       <CheckCircle2 className="h-3.5 w-3.5" />Move to Ready
     </button>}
 
-    {stage !== "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    {stage !== "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       onClick={() => run("Archived", () => archiveDocumentsAction(workspaceId, selectedIds, true))}>
       <Archive className="h-3.5 w-3.5" />Archive
     </button>}
 
-    {stage === "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    {stage === "archive" && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       onClick={() => run("Restored", () => archiveDocumentsAction(workspaceId, selectedIds, false))}>
       <Archive className="h-3.5 w-3.5" />Restore
     </button>}
 
-    <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       onClick={() => run("Flagged", () => flagDocumentsAction(workspaceId, selectedIds, true))}>
       <Flag className="h-3.5 w-3.5" />Flag
     </button>
 
-    {selectedIds.length === 2 && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+    {selectedIds.length === 2 && <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       onClick={() => run("Merged", () => mergeDocumentsAction(workspaceId, selectedIds))}>
       <Combine className="h-3.5 w-3.5" />Merge
     </button>}
 
-    <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50" onClick={() => void exportSelected()}>
+    <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50" onClick={() => void exportSelected()}>
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}Export
     </button>
 
@@ -89,7 +89,7 @@ export function BulkActionBar({ workspaceId, stage, selectedIds, onDone }: { wor
       <Trash2 className="h-3.5 w-3.5" />Delete
     </button>
 
-    <button type="button" className="ml-1 rounded-md px-2 py-1 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800" onClick={onDone}>Clear</button>
+    <button type="button" className="ml-1 rounded-md px-2 py-1 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={onDone}>Clear</button>
 
     <ConfirmDialog
       open={confirmingDelete}

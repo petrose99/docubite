@@ -59,9 +59,9 @@ function RowMenu({ items }: { items: Array<{ label: string; icon: typeof Pencil;
     return () => { window.removeEventListener("mousedown", onPointerDown); window.removeEventListener("keydown", onKeyDown) }
   }, [open])
   return <div ref={wrapper} className="relative">
-    <button type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded={open} className="rounded p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700" onClick={() => setOpen((value) => !value)}><MoreHorizontal className="h-4 w-4" /></button>
+    <button type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded={open} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setOpen((value) => !value)}><MoreHorizontal className="h-4 w-4" /></button>
     {open && <div role="menu" className="absolute right-0 z-40 mt-1 w-44 overflow-hidden rounded-md border bg-white py-1 shadow-lg">
-      {items.map((item) => <button key={item.label} type="button" role="menuitem" className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-stone-100 ${item.destructive ? "text-red-600 hover:bg-red-50" : "text-stone-700"}`}
+      {items.map((item) => <button key={item.label} type="button" role="menuitem" className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-100 ${item.destructive ? "text-red-600 hover:bg-red-50" : "text-slate-700"}`}
         onClick={() => { setOpen(false); item.onSelect() }}><item.icon className="h-3.5 w-3.5" />{item.label}</button>)}
     </div>}
   </div>
@@ -218,7 +218,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   const sortLink = (field: "name" | "updatedAt") => withParams({ sort: field, dir: sort === field && dir === "asc" ? "desc" : "asc" })
   const sortArrow = (field: "name" | "updatedAt") => (sort === field ? <ArrowUpDown className={`h-3 w-3 ${dir === "asc" ? "" : "rotate-180"}`} /> : <ArrowUpDown className="h-3 w-3 opacity-25" />)
 
-  const inputClass = "w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+  const inputClass = "w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
 
   // Content matches accompany a real search on My Files when the feature is on; grouping is that,
   // plus a folder to scope against. `rows` is indexed for selection, so name rows are rendered from
@@ -228,12 +228,12 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   const empty = !rows.length && !folders.length && !(showContent && contentMatches.length > 0)
 
   const groupHeader = (label: string) => (
-    <tr><td colSpan={5} className="border-b bg-stone-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">{label}</td></tr>
+    <tr><td colSpan={5} className="border-b bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</td></tr>
   )
 
   const fileRow = (file: FileRowData, index: number) => {
     const href = tab === "shared" ? `/shared/${file.id}` : `${fileBase}/${file.id}`
-    return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-stone-50"}>
+    return <tr key={file.id} className={marked.has(file.id) ? "bg-emerald-50/60" : "hover:bg-slate-50"}>
       <td className="border-b px-3 py-2">
         {tab === "mine" && <input type="checkbox" aria-label={`Select ${file.name}`} className="h-4 w-4 accent-emerald-600" checked={marked.has(file.id)}
           onMouseDown={(event) => { if (event.shiftKey) event.preventDefault() }}
@@ -241,20 +241,20 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
           onChange={() => {}} />}
       </td>
       <td className="border-b px-3 py-2">
-        <Link href={href} className="inline-flex items-center gap-2 font-medium text-stone-800 hover:text-emerald-800">
+        <Link href={href} className="inline-flex items-center gap-2 font-medium text-slate-800 hover:text-emerald-800">
           <Table2 className="h-4 w-4 shrink-0 text-emerald-600" />
           <span className="truncate" title={file.name}>{file.name}</span>
-          {file.linkAccess !== "none" && <Globe className="h-3.5 w-3.5 shrink-0 text-stone-300" aria-label="Shared by link" />}
+          {file.linkAccess !== "none" && <Globe className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-label="Shared by link" />}
         </Link>
-        {file.folderName && <span className="ml-6 text-xs text-stone-400">in {file.folderName}</span>}
+        {file.folderName && <span className="ml-6 text-xs text-slate-400">in {file.folderName}</span>}
       </td>
-      <td className="border-b px-3 py-2 text-stone-500">
-        {tab === "shared" ? <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-600">{file.sharedAccess === "edit" ? "Can edit" : file.sharedAccess === "interact" ? "Can interact" : "Can view"}</span> : file.documentCount}
+      <td className="border-b px-3 py-2 text-slate-500">
+        {tab === "shared" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">{file.sharedAccess === "edit" ? "Can edit" : file.sharedAccess === "interact" ? "Can interact" : "Can view"}</span> : file.documentCount}
       </td>
-      <td className="border-b px-3 py-2 text-stone-500"><LastUpdated iso={file.updatedAt} /></td>
+      <td className="border-b px-3 py-2 text-slate-500"><LastUpdated iso={file.updatedAt} /></td>
       <td className="border-b px-3 py-2">
         {tab === "mine" && <div className="flex items-center justify-end gap-1">
-          <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" onClick={() => setSharingFile(file)}>
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" onClick={() => setSharingFile(file)}>
             <Share2 className="h-3.5 w-3.5" />Share
           </button>
           <RowMenu items={[
@@ -272,17 +272,17 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
     if (match.page != null) params.set("page", String(match.page))
     if (match.bbox) params.set("bb", match.bbox.join(","))
     const query = params.toString()
-    return <tr key={`content-${match.documentId}`} className="hover:bg-stone-50">
+    return <tr key={`content-${match.documentId}`} className="hover:bg-slate-50">
       <td className="border-b px-3 py-2"></td>
       <td colSpan={4} className="border-b px-3 py-2">
         <Link href={`/workspaces/${workspaceId}/documents/${match.documentId}${query ? `?${query}` : ""}`} className="block">
           <span className="flex items-center gap-2">
-            <FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />
-            <span className="truncate font-medium text-stone-800" title={match.filename}>{match.filename}</span>
-            {match.fileName && <span className="shrink-0 text-xs text-stone-400">in {match.fileName}</span>}
+            <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="truncate font-medium text-slate-800" title={match.filename}>{match.filename}</span>
+            {match.fileName && <span className="shrink-0 text-xs text-slate-400">in {match.fileName}</span>}
             {match.page != null && <span className="shrink-0 rounded bg-emerald-50 px-1 font-mono text-[11px] text-emerald-800">p.{match.page}</span>}
           </span>
-          {match.snippet && <span className="ml-[1.375rem] mt-0.5 line-clamp-2 text-xs text-stone-500">{highlightSnippet(match.snippet, search)}</span>}
+          {match.snippet && <span className="ml-[1.375rem] mt-0.5 line-clamp-2 text-xs text-slate-500">{highlightSnippet(match.snippet, search)}</span>}
         </Link>
       </td>
     </tr>
@@ -294,12 +294,12 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
   const outScopeRows = indexedRows.filter(({ file }) => !file.inScope)
   const inScopeContent = contentMatches.filter((match) => match.inScope)
   const outScopeContent = contentMatches.filter((match) => !match.inScope)
-  const matchedDivider = <tr><td colSpan={5} className="border-b bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-stone-400">Matched inside documents</td></tr>
+  const matchedDivider = <tr><td colSpan={5} className="border-b bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">Matched inside documents</td></tr>
 
   return <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4">
     <div className="flex flex-wrap items-center gap-2">
       {tab === "mine" && <>
-        <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50" disabled={busy} onClick={() => setNewFolder({ name: "" })}>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50" disabled={busy} onClick={() => setNewFolder({ name: "" })}>
           <FolderPlus className="h-4 w-4" />New folder
         </button>
         <button type="button" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={creating} onClick={() => void newFile()}>
@@ -307,23 +307,23 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
         </button>
       </>}
       <div className="relative ml-auto w-64 max-w-full">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input className={`${inputClass} pl-8`} placeholder={documentSearchEnabled ? "Search files and documents" : "Search files"} value={searchValue} onChange={(event) => setSearchValue(event.target.value)} />
       </div>
     </div>
 
-    {tab === "mine" && (trail.length > 0 || search) && <nav className="flex flex-wrap items-center gap-1 text-sm text-stone-500">
-      <Link href={withParams({ folder: null })} className="rounded px-1.5 py-0.5 font-medium hover:bg-stone-100 hover:text-stone-800">All files</Link>
+    {tab === "mine" && (trail.length > 0 || search) && <nav className="flex flex-wrap items-center gap-1 text-sm text-slate-500">
+      <Link href={withParams({ folder: null })} className="rounded px-1.5 py-0.5 font-medium hover:bg-slate-100 hover:text-slate-800">All files</Link>
       {trail.map((folder) => <span key={folder.id} className="flex items-center gap-1">
-        <ChevronRight className="h-3.5 w-3.5 text-stone-300" />
-        <Link href={withParams({ folder: folder.id })} className="rounded px-1.5 py-0.5 font-medium hover:bg-stone-100 hover:text-stone-800">{folder.name}</Link>
+        <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+        <Link href={withParams({ folder: folder.id })} className="rounded px-1.5 py-0.5 font-medium hover:bg-slate-100 hover:text-slate-800">{folder.name}</Link>
       </span>)}
-      {search && (!documentSearchEnabled || !folderId) && <span className="ml-2 text-xs text-stone-400">Searching every folder for “{search}”</span>}
+      {search && (!documentSearchEnabled || !folderId) && <span className="ml-2 text-xs text-slate-400">Searching every folder for “{search}”</span>}
     </nav>}
 
-    {marked.size > 0 && tab === "mine" && <div className="flex flex-wrap items-center gap-2 rounded-md border bg-stone-50 px-3 py-2 text-sm">
-      <span className="font-medium text-stone-700">{marked.size} selected</span>
-      {(allFolders.length > 0 || folderId) && <label className="inline-flex items-center gap-1.5 font-medium text-stone-700">
+    {marked.size > 0 && tab === "mine" && <div className="flex flex-wrap items-center gap-2 rounded-md border bg-slate-50 px-3 py-2 text-sm">
+      <span className="font-medium text-slate-700">{marked.size} selected</span>
+      {(allFolders.length > 0 || folderId) && <label className="inline-flex items-center gap-1.5 font-medium text-slate-700">
         <FolderUp className="h-3.5 w-3.5" />
         <span className="sr-only">Move selected files to</span>
         {/* Value is reset to "" after every move so the control reads as an action, not a
@@ -335,32 +335,32 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
         </select>
       </label>}
       <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1 font-medium text-red-600 hover:bg-red-50 disabled:opacity-50" disabled={busy} onClick={() => setConfirming({ kind: "files", ids: [...marked] })}><Trash2 className="h-3.5 w-3.5" />Delete ({marked.size})</button>
-      <button type="button" className="rounded-md px-2 py-1 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800" onClick={clearMarked}>Clear</button>
+      <button type="button" className="rounded-md px-2 py-1 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={clearMarked}>Clear</button>
     </div>}
 
     <div className="min-h-0 flex-1 overflow-auto rounded-md border">
       <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-stone-50 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             <th className="w-10 border-b px-3 py-2">
               {tab === "mine" && <input type="checkbox" aria-label="Select all files" className="h-4 w-4 accent-emerald-600" checked={rows.length > 0 && marked.size === rows.length} onChange={toggleAll} />}
             </th>
-            <th className="border-b px-3 py-2"><Link href={sortLink("name")} className="inline-flex items-center gap-1 hover:text-stone-800">Name {sortArrow("name")}</Link></th>
+            <th className="border-b px-3 py-2"><Link href={sortLink("name")} className="inline-flex items-center gap-1 hover:text-slate-800">Name {sortArrow("name")}</Link></th>
             <th className="border-b px-3 py-2">{tab === "shared" ? "Access" : "Rows"}</th>
-            <th className="border-b px-3 py-2"><Link href={sortLink("updatedAt")} className="inline-flex items-center gap-1 hover:text-stone-800">Last updated {sortArrow("updatedAt")}</Link></th>
+            <th className="border-b px-3 py-2"><Link href={sortLink("updatedAt")} className="inline-flex items-center gap-1 hover:text-slate-800">Last updated {sortArrow("updatedAt")}</Link></th>
             <th className="w-28 border-b px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
-          {folders.map((folder) => <tr key={folder.id} className="hover:bg-stone-50">
+          {folders.map((folder) => <tr key={folder.id} className="hover:bg-slate-50">
             <td className="border-b px-3 py-2"></td>
             <td className="border-b px-3 py-2">
-              <Link href={withParams({ folder: folder.id })} className="inline-flex items-center gap-2 font-medium text-stone-800 hover:text-emerald-800">
-                <Folder className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500" />{folder.name}
+              <Link href={withParams({ folder: folder.id })} className="inline-flex items-center gap-2 font-medium text-slate-800 hover:text-emerald-800">
+                <Folder className="h-4 w-4 shrink-0 fill-slate-300 text-slate-400" />{folder.name}
               </Link>
             </td>
-            <td className="border-b px-3 py-2 text-stone-400">{folder.fileCount} file{folder.fileCount === 1 ? "" : "s"}</td>
-            <td className="border-b px-3 py-2 text-stone-400">—</td>
+            <td className="border-b px-3 py-2 text-slate-400">{folder.fileCount} file{folder.fileCount === 1 ? "" : "s"}</td>
+            <td className="border-b px-3 py-2 text-slate-400">—</td>
             <td className="border-b px-3 py-2">
               <div className="flex justify-end">
                 <RowMenu items={[
@@ -390,7 +390,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
             {showContent && contentMatches.map(contentRow)}
           </>}
 
-          {empty && <tr><td colSpan={5} className="px-4 py-16 text-center text-sm text-stone-400">
+          {empty && <tr><td colSpan={5} className="px-4 py-16 text-center text-sm text-slate-400">
             {tab === "shared" ? "Nothing has been shared with you yet." : search ? `No files match “${search}”.` : "No files yet — create your first one to start extracting data."}
           </td></tr>}
         </tbody>
@@ -401,7 +401,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       <div className="space-y-4 px-5 py-4">
         <input autoFocus className={inputClass} placeholder="Folder name" value={newFolder?.name ?? ""} onChange={(event) => setNewFolder({ name: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void submitFolder() } }} />
         <div className="flex justify-end gap-2">
-          <button type="button" className="rounded-md border px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50" onClick={() => setNewFolder(null)}>Cancel</button>
+          <button type="button" className="rounded-md border px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setNewFolder(null)}>Cancel</button>
           <button type="button" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={busy || !newFolder?.name.trim()} onClick={() => void submitFolder()}>Create</button>
         </div>
       </div>
@@ -411,7 +411,7 @@ export function FilesBrowser({ workspaceId, tab, folderId, trail, search, sort, 
       <div className="space-y-4 px-5 py-4">
         <input autoFocus className={inputClass} value={renaming?.name ?? ""} onChange={(event) => setRenaming((current) => (current ? { ...current, name: event.target.value } : current))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void submitRename() } }} />
         <div className="flex justify-end gap-2">
-          <button type="button" className="rounded-md border px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50" onClick={() => setRenaming(null)}>Cancel</button>
+          <button type="button" className="rounded-md border px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setRenaming(null)}>Cancel</button>
           <button type="button" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={busy || !renaming?.name.trim()} onClick={() => void submitRename()}>Rename</button>
         </div>
       </div>

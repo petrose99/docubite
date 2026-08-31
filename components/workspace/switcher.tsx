@@ -15,26 +15,26 @@ export function WorkspaceSwitcher({ workspaces, workspaceId }: { workspaces: Swi
 
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>
-      <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-stone-200 hover:bg-white" aria-label="Switch workspace">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-stone-200/80 text-[11px] font-bold text-stone-600">
+      <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-slate-200 hover:bg-white" aria-label="Switch workspace">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-200/80 text-[11px] font-bold text-slate-600">
           {(current?.name || "W").trim().charAt(0).toUpperCase()}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-stone-800">{current?.name || "Workspace"}</span>
-          <span className="block truncate text-xs text-stone-400">{current?.kind === "team" ? "Team workspace" : "Personal workspace"}</span>
+          <span className="block truncate text-sm font-medium text-slate-800">{current?.name || "Workspace"}</span>
+          <span className="block truncate text-xs text-slate-400">{current?.kind === "team" ? "Team workspace" : "Personal workspace"}</span>
         </span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       </button>
     </PopoverTrigger>
     <PopoverContent align="start" className="w-64 p-1.5">
-      <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Workspaces</p>
+      <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Workspaces</p>
       <ul className="max-h-64 overflow-y-auto">
         {workspaces.map((workspace) => <li key={workspace.id}>
           <Link href={`/workspaces/${workspace.id}`} onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-stone-700 hover:bg-stone-100">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-stone-100 text-[10px] font-bold text-stone-500">{workspace.name.trim().charAt(0).toUpperCase()}</span>
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-500">{workspace.name.trim().charAt(0).toUpperCase()}</span>
             <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-            {workspace.kind === "team" && <span className="shrink-0 text-[11px] text-stone-400">team</span>}
+            {workspace.kind === "team" && <span className="shrink-0 text-[11px] text-slate-400">team</span>}
             <Check className={`h-3.5 w-3.5 shrink-0 text-primary ${workspace.id === workspaceId ? "" : "invisible"}`} />
           </Link>
         </li>)}
@@ -42,8 +42,8 @@ export function WorkspaceSwitcher({ workspaces, workspaceId }: { workspaces: Swi
 
       <div className="mt-1.5 border-t pt-1.5">
         <Link href="/workspaces/create" onClick={() => setOpen(false)}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100">
-          <Plus className="h-3.5 w-3.5 text-stone-400" />New workspace
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+          <Plus className="h-3.5 w-3.5 text-slate-400" />New workspace
         </Link>
       </div>
     </PopoverContent>

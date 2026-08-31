@@ -17,7 +17,7 @@ function TotalField({ field, value, ref: provenanceRef, onFocusSource }: {
   onFocusSource: (target: { page: number; bbox: Ref["bbox"]; quote: string }) => void
 }) {
   return <div className="flex flex-col items-end gap-1">
-    <div className="flex items-center gap-1.5 text-xs font-medium text-stone-500">
+    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
       {field.label}
       {provenanceRef ? (
         <button type="button" className="text-emerald-700 hover:text-emerald-800" title="Jump to where this was read in the source"
@@ -25,11 +25,11 @@ function TotalField({ field, value, ref: provenanceRef, onFocusSource }: {
           <Crosshair className="h-3 w-3" />
         </button>
       ) : (
-        <Pencil className="h-3 w-3 text-stone-300" aria-label="No source pin — entered by hand or unresolved" />
+        <Pencil className="h-3 w-3 text-slate-300" aria-label="No source pin — entered by hand or unresolved" />
       )}
     </div>
     <input id={field.key} name={field.key} type="number" step="any"
-      className="w-32 rounded-md border border-stone-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
+      className="w-32 rounded-md border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
       defaultValue={typeof value === "string" || typeof value === "number" ? String(value) : ""} />
   </div>
 }
@@ -49,12 +49,12 @@ export function LineItemsSection({ field, value, fieldKey, summaryFields, fieldV
   provenanceFields: Record<string, Ref>
   onFocusSource: (target: { page: number; bbox: Ref["bbox"]; quote: string }) => void
 }) {
-  return <div className="space-y-3 border-t border-stone-200 pt-4">
-    <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">{field.label}</div>
+  return <div className="space-y-3 border-t border-slate-200 pt-4">
+    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{field.label}</div>
     {field.itemFields?.length
       ? <LineItemsEditor fieldKey={fieldKey} itemFields={field.itemFields} initialRows={Array.isArray(value) ? value as Array<Record<string, unknown>> : []} />
       : <textarea id={fieldKey} name={fieldKey} defaultValue={Array.isArray(value) ? JSON.stringify(value) : ""} placeholder="JSON array" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm" />}
-    {summaryFields.length > 0 && <div className="flex flex-wrap justify-end gap-4 rounded-lg bg-stone-50 px-4 py-3">
+    {summaryFields.length > 0 && <div className="flex flex-wrap justify-end gap-4 rounded-lg bg-slate-50 px-4 py-3">
       {summaryFields.map((summaryField) => <TotalField key={summaryField.key} field={summaryField} value={fieldValues[summaryField.key]} ref={provenanceFields[summaryField.key] ?? null} onFocusSource={onFocusSource} />)}
     </div>}
   </div>

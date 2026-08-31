@@ -11,7 +11,7 @@ import type { MatchedShape, SheetTemplate, StagedFile, WorkspaceUsage } from "@/
 import type { TrackedDocumentStatus } from "@/components/extract/use-extraction-progress"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
-import { CloudOff, Files, FileUp, GripHorizontal, Loader2, Mail, Sparkles, X } from "lucide-react"
+import { CloudOff, Files, FileUp, Loader2, Mail, Sparkles, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -50,17 +50,20 @@ function deriveFileName(row: StagedFile): string {
   return row.filename.replace(/\.[^./]+$/, "") || row.filename
 }
 
-function UsageMeter({ usage }: { usage: WorkspaceUsage }) {
+/** `inline` drops the bar's own border/padding for the modal footer, where it sits beside the
+ * Cancel/Process buttons instead of owning a row of its own. */
+function UsageMeter({ usage, inline = false }: { usage: WorkspaceUsage; inline?: boolean }) {
   const percent = usage.documentsLimit > 0 ? Math.min(100, Math.round((usage.documentsUsed / usage.documentsLimit) * 100)) : 0
-  return <div className="flex items-center gap-3 border-b px-4 py-2.5 text-xs text-stone-500">
-    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-stone-200"><div className={`h-full rounded-full ${percent >= 90 ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(percent, 4)}%` }} /></div>
-    <span>{usageLabel(usage.documentsUsed, usage.documentsLimit)} documents · {usageLabel(usage.aiUsed, usage.aiLimit)} AI extractions</span>
-    <span className="ml-auto rounded border border-stone-200 px-1.5 py-0.5 font-medium text-stone-600">{usage.planName}</span>
+  return <div className={`flex items-center gap-3 text-xs text-slate-500 ${inline ? "" : "border-b px-4 py-2.5"}`}>
+    <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${percent >= 90 ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(percent, 4)}%` }} /></div>
+    <span className="truncate">{usageLabel(usage.documentsUsed, usage.documentsLimit)} documents · {usageLabel(usage.aiUsed, usage.aiLimit)} AI extractions</span>
+    <span className="shrink-0 rounded border border-slate-200 px-1.5 py-0.5 font-medium text-slate-600">{usage.planName}</span>
   </div>
 }
 
-/** Lido-style floating extraction panel: draggable, non-modal, so the sheet stays visible
- * behind it and freshly extracted rows appear next to it live. */
+/** Centered two-column modal (Sources | What to extract): the sheet's own worksheets stay
+ * reachable behind the backdrop, and freshly extracted rows reconcile into it once this closes —
+ * see ExtractOverlay's doc comment for why the polling instance lives one level up from here. */
 export function ExtractPanel({ workspaceId, fileId, fileName, template, templates, onSelectTemplate, usage, sheetCount, onClose, onDocumentsQueued, statuses }: {
   workspaceId: string
   fileId: string
@@ -118,36 +121,6 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
   // folder of documents announces itself once, when it finishes, rather than on every poll.
   const batchQueuedIds = useRef<string[]>([])
   const batchToasted = useRef(false)
-
-  // Draggable position; starts docked to the top-right like Lido's panel.
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
-  const dragState = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  const onDragStart = (event: React.PointerEvent) => {
-    const rect = panelRef.current?.getBoundingClientRect()
-    if (!rect) return
-    dragState.current = { startX: event.clientX, startY: event.clientY, baseX: rect.left, baseY: rect.top }
-    ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
-  }
-  const clampPosition = (x: number, y: number) => ({
-    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - 120)),
-    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - 80)),
-  })
-  const onDragMove = (event: React.PointerEvent) => {
-    const drag = dragState.current
-    if (!drag) return
-    setPosition(clampPosition(drag.baseX + event.clientX - drag.startX, drag.baseY + event.clientY - drag.startY))
-  }
-  const onDragEnd = () => { dragState.current = null }
-
-  // A panel dragged to the edge would otherwise be stranded off-screen (or sitting on top of
-  // the sheet) when the window shrinks.
-  useEffect(() => {
-    const onResize = () => setPosition((current) => (current ? clampPosition(current.x, current.y) : current))
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
-  }, [])
 
   // webkitdirectory has no typed React prop, so it is set on the element directly. Setting
   // `directory` too covers non-webkit engines that honour the standard name.
@@ -477,110 +450,131 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
     } finally { setDeleting(false) }
   }
 
-  const inputClass = "w-full rounded-md border border-stone-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+  const inputClass = "w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
   // Fields/instructions/page-range only matter once there's a document to extract from — showing
-  // them on an empty panel is setup for a file that isn't there yet. But a file reopened to add
-  // more documents can already have fields (from its existing template) with nothing staged this
-  // session, and a ZIP/photo attempt can force the section open with nothing staged either — both
-  // count as "there's a file" too, just not one sitting in the upload list.
+  // them as fully configurable is setup for a file that isn't there yet. But a file reopened to
+  // add more documents can already have fields (from its existing template) with nothing staged
+  // this session, and a ZIP/photo attempt can force the section open with nothing staged either —
+  // both count as "there's a file" too, just not one sitting in the upload list.
   const hasFile = staged.length > 0 || fields.length > 0 || setupRevealed
-  const tabs = [
+  const sourceTabs = [
     { label: "Upload", icon: FileUp, active: true },
     { label: "Google Drive", icon: CloudOff, active: false },
     { label: "Email", icon: Mail, active: false },
   ]
 
-  return <div ref={panelRef} className="fixed z-50 flex max-h-[calc(100vh-6rem)] w-[26.5rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl" style={position ? { left: position.x, top: position.y } : { right: 24, top: 88 }}>
-    <div className="flex cursor-grab touch-none justify-center pt-1.5 text-stone-300 active:cursor-grabbing" onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}><GripHorizontal className="h-4 w-4" /></div>
-    <div className="flex items-center justify-between gap-3 px-4 pb-3">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><FileUp className="h-5 w-5" /></div>
-        <h2 className="text-base font-bold text-stone-900">Extract Data</h2>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-8 backdrop-blur-[3px]" onClick={onClose}>
+    <div className="flex h-[88vh] max-h-[820px] w-full max-w-[1000px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="flex items-center gap-3 border-b px-6 py-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><FileUp className="h-[18px] w-[18px]" /></div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[17px] font-bold tracking-tight text-slate-900">Upload to {fileName === "Pipeline" ? "Pipeline" : "Extract"}</h2>
+          <p className="text-[12.5px] text-slate-400">{staged.length > 0 ? `${staged.length} file${staged.length === 1 ? "" : "s"} staged` : "Drop files or browse to get started"}</p>
+        </div>
+        {lastBatch && <button type="button" onClick={() => setReportOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"><Files className="h-3.5 w-3.5" />Report</button>}
+        <button type="button" className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" onClick={onClose} aria-label="Close"><X className="h-[18px] w-[18px]" /></button>
       </div>
-      <div className="flex items-center gap-1">
-        {lastBatch && <button type="button" onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50" title="Folder report"><Files className="h-3.5 w-3.5" />Report</button>}
-        <button type="button" className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
-      </div>
-    </div>
 
-    <div className="flex gap-1 border-b px-4">
-      {tabs.map((tab) => <button key={tab.label} type="button" disabled={!tab.active} title={tab.active ? undefined : "Coming soon"} className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 px-2.5 pb-2 pt-1 text-sm font-medium ${tab.active ? "border-emerald-600 text-emerald-700" : "border-transparent text-stone-400"}`}>
-        {tab.label}
-        {!tab.active && <span className="rounded bg-stone-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-400">Soon</span>}
-      </button>)}
-    </div>
-
-    <UsageMeter usage={usage} />
-
-    <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-      {matchedShape && !fields.length && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-          <div className="flex items-start gap-2">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-900">Looks like a {matchedShape.name}</p>
-              <p className="mt-0.5 text-xs text-emerald-800">
-                {matchedShape.lastFilename ? `Same fields as ${matchedShape.lastFilename}, ${relativeTime(matchedShape.lastRunAt)}?` : `You set this up ${relativeTime(matchedShape.lastRunAt)}. Reuse the same fields?`}
-              </p>
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+        <div className="flex min-h-0 flex-col overflow-y-auto border-b p-5 lg:border-b-0 lg:border-r">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Sources</div>
+            <div className="flex gap-3">
+              {sourceTabs.map((tab) => <span key={tab.label} title={tab.active ? undefined : "Coming soon"} className={`inline-flex items-center gap-1 text-xs font-medium ${tab.active ? "text-emerald-700" : "text-slate-300"}`}>
+                <tab.icon className="h-3.5 w-3.5" />{tab.label}
+              </span>)}
             </div>
           </div>
-          <div className="mt-2.5 flex gap-2">
-            <button type="button" onClick={useMatchedShape} className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">Use same setup</button>
-            <button type="button" onClick={startFresh} className="rounded-md px-3 py-1.5 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100">Start fresh</button>
+
+          {matchedShape && !fields.length && (
+            <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-start gap-2">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-emerald-900">Looks like a {matchedShape.name}</p>
+                  <p className="mt-0.5 text-xs text-emerald-800">
+                    {matchedShape.lastFilename ? `Same fields as ${matchedShape.lastFilename}, ${relativeTime(matchedShape.lastRunAt)}?` : `You set this up ${relativeTime(matchedShape.lastRunAt)}. Reuse the same fields?`}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2.5 flex gap-2">
+                <button type="button" onClick={useMatchedShape} className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">Use same setup</button>
+                <button type="button" onClick={startFresh} className="rounded-md px-3 py-1.5 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100">Start fresh</button>
+              </div>
+            </div>
+          )}
+
+          {/* A div, not a button: it wraps the folder/ZIP/camera buttons below, and a <button>
+           * cannot legally contain another <button> (React 19 flags the nesting as a hydration
+           * error). role="button" plus a key handler keeps it operable the same way a real button
+           * would be. */}
+          <div role="button" tabIndex={0} className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-emerald-200 bg-emerald-50/40 hover:border-emerald-400 hover:bg-emerald-50"}`}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click() } }}
+            onDragOver={(event) => { event.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(event) => { event.preventDefault(); setDragOver(false); handleDrop(event.dataTransfer) }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><FileUp className="h-[21px] w-[21px]" /></div>
+            <span><span className="font-semibold text-emerald-700">Click to upload</span> <span className="text-slate-500">or drag and drop</span></span>
+            <span className="text-xs text-slate-400">PDF, JPG, PNG</span>
+            <span className="mt-1 flex flex-wrap items-center justify-center gap-3">
+              <button type="button" className="text-xs font-medium text-slate-400 hover:text-emerald-700" onClick={(event) => { event.stopPropagation(); folderInputRef.current?.click() }}>or upload a whole folder</button>
+              <button type="button" className="text-xs font-medium text-slate-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); zipInputRef.current?.click() }}>or upload a ZIP</button>
+              {/* capture="environment" only does anything on a device with a camera (phones/tablets)
+               * — elsewhere it degrades to an ordinary file picker, so this button costs nothing on
+               * desktop and needs no separate desktop/mobile branch. */}
+              <button type="button" className="text-xs font-medium text-slate-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); cameraInputRef.current?.click() }}>or take a photo</button>
+            </span>
+          </div>
+          <input ref={inputRef} type="file" multiple className="hidden" accept={acceptedTypes} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
+          <input ref={folderInputRef} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
+          <input ref={zipInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadZip(file); event.target.value = "" }} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCameraCapture(file); event.target.value = "" }} />
+
+          {staged.length > 0 && <div className="mt-3 space-y-0.5 overflow-y-auto pr-1">
+            {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onReextractAdaptively={() => void reextractAdaptively(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
+          </div>}
+          {staged.length > 0 && <div className="mt-2.5 flex items-center gap-4 text-sm">
+            <button type="button" className="font-medium text-slate-400 hover:text-slate-600 disabled:opacity-50" disabled={busy} onClick={resetAll}>Reset all files</button>
+            <button type="button" className="font-medium text-red-500 hover:text-red-700 disabled:opacity-50" disabled={busy || deleting} onClick={requestDeleteAll}>Delete all files</button>
+          </div>}
+        </div>
+
+        <div className="flex min-h-0 flex-col overflow-y-auto p-5">
+          <div className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">What to extract</div>
+          {templates && templates.length > 1 && <div className="mb-4">
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600" htmlFor="extract-document-type">Document type</label>
+            <select id="extract-document-type" className={inputClass} value={template?.id ?? ""} disabled={staged.length > 0}
+              title={staged.length > 0 ? "Reset files to change document type" : undefined}
+              onChange={(event) => onSelectTemplate?.(event.target.value)}>
+              {templates.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">Sets which worksheet — and which record type your accounting export sees — these documents are filed under.</p>
+          </div>}
+
+          {hasFile ? <>
+            <label className="mb-2 block text-xs font-semibold text-slate-600">Fields</label>
+            <p className="mb-2 -mt-1.5 text-xs text-slate-400">Each field is one data point the AI extracts. Click a chip to refine it.</p>
+            <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
+            {!fields.length && <p className="mt-1.5 text-xs text-slate-400">{shapeChecking ? "Checking for a matching setup…" : "Add at least one field before processing."}</p>}
+          </> : <p className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">Add a file to set up which fields DocuBite extracts.</p>}
+
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3.5">
+            <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <Sparkles className="h-[15px] w-[15px] text-indigo-600" />Tip
+            </div>
+            <p className="text-xs leading-relaxed text-slate-500">DocuBite reads handwriting and low-quality scans too. Add a field for anything specific — like a PO number — and it&apos;ll look for it on every page.</p>
           </div>
         </div>
-      )}
+      </div>
 
-      <section>
-        <h3 className="text-sm font-bold text-stone-900">Files</h3>
-        <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF or image)</p>
-        {templates && templates.length > 1 && <div className="mb-3">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500" htmlFor="extract-document-type">Document type</label>
-          <select id="extract-document-type" className={inputClass} value={template?.id ?? ""} disabled={staged.length > 0}
-            title={staged.length > 0 ? "Reset files to change document type" : undefined}
-            onChange={(event) => onSelectTemplate?.(event.target.value)}>
-            {templates.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
-          </select>
-          <p className="mt-1 text-xs text-stone-400">Sets which worksheet — and which record type your accounting export sees — these documents are filed under.</p>
-        </div>}
-        {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
-          {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onReextractAdaptively={() => void reextractAdaptively(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
-        </div>}
-        <button type="button" className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(event) => { event.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(event) => { event.preventDefault(); setDragOver(false); handleDrop(event.dataTransfer) }}>
-          <FileUp className="h-5 w-5 text-stone-400" />
-          <span><span className="font-semibold text-emerald-700">Click to upload</span> <span className="text-stone-500">or drag and drop</span></span>
-          <span className="flex flex-wrap items-center justify-center gap-3">
-            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" onClick={(event) => { event.stopPropagation(); folderInputRef.current?.click() }}>or upload a whole folder</button>
-            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); zipInputRef.current?.click() }}>or upload a ZIP</button>
-            {/* capture="environment" only does anything on a device with a camera (phones/tablets)
-             * — elsewhere it degrades to an ordinary file picker, so this button costs nothing on
-             * desktop and needs no separate desktop/mobile branch. */}
-            <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); cameraInputRef.current?.click() }}>or take a photo</button>
-          </span>
-        </button>
-        <input ref={inputRef} type="file" multiple className="hidden" accept={acceptedTypes} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
-        <input ref={folderInputRef} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
-        <input ref={zipInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadZip(file); event.target.value = "" }} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCameraCapture(file); event.target.value = "" }} />
-        <div className="mt-2.5 flex items-center gap-4 text-sm">
-          <button type="button" className="font-medium text-stone-400 hover:text-stone-600 disabled:opacity-50" disabled={!staged.length || busy} onClick={resetAll}>Reset all files</button>
-          <button type="button" className="font-medium text-red-500 hover:text-red-700 disabled:opacity-50" disabled={!staged.length || busy || deleting} onClick={requestDeleteAll}>Delete all files</button>
-        </div>
-        <button type="button" className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50" disabled={busy || !processable.length || !fields.length} onClick={() => void uploadRows(processable)}>
+      <div className="flex items-center gap-4 border-t px-6 py-4">
+        <div className="min-w-0 flex-1"><UsageMeter usage={usage} inline /></div>
+        <button type="button" className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={onClose}>Cancel</button>
+        <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:pointer-events-none disabled:opacity-50" disabled={busy || !processable.length || !fields.length} onClick={() => void uploadRows(processable)}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Process all files{processable.length > 1 ? ` (${processable.length})` : ""}
         </button>
-        {!fields.length && hasFile && <p className="mt-1.5 text-xs text-stone-400">{shapeChecking ? "Checking for a matching setup…" : "Add at least one field below before processing."}</p>}
-      </section>
-
-      {hasFile && <section>
-        <h3 className="text-sm font-bold text-stone-900">Fields</h3>
-        <p className="mb-2 text-xs text-stone-500">Each field is one data point the AI extracts. Click a chip to refine it.</p>
-        <ColumnChips fields={fields} onChange={(next) => { setFields(next); markDirty() }} />
-      </section>}
+      </div>
     </div>
 
     <ConfirmDialog

@@ -38,22 +38,22 @@ export function AccountMenu({ name, email, collapsed = false }: { name: string; 
   const initial = (name || email).trim().charAt(0).toUpperCase() || "?"
 
   return <div ref={wrapper} className="relative">
-    <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-stone-100" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold text-white">{initial}</span>
+    <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-slate-100" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-700 text-xs font-bold text-white">{initial}</span>
       {!collapsed && <>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-stone-800">{name || email}</span>
-          {name && <span className="block truncate text-xs text-stone-400">{email}</span>}
+          <span className="block truncate text-sm font-medium text-slate-800">{name || email}</span>
+          {name && <span className="block truncate text-xs text-slate-400">{email}</span>}
         </span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       </>}
     </button>
     {open && <div role="menu" className="absolute bottom-full left-0 z-50 mb-1 w-full min-w-52 overflow-hidden rounded-md border bg-white py-1 shadow-lg">
       <div className="border-b px-3 py-2">
-        <p className="truncate text-sm font-medium text-stone-800">{name || email}</p>
-        <p className="truncate text-xs text-stone-400">{email}</p>
+        <p className="truncate text-sm font-medium text-slate-800">{name || email}</p>
+        <p className="truncate text-xs text-slate-400">{email}</p>
       </div>
-      <button type="button" role="menuitem" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 hover:bg-stone-100 disabled:opacity-50" disabled={busy} onClick={() => void signOut()}>
+      <button type="button" role="menuitem" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50" disabled={busy} onClick={() => void signOut()}>
         <LogOut className="h-4 w-4" />{busy ? "Signing out…" : "Sign out"}
       </button>
     </div>}
