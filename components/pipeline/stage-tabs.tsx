@@ -21,10 +21,10 @@ export function StageTabs({ workspaceId, active, counts }: { workspaceId: string
       const Icon = STAGE_ICONS[stage]
       return <Link key={stage} href={`/workspaces/${workspaceId}/pipeline?stage=${stage}`}
         aria-current={isActive ? "page" : undefined}
-        className={`flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? "border-emerald-700 text-emerald-800" : "border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-800"}`}>
+        className={`flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? "border-emerald-700 text-emerald-800" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"}`}>
         <Icon className="h-4 w-4 shrink-0" />
         {STAGE_LABELS[stage]}
-        <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${isActive ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-500"}`}>{counts[stage]}</span>
+        <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>{counts[stage]}</span>
       </Link>
     })}
   </nav>

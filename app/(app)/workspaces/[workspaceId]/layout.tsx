@@ -3,6 +3,7 @@ import { getCurrentUser, getSession } from "@/lib/auth"
 import config from "@/lib/config"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { createClient } from "@/lib/supabase/server"
+import { countDocumentsByStage } from "@/models/documents"
 import { getWorkspaceMembership, getWorkspacesForUser } from "@/models/workspaces"
 import { redirect } from "next/navigation"
 
@@ -35,18 +36,23 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     }
   }
 
-  const [workspaces, capabilities] = await Promise.all([
+  // pipelineReviewCount feeds the sidebar's Pipeline nav badge — read on every navigation the same
+  // way workspaces/capabilities already are, since it's cheap (one grouped count query) and the
+  // badge needs to stay current without the reader having to visit Pipeline first.
+  const [workspaces, capabilities, pipelineCounts] = await Promise.all([
     getWorkspacesForUser(user.id),
     getWorkspaceCapabilities(workspaceId),
+    countDocumentsByStage(workspaceId),
   ])
 
-  return <div className="flex min-h-screen bg-white text-stone-900">
+  return <div className="flex min-h-screen bg-white text-slate-900">
     <Sidebar
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
       user={{ name: user.name, email: user.email }}
       enabledModuleKeys={[...capabilities.enabled]}
-      accountingEnabled={config.integrations.bigcapital.enabled} />
+      accountingEnabled={config.integrations.bigcapital.enabled}
+      pipelineReviewCount={pipelineCounts.to_review} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

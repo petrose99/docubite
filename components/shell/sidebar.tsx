@@ -35,7 +35,7 @@ const ICONS: Record<string, typeof Files> = {
  * this rail doesn't scroll. Module nav entries (Dictate) come from
  * `enabledModuleKeys` — the workspace's resolved capability set (lib/modules/capabilities.ts) —
  * rather than ad-hoc per-feature booleans. */
-export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, accountingEnabled = false }: {
+export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, accountingEnabled = false, pipelineReviewCount = 0 }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
@@ -46,6 +46,10 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
    * since it depends on the encryption key being configured at all rather than anything a workspace
    * owner toggles. */
   accountingEnabled?: boolean
+  /** counts.to_review from countDocumentsByStage — how many documents are waiting on a person right
+   * now. Surfaced as a badge on the Pipeline entry so "something needs you" is visible from every
+   * page, not just after clicking into Pipeline's own To review tab. */
+  pipelineReviewCount?: number
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
@@ -64,35 +68,54 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   // main destination); Files is demoted below it — still available for the rare case someone
   // wants the underlying spreadsheet/ingestion-container view, but no longer where the app points
   // first. See the pipeline redesign plan, Phases 2 & 6.
+  //
+  // Grouped into Workspace / Modules / Settings sections, mirroring the merged nav from the
+  // enterprise restyle — module entries (Dictate, Accounting) sit apart from the fixed Home/
+  // Pipeline/Files trio since they come and go per workspace, and Settings is its own section of
+  // one so it doesn't read as just another workspace destination.
   const workItems = [
     { href: base, label: "Home", icon: BarChart3, exact: true },
-    { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false },
+    { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
+  ]
+  const moduleItems = [
     ...moduleWorkItems,
     ...(accountingEnabled ? [{ href: `${base}/accounting`, label: "Accounting", icon: Landmark, exact: false }] : []),
-    { href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false },
   ]
+  const settingsItems = [{ href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false }]
 
-  const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean }) => {
+  const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean; badge?: number }) => {
     // Non-exact entries stay lit while you're inside a page under them — Settings while you're on
     // any settings leaf, a module item while you're on its own sub-pages.
     const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.label === "Settings" && pathname.startsWith(`${base}/settings`))
     return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900"}`}>
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"}`}>
       <item.icon className="h-4 w-4 shrink-0" />{item.label}
+      {item.badge != null && <span className="ml-auto flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-bold text-white">{item.badge}</span>}
     </Link>
   }
 
-  return <aside className="flex w-56 shrink-0 flex-col gap-1 border-r bg-stone-50 px-2 py-3">
-    <Link href={base} className="flex items-center gap-2 px-2 py-1">
+  const sectionLabel = (label: string) => <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-wide text-slate-400 first:pt-0">{label}</div>
+
+  return <aside className="flex w-56 shrink-0 flex-col gap-0.5 border-r bg-slate-100 px-2.5 py-3">
+    <Link href={base} className="flex items-center gap-2 px-1.5 py-1">
       <BiteMark className="h-7 w-7 shrink-0" />
-      <span className="truncate text-sm font-bold text-stone-900">DocuBite</span>
+      <span className="truncate text-sm font-bold text-slate-900">DocuBite</span>
     </Link>
 
-    <div className="mb-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>
+    <div className="mb-1 mt-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>
 
-    <nav className="space-y-0.5">
-      {workItems.map(navLink)}
+    <nav className="flex flex-col">
+      {sectionLabel("Workspace")}
+      <div className="space-y-0.5">{workItems.map(navLink)}</div>
+
+      {moduleItems.length > 0 && <>
+        {sectionLabel("Modules")}
+        <div className="space-y-0.5">{moduleItems.map(navLink)}</div>
+      </>}
+
+      {sectionLabel("Settings")}
+      <div className="space-y-0.5">{settingsItems.map(navLink)}</div>
     </nav>
 
     <div className="mt-auto pt-3">

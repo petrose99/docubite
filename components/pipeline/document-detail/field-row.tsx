@@ -28,10 +28,10 @@ export function FieldRow({ field, value, confidence, ref: provenanceRef, onFocus
   // grid just gets a plain label instead of the click-to-highlight affordance.
   const isArray = field.type === "array"
 
-  return <div className={`space-y-1.5 rounded-md ${isArray ? "border-t border-stone-200 pt-4" : ""} ${lowConfidence ? "border border-amber-300 bg-amber-50/60 p-2" : ""}`}>
+  return <div className={`space-y-1.5 rounded-md ${isArray ? "border-t border-slate-200 pt-4" : ""} ${lowConfidence ? "border border-indigo-300 bg-indigo-50/60 p-2" : ""}`}>
     <Label htmlFor={field.key} className="flex items-center gap-2">
-      <span className={isArray ? "text-xs font-semibold uppercase tracking-wide text-stone-500" : undefined}>{field.label}{field.required ? " *" : ""}</span>
-      {lowConfidence && <span className="text-xs font-normal text-amber-700">Low confidence</span>}
+      <span className={isArray ? "text-xs font-semibold uppercase tracking-wide text-slate-500" : undefined}>{field.label}{field.required ? " *" : ""}</span>
+      {lowConfidence && <span className="text-xs font-normal text-indigo-700">Low confidence</span>}
       {isArray ? null : provenanceRef ? (
         <button type="button" className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
           onClick={() => onFocusSource({ page: provenanceRef.page, bbox: provenanceRef.bbox, quote: provenanceRef.quote })}
@@ -39,7 +39,7 @@ export function FieldRow({ field, value, confidence, ref: provenanceRef, onFocus
           <Crosshair className="h-3 w-3" />Source
         </button>
       ) : (
-        <span className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-stone-400" title="No source pin — entered by hand or unresolved">
+        <span className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-slate-400" title="No source pin — entered by hand or unresolved">
           <Pencil className="h-3 w-3" />Manual
         </span>
       )}

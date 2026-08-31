@@ -161,6 +161,24 @@ export async function countDocumentsByStage(workspaceId: string): Promise<Record
   return Object.fromEntries(PIPELINE_STAGES.map((stage, index) => [stage, counts[index]])) as Record<PipelineStage, number>
 }
 
+/** Home's "Documents this month" stat — a plain calendar-month count off `receivedAt`, the same
+ * timestamp the pipeline list sorts and displays by. Not stage-filtered: a document counts here
+ * the moment it lands, whichever stage it's since moved through. */
+export async function countDocumentsThisMonth(workspaceId: string, now: Date = new Date()): Promise<number> {
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  return prisma.document.count({ where: { workspaceId, receivedAt: { gte: startOfMonth } } })
+}
+
+/** Home's "Recent files" card badge: how many of each file's documents are sitting on the To
+ * review stage, so the card can say "2 in review" the same way the pipeline tab would rather than
+ * a generic document count. groupBy rather than N queries — one round trip for every file on the
+ * card regardless of how many there are. */
+export async function countToReviewByFile(workspaceId: string, fileIds: string[]): Promise<Record<string, number>> {
+  if (!fileIds.length) return {}
+  const rows = await prisma.document.groupBy({ by: ["fileId"], where: { workspaceId, fileId: { in: fileIds }, ...stageWhereClause("to_review") }, _count: { _all: true } })
+  return Object.fromEntries(rows.map((row) => [row.fileId, row._count._all]))
+}
+
 /** Of the given document ids, which currently belong to `stage` — used to narrow the workspace-
  * wide content-search hits (lib/retrieval.ts::searchDocumentsByContent spans every document) down
  * to the tab actually being viewed, the same way the ordinary filename/OCR-text match already is. */

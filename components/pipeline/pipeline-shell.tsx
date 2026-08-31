@@ -23,8 +23,8 @@ export function PipelineShell({ workspaceId, stage, counts, rows, contentMatches
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex flex-wrap items-center gap-3 border-b px-6 py-4">
       <div>
-        <h1 className="text-xl font-bold text-stone-900">Pipeline</h1>
-        <p className="text-sm text-stone-500">Upload, review, and approve documents — one list across every file.</p>
+        <h1 className="text-xl font-bold text-slate-900">Pipeline</h1>
+        <p className="text-sm text-slate-500">Upload, review, and approve documents — one list across every file.</p>
       </div>
       <div className="ml-auto">
         <FileHubUploadButton

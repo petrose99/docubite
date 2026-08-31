@@ -35,10 +35,10 @@ export function FilterPanel({ query, flaggedOnly, documentSearchEnabled }: { que
     router.push(`?${params.toString()}`)
   }
 
-  return <div className="flex flex-wrap items-center gap-3 border-b bg-stone-50/60 px-6 py-3">
+  return <div className="flex flex-wrap items-center gap-3 border-b bg-slate-50/60 px-6 py-3">
     <div className="relative w-80 max-w-full">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-      <input className="w-full rounded-md border border-stone-300 bg-white py-1.5 pl-8 pr-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <input className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-8 pr-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
         placeholder={documentSearchEnabled ? "Search documents and their content" : "Search documents"}
         value={value} onChange={(event) => setValue(event.target.value)} />
     </div>
@@ -47,7 +47,7 @@ export function FilterPanel({ query, flaggedOnly, documentSearchEnabled }: { que
         <Sparkles className="h-3.5 w-3.5" />Also searching what&apos;s inside each document
       </span>
     )}
-    <label className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-50">
+    <label className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
       <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={flaggedOnly} onChange={toggleFlagged} />Flagged only
     </label>
   </div>

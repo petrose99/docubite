@@ -43,7 +43,7 @@ export function FileHubUploadButton({ workspaceId, fileId, fileName, template, t
     <button type="button" onClick={() => setOpen(true)}
       className={primary
         ? "inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
-        : "inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"}>
+        : "inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"}>
       <Upload className="h-4 w-4" />Upload documents
     </button>
     {open && <ExtractOverlay
