@@ -567,8 +567,9 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
         {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
           {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}
-        <button type="button" className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
+        <div role="button" tabIndex={0} className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
           onClick={() => inputRef.current?.click()}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click() } }}
           onDragOver={(event) => { event.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(event) => { event.preventDefault(); setDragOver(false); handleDrop(event.dataTransfer) }}>
@@ -582,7 +583,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, template
              * desktop and needs no separate desktop/mobile branch. */}
             <button type="button" className="text-xs font-medium text-stone-400 hover:text-emerald-700" disabled={busy} onClick={(event) => { event.stopPropagation(); cameraInputRef.current?.click() }}>or take a photo</button>
           </span>
-        </button>
+        </div>
         <input ref={inputRef} type="file" multiple className="hidden" accept={acceptedTypes} onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
         <input ref={folderInputRef} type="file" multiple className="hidden" onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = "" }} />
         <input ref={zipInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadZip(file); event.target.value = "" }} />
