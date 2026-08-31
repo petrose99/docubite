@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/shell/sidebar"
 import { getCurrentUser, getSession } from "@/lib/auth"
+import config from "@/lib/config"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceMembership, getWorkspacesForUser } from "@/models/workspaces"
@@ -44,7 +45,8 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       workspaceId={workspaceId}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
       user={{ name: user.name, email: user.email }}
-      enabledModuleKeys={[...capabilities.enabled]} />
+      enabledModuleKeys={[...capabilities.enabled]}
+      accountingEnabled={config.integrations.bigcapital.enabled} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
   </div>
 }

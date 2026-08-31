@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listAccountingEntities } from "@/models/accounting-entities"
 
+const PROVIDER_LABELS: Record<string, string> = { quickbooks: "QuickBooks", xero: "Xero", bigcapital: "Bigcapital" }
+
 /** Validates and describes the finance agent's proposed write actions — never performs one.
  *
  * Every function here answers "is this proposal real, and what does it actually mean" (does the
@@ -107,9 +109,20 @@ export async function describePushToAccounting(workspaceId: string, documentId: 
   if (!document) return { error: "document_not_found" }
   if (document.status !== "reviewed") return { error: "document_not_reviewed" }
   if (!document.template?.code || !capabilities.pushableTemplateCodes.includes(document.template.code)) return { error: "document_type_not_pushable" }
-  const connection = await prisma.integrationConnection.findFirst({ where: { workspaceId, status: "active" }, orderBy: { createdAt: "asc" }, select: { id: true, provider: true } })
+  // defaultExpenseAccountId is required, matching PushToAccountingCard's own filter — an active
+  // connection with no coding account configured yet can't actually accept a push, so it must not
+  // be proposed as one. Every provider gets an explicit label (PROVIDER_LABELS, matching push-to-
+  // accounting-card.tsx) rather than a binary quickbooks/xero guess, now that a bigcapital
+  // connection — auto-provisioned for every workspace — is typically the OLDEST active connection
+  // and would otherwise be silently mislabeled "Xero" in this confirmation text.
+  const connection = await prisma.integrationConnection.findFirst({
+    where: { workspaceId, status: "active", defaultExpenseAccountId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, provider: true },
+  })
   if (!connection) return { error: "no_active_connection" }
-  return { kind: "push_to_accounting", documentId, connectionId: connection.id, summary: `Push "${document.filename}" to ${connection.provider === "quickbooks" ? "QuickBooks" : "Xero"}` }
+  const label = PROVIDER_LABELS[connection.provider] ?? connection.provider
+  return { kind: "push_to_accounting", documentId, connectionId: connection.id, summary: `Push "${document.filename}" to ${label}` }
 }
 
 /** Dext-parity Phase 3 WP3.5. Distinct from describeApproveReviewTasks/describeRejectReviewTask

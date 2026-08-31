@@ -14,3 +14,13 @@ export const getLastSyncedAt = cache(async (connectionId: string): Promise<Date 
   const row = await prisma.accountingEntity.findFirst({ where: { connectionId }, orderBy: { syncedAt: "desc" }, select: { syncedAt: true } })
   return row?.syncedAt ?? null
 })
+
+/** Active account/vendor counts for the Accounting tab's "Sync & coding" card — how much a "Sync
+ * now" actually pulled in, without the caller loading every row. */
+export const getEntityCounts = cache(async (connectionId: string): Promise<{ accounts: number; vendors: number }> => {
+  const [accounts, vendors] = await Promise.all([
+    prisma.accountingEntity.count({ where: { connectionId, entityType: "account", active: true } }),
+    prisma.accountingEntity.count({ where: { connectionId, entityType: "vendor", active: true } }),
+  ])
+  return { accounts, vendors }
+})

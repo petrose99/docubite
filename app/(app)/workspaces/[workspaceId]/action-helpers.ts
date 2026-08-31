@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 
 /** `documents` is only the detail-page prefix — there is no document list page; the sheet is
  * the view of that data, so document mutations revalidate the file's `sheet`. */
-export const paths = (workspaceId: string) => ({ overview: `/workspaces/${workspaceId}`, documents: `/workspaces/${workspaceId}/documents`, pipeline: `/workspaces/${workspaceId}/pipeline`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules`, settingsEmail: `/workspaces/${workspaceId}/settings/email`, approvals: `/workspaces/${workspaceId}/settings/approvals`, expenses: `/workspaces/${workspaceId}/expenses` })
+export const paths = (workspaceId: string) => ({ overview: `/workspaces/${workspaceId}`, documents: `/workspaces/${workspaceId}/documents`, pipeline: `/workspaces/${workspaceId}/pipeline`, files: `/workspaces/${workspaceId}/files`, dictation: `/workspaces/${workspaceId}/dictation`, templates: `/workspaces/${workspaceId}/settings/templates`, reports: `/workspaces/${workspaceId}/settings/reports`, workspace: `/workspaces/${workspaceId}/settings/workspace`, integrations: `/workspaces/${workspaceId}/settings/integrations`, tax: `/workspaces/${workspaceId}/settings/tax`, review: `/workspaces/${workspaceId}/review`, rules: `/workspaces/${workspaceId}/settings/rules`, modules: `/workspaces/${workspaceId}/settings/modules`, settingsEmail: `/workspaces/${workspaceId}/settings/email`, approvals: `/workspaces/${workspaceId}/settings/approvals`, expenses: `/workspaces/${workspaceId}/expenses`, accounting: `/workspaces/${workspaceId}/accounting` })
 
 /** Revalidates the whole workspace segment layout, not just one page — needed whenever a change
  * (module toggle, rename, ownership transfer) should update the persistent sidebar, which the
@@ -21,6 +21,7 @@ export const sheetPath = (workspaceId: string, fileId: string) => `/workspaces/$
 const BILLING_MESSAGES: Record<string, string> = {
   // Integrations (P1). The url_* codes come from lib/url-safety's SSRF guard.
   integrations_not_available: "Integrations aren't enabled on this deployment.",
+  accounting_not_available: "The Bigcapital accounting bridge isn't enabled on this deployment.",
   url_scheme_not_https: "The webhook URL must start with https://.",
   url_private_ip: "That URL points at a private or internal address, which isn't allowed.",
   url_invalid: "That doesn't look like a valid URL.",

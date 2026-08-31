@@ -8,6 +8,8 @@ import * as quickbooks from "@/lib/integrations/quickbooks/client"
 import { toQuickBooksBillBody } from "@/lib/integrations/quickbooks/bill-mapper"
 import * as xero from "@/lib/integrations/xero/client"
 import { toXeroBillBody } from "@/lib/integrations/xero/bill-mapper"
+import * as bigcapital from "@/lib/integrations/bigcapital/client"
+import { toBigcapitalBillBody } from "@/lib/integrations/bigcapital/bill-mapper"
 import { computePushUpdate, PUSH_LEASE_MS, type PushAttemptResult } from "@/lib/integration-push-policy"
 
 /** The push loop: claim a due IntegrationPush, resolve the vendor/contact + default expense account
@@ -43,9 +45,16 @@ export async function claimNextIntegrationPush(now = new Date()): Promise<string
 async function ledgerHasDuplicate(provider: string, externalTenantId: string | null, accessToken: string, referenceNumber: string): Promise<boolean> {
   if (!externalTenantId) return false
   try {
-    return provider === "quickbooks"
-      ? await quickbooks.findBillByDocNumber(externalTenantId, accessToken, referenceNumber)
-      : await xero.findBillByInvoiceNumber(externalTenantId, accessToken, referenceNumber)
+    switch (provider) {
+      case "quickbooks":
+        return await quickbooks.findBillByDocNumber(externalTenantId, accessToken, referenceNumber)
+      case "xero":
+        return await xero.findBillByInvoiceNumber(externalTenantId, accessToken, referenceNumber)
+      case "bigcapital":
+        return await bigcapital.findBillByReferenceNumber(accessToken, externalTenantId, referenceNumber)
+      default:
+        return false
+    }
   } catch (error) {
     console.error("[integration-push] ledger duplicate lookup failed, proceeding with push:", error instanceof Error ? error.message : error)
     return false
@@ -62,6 +71,18 @@ async function pushToXero(tenantId: string, accessToken: string, bill: Normalize
   const contactId = await xero.findOrCreateContact(tenantId, accessToken, bill.vendorName)
   const body = toXeroBillBody(bill, contactId, accountCode)
   return xero.createBill(tenantId, accessToken, body)
+}
+
+async function pushToBigcapital(organizationId: string, apiKey: string, bill: NormalizedBill, accountId: string): Promise<{ id: string }> {
+  // Bigcapital bill lines reference a catalog Item, not an account directly (confirmed live — an
+  // entry with no item_id is rejected) — findOrCreateExpenseItem maps the connection's configured
+  // default expense account onto one generic, reusable item.
+  const [vendorId, itemId] = await Promise.all([
+    bigcapital.findOrCreateVendor(apiKey, organizationId, bill.vendorName),
+    bigcapital.findOrCreateExpenseItem(apiKey, organizationId, accountId),
+  ])
+  const body = toBigcapitalBillBody(bill, vendorId, itemId)
+  return bigcapital.createBill(apiKey, organizationId, body)
 }
 
 /** Attempts one claimed push and records the outcome. Safe to call on a row another driver may also
@@ -97,9 +118,20 @@ export async function attemptIntegrationPush(pushId: string, now = new Date()): 
       const accessToken = await getValidAccessToken(connection.id, now)
       const isDuplicate = bill.referenceNumber ? await ledgerHasDuplicate(connection.provider, connection.externalTenantId, accessToken, bill.referenceNumber) : false
       if (isDuplicate) throw new IntegrationPermanentError("ledger_duplicate")
-      const created = connection.provider === "quickbooks"
-        ? await pushToQuickbooks(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
-        : await pushToXero(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
+      let created: { id: string }
+      switch (connection.provider) {
+        case "quickbooks":
+          created = await pushToQuickbooks(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
+          break
+        case "xero":
+          created = await pushToXero(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
+          break
+        case "bigcapital":
+          created = await pushToBigcapital(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
+          break
+        default:
+          throw new IntegrationPermanentError(`${connection.provider}_push_not_implemented`)
+      }
       result = { success: true, errorCode: null, externalBillId: created.id }
     } catch (error) {
       if (error instanceof TokenRefreshError) {

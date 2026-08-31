@@ -60,6 +60,8 @@ model User {
   decidedBankMatches BankMatch[] @relation("BankMatchDecider")
   createdApprovalWorkflows ApprovalWorkflow[] @relation("ApprovalWorkflowCreator")
   submittedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimSubmitter")
+  bigcapitalAccounts    BigcapitalAccount[]
+  provisionedIntegrationJobs IntegrationProvisionJob[] @relation("IntegrationProvisionJobOwner")
 
   @@map("users")
 }
@@ -115,6 +117,8 @@ model Workspace {
   webhookDeliveries WebhookDelivery[]
   integrationConnections IntegrationConnection[]
   integrationPushes IntegrationPush[]
+  integrationProvisionJobs IntegrationProvisionJob[]
+  bigcapitalAccount BigcapitalAccount?
   taxProfile      TaxProfile?
   productEvents   ProductEvent[]
   ingestionItems  IngestionItem[]
@@ -882,6 +886,69 @@ model IntegrationPush {
   @@index([status, nextAttemptAt])
   @@index([workspaceId, createdAt])
   @@map("integration_pushes")
+}
+
+/// Bigcapital, unlike QuickBooks/Xero, has no OAuth app to connect through — every workspace gets
+/// its own isolated Bigcapital organization, auto-provisioned via a real Bigcapital user account
+/// created on the workspace's behalf. This is that account: ONE PER WORKSPACE, not per DocuBite
+/// user — confirmed live against a real Bigcapital instance that an account can build exactly one
+/// organization, ever (a second build on the same account fails with TENANT_ALREADY_BUILT), so
+/// reusing one login across a user's several workspaces (the original P1 design) is not possible.
+/// `email` is a `+ws_<workspaceId>` alias of the triggering user's real address (see
+/// models/bigcapital.ts's buildAliasEmail) — a distinct, valid, traceable login per workspace.
+/// `organizationId` is fixed forever once signup succeeds, well before the org's database is built.
+/// `passwordEnc`/`masterTokenEnc` are AES-GCM-sealed exactly like IntegrationConnection's tokens;
+/// the JWT is cached only long enough to build an org and mint its API key, never relied on after.
+model BigcapitalAccount {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @unique @map("workspace_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  bigcapitalUserId String?  @map("bigcapital_user_id")
+  organizationId   String?  @map("organization_id")
+  email            String
+  passwordEnc      String   @map("password_enc")
+  masterTokenEnc   String?  @map("master_token_enc")
+  status           String   @default("active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bigcapital_accounts")
+}
+
+/// One durable, retried attempt to provision a workspace's Bigcapital organization (build org +
+/// mint API key + seal into an IntegrationConnection) — modelled on IntegrationPush's claim/attempt/
+/// drain shape exactly, but keyed on (workspaceId, provider) instead of a document, since there is
+/// no per-document unit of work here. Enqueued right after workspace creation; the worker never
+/// blocks the request that created it — see models/bigcapital.ts.
+model IntegrationProvisionJob {
+  id            String    @id @default(uuid()) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  provider      String    @default("bigcapital")
+  /// The user whose identity backs this provisioning attempt, captured once when the job is
+  /// (re)enqueued rather than re-resolved from the workspace's CURRENT owner on every retry — a
+  /// team workspace's ownership can change between enqueue and a backoff-delayed retry, and the
+  /// job must keep provisioning under the owner who actually triggered it.
+  ownerUserId   String?   @map("owner_user_id") @db.Uuid
+  /// The in-flight Bigcapital organization-build job id, persisted across attempts so a retry after
+  /// a "still building" timeout polls the SAME build instead of kicking off a second one. Cleared
+  /// on success or a terminal (non-retryable) failure.
+  externalRef   String?   @map("external_ref")
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
+  leaseUntil    DateTime? @map("lease_until")
+  errorCode     String?   @map("error_code")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerUser     User?     @relation("IntegrationProvisionJobOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, provider])
+  @@index([status, nextAttemptAt])
+  @@map("integration_provision_jobs")
 }
 
 /** One workspace's tax configuration: which region it files in, versioned the same way

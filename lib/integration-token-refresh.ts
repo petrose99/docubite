@@ -57,6 +57,13 @@ export async function getValidAccessToken(connectionId: string, now = new Date()
       throw new TokenRefreshError("integration_token_decrypt_failed")
     }
 
+    // Bigcapital's connection carries a non-expiring API key (models/bigcapital.ts seals it into
+    // both access/refresh columns and sets access_token_expires_at a century out), so `stillFresh`
+    // above should always be true for it and this branch should never run. Refusing explicitly
+    // rather than falling through to refreshXeroTokens matters: that would decrypt the API key and
+    // POST it to Xero's real OAuth endpoint as a "refresh token" — leaking the key and then
+    // bricking a perfectly good connection into needs_reauth with no reconnect flow to recover it.
+    if (connection.provider === "bigcapital") throw new TokenRefreshError("bigcapital_token_refresh_not_supported")
     const refresh = connection.provider === "quickbooks" ? refreshQuickbooksTokens : refreshXeroTokens
     try {
       const refreshed = await refresh(refreshToken)
