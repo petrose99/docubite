@@ -407,6 +407,10 @@ model Document {
   /// and for a dictation whose entry point never runs the router/extraction at all. Informational —
   /// nothing downstream currently branches on it being present.
   dictationRouting Json?                    @map("dictation_routing")
+  /// Tri-state override of config.documents.adaptiveExtraction for this document: true/false forces
+  /// adaptive line-item discovery on or off regardless of the global flag (set by the "Re-extract
+  /// adaptively" action), null defers to the global default. See lib/adaptive-extraction.ts.
+  adaptiveExtraction Boolean?                @map("adaptive_extraction")
   aiQuotaClaimed    Boolean                  @default(false) @map("ai_quota_claimed")
   searchText        String                   @default("") @map("search_text")
   ocrText           String                   @default("") @map("ocr_text")

@@ -149,6 +149,12 @@ const envSchema = z.object({
   // Small/fast model for the command/content-separation call (Stage B). Falls back to the main
   // structuring model when unset — see lib/dictation/extraction.ts.
   DICTATION_FAST_MODEL_NAME: z.string().optional(),
+  // Adaptive extraction (lib/adaptive-extraction.ts): before the extraction prompt is built, discover
+  // the document's actual line-item columns and merge them into the template's array field, so a
+  // document with columns the template never anticipated (e.g. "Product Code", "Country of Origin")
+  // gets them as real columns instead of crammed into the one open text field. Off by default and
+  // fail-safe by design: any discovery/merge failure falls back to the template's fields unchanged.
+  ADAPTIVE_EXTRACTION: z.enum(["true", "false"]).default("false"),
   // Outbound integrations (webhooks, API keys, accounting connectors). The single master gate:
   // with no encryption key set the whole surface is dark — the sidebar entry is omitted, webhook
   // secrets and connector OAuth tokens have nowhere safe to live, so none of it is offered. The
@@ -209,7 +215,7 @@ export const isGoogleAuthEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CL
 const config = {
   app: { title: "DocuBite", description: "Take a bite out of document busywork. DocuBite reads invoices, receipts and bank statements — even handwritten and scanned ones — into a live sheet where every value traces to its source, and reports on whole folders: what's missing, what's duplicated, what needs a look.", version: packageJson.version || "0.0.1", baseURL: env.BASE_URL, supportEmail: "support@docubite.com" },
   ai: { openaiApiKey: env.OPENAI_API_KEY, openaiModelName: env.OPENAI_MODEL_NAME, geminiApiKey: env.GEMINI_API_KEY, geminiModelName: env.GEMINI_MODEL_NAME, provider: env.AI_PROVIDER },
-  documents: { maxFileSizeBytes: 50 * 1024 * 1024, maxPages: env.DOCUMENT_MAX_PAGES, pagesPerBatch: env.DOCUMENT_PAGES_PER_BATCH },
+  documents: { maxFileSizeBytes: 50 * 1024 * 1024, maxPages: env.DOCUMENT_MAX_PAGES, pagesPerBatch: env.DOCUMENT_PAGES_PER_BATCH, adaptiveExtraction: env.ADAPTIVE_EXTRACTION === "true" },
   mineru: { apiToken: env.MINERU_API_TOKEN || "", apiBase: env.MINERU_API_BASE.replace(/\/+$/, ""), modelVersion: env.MINERU_MODEL_VERSION, pollIntervalMs: env.MINERU_POLL_INTERVAL_MS, timeoutMs: env.MINERU_TIMEOUT_MS },
   // `enabled` is the single feature gate read by the enqueue point, the embed job handler and the
   // assistant tool registration. baseUrl has its trailing slash stripped the way mineru.apiBase does.

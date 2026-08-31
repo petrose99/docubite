@@ -1,8 +1,14 @@
 import { requestLLM } from "@/ai/providers/llmProvider"
 import config from "@/lib/config"
 import { buildBatchParts, normalizeForMineru, PageContent } from "@/lib/document-processing"
-import { DocumentFieldDefinition, documentTemplateFieldsSchema } from "@/lib/document-templates"
+import { DocumentFieldDefinition, DocumentItemFieldDefinition, documentItemFieldsSchema, documentTemplateFieldsSchema } from "@/lib/document-templates"
 import { parseDocumentWithMineru } from "@/lib/mineru"
+
+/** Line-item discovery (lib/adaptive-extraction.ts) only looks at the pages the extraction job
+ * already parsed, so it never re-runs MinerU. Capped at page 2 for the same reason as
+ * SUGGESTION_SAMPLE_RANGE above: column layout is visible early, and reading further only adds
+ * latency. */
+const ITEM_DISCOVERY_MAX_PAGE = 2
 
 /** How many pages of the sampled document the suggestion pass reads. Column layout is
  * almost always visible on page 1; page 2 catches line-item tables that start below a
@@ -154,4 +160,60 @@ export async function suggestFieldsFromContents(contents: PageContent[], input: 
 export async function suggestFieldsFromBuffer(input: { buffer: Buffer; mimeType: string; filename: string; singleColumn?: string }): Promise<SuggestedSheet> {
   const contents = await sampleDocumentPages(input)
   return suggestFieldsFromContents(contents, { singleColumn: input.singleColumn })
+}
+
+export function buildLineItemDiscoveryPrompt(baseItemFields: DocumentItemFieldDefinition[]) {
+  const knownKeys = baseItemFields.map((field) => `${field.key} (${field.label})`).join(", ") || "none"
+  return [
+    "You are looking at a document's repeating line-item table (invoice/receipt/order rows).",
+    `The extraction sheet already has these row columns defined: ${knownKeys}.`,
+    "Study the table in the sampled pages and propose the FULL set of row columns it actually has.",
+    "Rules:",
+    "- For each already-defined column above whose concept appears in this table, keep its EXACT key unchanged.",
+    "- For every OTHER column the table visibly has that is not already covered (e.g. a product code, SKU, country of origin, color, size, tax rate, discount), add one new field for it.",
+    "- Keys are snake_case (letters, digits, underscores; must start with a letter) and must not collide with an existing key unless you mean to reuse it.",
+    "- Allowed types: string, number, date, boolean, enum. Use enum only for a small closed set of values, and then list the options.",
+    "- Give each new field a one-sentence instruction telling the extractor exactly what to read.",
+    "- Propose at most 20 fields total (existing kept ones plus new ones).",
+    "- Do not invent columns the table does not have. If the table has no columns beyond what's already defined, return only the existing ones unchanged.",
+  ].join("\n")
+}
+
+export const lineItemDiscoveryJsonSchema = {
+  type: "object",
+  properties: {
+    item_fields: { type: "array", items: suggestedItemField, description: "The row's full set of columns: kept existing keys plus any new ones the table actually has" },
+  },
+  required: ["item_fields"],
+  additionalProperties: false,
+}
+
+/** Discovers a document's actual line-item table columns, for lib/adaptive-extraction.ts to merge
+ * into a template's array field. Reuses the extraction job's already-parsed pages (no second MinerU
+ * parse) and the same requestLLM provider/schema machinery as suggestFieldsFromContents. Never
+ * throws: any failure (no AI configured, LLM error, garbage output) returns `baseItemFields`
+ * unchanged, so a discovery failure degrades to today's fixed-template behavior rather than
+ * blocking extraction. */
+export async function discoverItemFields(contents: PageContent[], baseItemFields: DocumentItemFieldDefinition[]): Promise<DocumentItemFieldDefinition[]> {
+  try {
+    const aiProvider = config.ai.provider
+    const apiKey = aiProvider === "gemini" ? config.ai.geminiApiKey : config.ai.openaiApiKey
+    const modelName = aiProvider === "gemini" ? config.ai.geminiModelName : config.ai.openaiModelName
+    if (!apiKey) return baseItemFields
+    const sampled = contents.filter((content) => content.page <= ITEM_DISCOVERY_MAX_PAGE)
+    if (!sampled.length) return baseItemFields
+    const { textParts } = buildBatchParts(sampled, sampled.map((content) => content.page))
+    const prompt = buildLineItemDiscoveryPrompt(baseItemFields)
+    const response = await requestLLM({ providers: [{ provider: aiProvider, apiKey, model: modelName }] }, { prompt, schema: lineItemDiscoveryJsonSchema, textParts })
+    if (response.error) return baseItemFields
+    const output = response.output && typeof response.output === "object" && !Array.isArray(response.output) ? (response.output as Record<string, unknown>) : {}
+    const rawItemFields = Array.isArray(output.item_fields) ? output.item_fields : []
+    const seen = new Set<string>()
+    const coerced = rawItemFields.map((raw) => coerceField(raw, false)).filter((field): field is Record<string, unknown> => !!field && !seen.has(field.key as string) && !!seen.add(field.key as string)).slice(0, 20)
+    const parsed = documentItemFieldsSchema.safeParse(coerced)
+    if (!parsed.success || !parsed.data.length) return baseItemFields
+    return parsed.data
+  } catch {
+    return baseItemFields
+  }
 }

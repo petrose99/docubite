@@ -1,4 +1,5 @@
 import { requestLLM } from "@/ai/providers/llmProvider"
+import { deriveAdaptiveFields } from "@/lib/adaptive-extraction"
 import { track } from "@/lib/analytics"
 import { SUPPLIER_FIELD_BY_TEMPLATE } from "@/lib/automation/rules"
 import { applyAutomationRules } from "@/models/automation-rules"
@@ -271,7 +272,7 @@ export async function processDocumentJob(jobId: string) {
     if (!PROCESSABLE_TYPES.has(document.mimeType)) throw new Error("unsupported_document_type")
     const source = await readDocumentSource(document.storageKey)
     await scanDocumentBuffer(source, document.mimeType)
-    const fields = parseTemplateFields(document.fieldSnapshot)
+    const templateFields = parseTemplateFields(document.fieldSnapshot)
     if (!document.workspace.aiEnabled) {
       await prisma.$transaction([
         prisma.document.update({ where: { id: document.id }, data: { status: "ready_for_review", reviewedData: {}, confidence: { aiEnabled: false } } }),
@@ -331,6 +332,10 @@ export async function processDocumentJob(jobId: string) {
     // actually exist in `contents`.
     const collectedPages = contents.map((content) => content.page)
     const batches = pageBatches(contents.length, config.documents.pagesPerBatch).map((batch) => batch.map((position) => collectedPages[position - 1]))
+    // Discovers this document's real line-item columns and merges them into the template's array
+    // field when adaptive extraction is on; otherwise returns templateFields unchanged. Never
+    // throws — see lib/adaptive-extraction.ts.
+    const fields = await deriveAdaptiveFields({ document, templateFields, contents })
     const fewShotExamples = document.template?.code ? await getFewShotExamples(document.workspaceId, document.template.code).catch(() => []) : []
     const prompt = buildDocumentPrompt(document.template?.name || "document", fields, document.templateVersion?.prompt, fewShotExamples)
     const schema = buildDocumentJsonSchema(fields)
@@ -369,7 +374,7 @@ export async function processDocumentJob(jobId: string) {
       const shape = await upsertExtractionShape({
         workspaceId: document.workspaceId, templateId: document.templateId, name: document.template.name,
         docType: classification.docType || null, entity: classification.entity || null,
-        fields: document.fieldSnapshot as Prisma.InputJsonValue, prompt: document.templateVersion?.prompt ?? null,
+        fields: fields as unknown as Prisma.InputJsonValue, prompt: document.templateVersion?.prompt ?? null,
         multiRow: document.template.multiRow, signature, lastDocumentId: document.id,
       }).catch(() => null)
       shapeId = shape?.id ?? null
@@ -389,7 +394,7 @@ export async function processDocumentJob(jobId: string) {
     // hundred rows, which is still only a handful of batched statements but not instant.
     const confidence = { missingRequiredFields: missing, partialFailure: batchFailures > 0, fieldConfidence, conflictingFields }
     await prisma.$transaction(async (tx) => {
-      await tx.document.update({ where: { id: document.id }, data: { status, ocrText, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: confidence as Prisma.InputJsonValue } })
+      await tx.document.update({ where: { id: document.id }, data: { status, ocrText, fieldSnapshot: fields as unknown as Prisma.InputJsonValue, rawExtraction: extraction as Prisma.InputJsonValue, reviewedData: extraction as Prisma.InputJsonValue, provenance: provenance as Prisma.InputJsonValue, shapeId, classification: classification as Prisma.InputJsonValue, confidence: confidence as Prisma.InputJsonValue } })
       await tx.documentProcessingJob.update({ where: { id: job.id }, data: { status: "completed", completedAt: new Date(), leaseUntil: null } })
       await recordSystemAudit({ workspaceId: document.workspaceId, documentId: document.id, type: "extraction_completed" }, tx)
       await replaceDocumentFieldValues({ workspaceId: document.workspaceId, documentId: document.id, fileId: document.fileId, templateCode: document.template?.code ?? null, rows: fieldValues }, tx)

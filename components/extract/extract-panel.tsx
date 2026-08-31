@@ -1,6 +1,6 @@
 "use client"
 
-import { deleteDocumentsAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { deleteDocumentsAction, reextractAdaptivelyAction, renameFileAction, reprocessDocumentAction, saveExtractionSheetAction, suggestTemplateFieldsAction, uploadDocumentsAction, uploadZipAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ColumnChips } from "@/components/extract/column-chips"
 import { downscaleImage } from "@/components/extract/downscale-image"
 import { FileRow } from "@/components/extract/file-row"
@@ -448,6 +448,18 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, s
     }
   }
 
+  const reextractAdaptively = async (row: StagedFile) => {
+    if (!row.documentId) return
+    try {
+      const result = await reextractAdaptivelyAction(workspaceId, fileId, row.documentId)
+      if (!result.success) { toast.error(result.error || "Re-extract failed"); return }
+      setStaged((previous) => previous.map((current) => (current.localId === row.localId ? { ...current, status: "queued", error: null } : current)))
+      onDocumentsQueued([row.documentId])
+    } catch {
+      toast.error("Could not reach the server — nothing was re-extracted")
+    }
+  }
+
   const dropRowLocally = (row: StagedFile) => {
     if (row.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(row.previewUrl)
     setStaged((previous) => previous.filter((current) => current.localId !== row.localId))
@@ -549,7 +561,7 @@ export function ExtractPanel({ workspaceId, fileId, fileName, template, usage, s
         <h3 className="text-sm font-bold text-stone-900">Files</h3>
         <p className="mb-2 text-xs text-stone-500">Upload up to {MAX_STAGED_FILES} files at a time to extract data from (PDF or image)</p>
         {staged.length > 0 && <div className="mb-2 max-h-64 space-y-0.5 overflow-y-auto pr-1">
-          {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
+          {staged.map((row) => <FileRow key={row.localId} staged={row} busy={busy} sourceUrl={row.documentId ? `/api/documents/${row.documentId}/source` : null} onExtract={() => void uploadRows([row])} onReprocess={() => void reprocess(row)} onReextractAdaptively={() => void reextractAdaptively(row)} onRemove={() => removeRow(row)} onDiff={row.documentId ? () => setDiffDocId(row.documentId) : undefined} />)}
         </div>}
         <button type="button" className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-sm transition-colors ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/50"}`}
           onClick={() => inputRef.current?.click()}

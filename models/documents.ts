@@ -364,6 +364,26 @@ export async function requeueDocumentExtraction(workspaceId: string, documentId:
   return job
 }
 
+/** Re-runs extraction for one document with adaptive line-item discovery forced on, even if the
+ * global ADAPTIVE_EXTRACTION flag is off (the panel's "Re-extract adaptively" action). Resets
+ * fieldSnapshot to the template's own version fields first, so a previously merged snapshot from an
+ * earlier adaptive run does not compound into this one. */
+export async function requeueAdaptiveExtraction(workspaceId: string, documentId: string) {
+  const document = await prisma.document.findFirst({ where: { id: documentId, workspaceId }, select: { id: true, storageKey: true, templateVersionId: true, templateVersion: { select: { fields: true } } } })
+  if (!document) throw new Error("document_not_found")
+  if (!document.storageKey) throw new Error("document_source_missing")
+  if (!document.templateVersion) throw new Error("document_has_no_template")
+  const active = await prisma.documentProcessingJob.findFirst({ where: { documentId: document.id, status: { in: ["queued", "processing"] } }, select: { id: true } })
+  if (active) throw new Error("document_already_processing")
+  const context = await getRequestAuditContext()
+  const [, job] = await prisma.$transaction([
+    prisma.document.update({ where: { id: document.id }, data: { status: "queued", errorCode: null, adaptiveExtraction: true, fieldSnapshot: document.templateVersion.fields as Prisma.InputJsonValue } }),
+    prisma.documentProcessingJob.create({ data: { workspaceId, documentId: document.id, type: "extract" } }),
+    prisma.documentAuditEvent.create({ data: auditEventData({ workspaceId, documentId: document.id, type: "extraction_requeued" }, context) }),
+  ])
+  return job
+}
+
 export function documentDataForExport(document: Pick<Document, "filename" | "status" | "receivedAt" | "reviewedData">) {
   return { filename: document.filename, status: document.status, received_at: document.receivedAt.toISOString(), ...((document.reviewedData as Record<string, unknown> | null) || {}) }
 }

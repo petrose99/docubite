@@ -13,7 +13,7 @@ import { createIngestionItem } from "@/lib/ingestion"
 import { scanDocumentBuffer } from "@/lib/malware-scan"
 import { parsePageRange } from "@/lib/page-range"
 import { expandZipBuffer } from "@/lib/zip-ingestion"
-import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
+import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, markDocumentsReviewed, requeueAdaptiveExtraction, requeueDocumentExtraction, updateDocumentField, updateDocumentReview, validateDocumentInput } from "@/models/documents"
 import { addDomainPackToFile, createFile, createFolder, deleteFileIfEmpty, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
 import { seedTemplatesForIndustry } from "@/lib/modules/seeds"
 import { getCurrentUser } from "@/lib/auth"
@@ -323,6 +323,20 @@ export async function reprocessDocumentAction(workspaceId: string, fileId: strin
     await revalidateSheet(workspaceId, fileId)
     return { success: true, data: null }
   } catch (error) { return { success: false, error: errorMessage(error, "Re-process failed") } }
+}
+
+/** Re-processes one document with adaptive line-item discovery forced on, for a document that
+ * extracted wrong under its template's fixed line-item columns. Mirrors reprocessDocumentAction
+ * exactly, save for calling requeueAdaptiveExtraction instead of requeueDocumentExtraction. */
+export async function reextractAdaptivelyAction(workspaceId: string, fileId: string, documentId: string): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  try {
+    const job = await requeueAdaptiveExtraction(workspaceId, documentId)
+    after(() => processDocumentJob(job.id).catch(() => {}))
+    await revalidateSheet(workspaceId, fileId)
+    return { success: true, data: null }
+  } catch (error) { return { success: false, error: errorMessage(error, "Re-extract failed") } }
 }
 
 export async function setWorkspaceAiAction(workspaceId: string, enabled: boolean): Promise<ActionState<null>> {
