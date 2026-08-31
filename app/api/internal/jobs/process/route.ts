@@ -2,6 +2,7 @@ import config from "@/lib/config"
 import { processDocumentJob, processNextQueuedDocumentJob } from "@/lib/document-processing"
 import { drainWebhookDeliveries } from "@/lib/webhook-delivery"
 import { drainIntegrationPushes } from "@/lib/integration-push"
+import { drainProvisionJobs } from "@/models/bigcapital"
 import { sendDueReminders } from "@/models/reminders"
 import crypto from "crypto"
 
@@ -19,16 +20,25 @@ export async function POST(request: Request) {
     // queues, so no cron reconfiguration was needed to start delivering webhooks, and none is
     // needed now to start pushing to accounting connectors either.
     const body = await request.json().catch(() => ({})) as { jobId?: string; drainWebhooks?: boolean; drainIntegrationPushes?: boolean }
-    const webhookDeliveries = await drainWebhookDeliveries()
-    const integrationPushes = await drainIntegrationPushes()
-    // Dext-parity Phase 3 WP3.4: reminders are cheap and self-rate-limiting (isReminderDue is what
-    // actually decides whether anything sends), so this drains on every hit exactly like the two
-    // queues above — no separate cron wiring needed for reminders to start going out.
-    const reminders = await sendDueReminders()
+    // Run every independent drain concurrently rather than one after another — they touch separate
+    // tables and have no ordering dependency. Provisioning is skipped entirely on a targeted
+    // {jobId} dispatch (the embed-detached kick after one document's OCR/ASR step): unlike the
+    // other two queues, one due provisioning attempt can genuinely block for 15+ seconds (org-build
+    // polling — see models/bigcapital.ts), which would delay that document's own job for no reason
+    // a single-document caller asked for. The cron's empty-body hit still drains it normally.
+    const [webhookDeliveries, integrationPushes, provisionJobs, reminders] = await Promise.all([
+      drainWebhookDeliveries(),
+      drainIntegrationPushes(),
+      body.jobId ? Promise.resolve(0) : drainProvisionJobs(),
+      // Dext-parity Phase 3 WP3.4: reminders are cheap and self-rate-limiting (isReminderDue is
+      // what actually decides whether anything sends), so this drains on every hit exactly like
+      // the queues above — no separate cron wiring needed for reminders to start going out.
+      sendDueReminders(),
+    ])
     let jobId: string | null = null
     if (body.jobId) { await processDocumentJob(body.jobId); jobId = body.jobId }
     else if (!body.drainWebhooks && !body.drainIntegrationPushes) jobId = await processNextQueuedDocumentJob()
-    return Response.json({ processed: Boolean(jobId), jobId, webhookDeliveries, integrationPushes, reminders })
+    return Response.json({ processed: Boolean(jobId), jobId, webhookDeliveries, integrationPushes, provisionJobs, reminders })
   } catch (error) {
     // Logged rather than swallowed: this route has no caller watching stdout except the drain
     // cron, so without this the only visibility into a failure is Vercel's function logs — and

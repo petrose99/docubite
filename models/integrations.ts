@@ -167,7 +167,7 @@ export async function listWorkspaceIntegrationConnections(workspaceId: string) {
   })
 }
 
-export async function getWorkspaceIntegrationConnection(workspaceId: string, provider: "quickbooks" | "xero") {
+export async function getWorkspaceIntegrationConnection(workspaceId: string, provider: "quickbooks" | "xero" | "bigcapital") {
   return prisma.integrationConnection.findFirst({
     where: { workspaceId, provider },
     select: {
@@ -183,7 +183,7 @@ export async function getWorkspaceIntegrationConnection(workspaceId: string, pro
 export async function upsertWorkspaceIntegrationConnection(
   workspaceId: string,
   input: {
-    provider: "quickbooks" | "xero"
+    provider: "quickbooks" | "xero" | "bigcapital"
     externalTenantId: string
     tenantName: string | null
     accessTokenEnc: string
@@ -261,7 +261,7 @@ export async function listWorkspaceIntegrationPushes(workspaceId: string, docume
  * behind stale state. */
 export async function upsertWorkspaceIntegrationPush(
   workspaceId: string,
-  input: { connectionId: string; documentId: string; provider: "quickbooks" | "xero"; payload: object; createdById: string | null }
+  input: { connectionId: string; documentId: string; provider: "quickbooks" | "xero" | "bigcapital"; payload: object; createdById: string | null }
 ) {
   return prisma.integrationPush.upsert({
     where: { documentId_connectionId: { documentId: input.documentId, connectionId: input.connectionId } },

@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, ClipboardCheck, Files, ListChecks, Mic, Settings } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, Landmark, ListChecks, Mic, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -35,13 +35,17 @@ const ICONS: Record<string, typeof Files> = {
  * this rail doesn't scroll. Module nav entries (Dictate) come from
  * `enabledModuleKeys` — the workspace's resolved capability set (lib/modules/capabilities.ts) —
  * rather than ad-hoc per-feature booleans. */
-export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
+export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, accountingEnabled = false }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
   /** Every module key currently enabled for this workspace (getWorkspaceCapabilities(...).enabled),
    * used to build the nav entries each module registers via ModuleDefinition.navItems. */
   enabledModuleKeys: string[]
+  /** config.integrations.bigcapital.enabled — a deployment-level gate, not a per-workspace module,
+   * since it depends on the encryption key being configured at all rather than anything a workspace
+   * owner toggles. */
+  accountingEnabled?: boolean
 }) {
   const pathname = usePathname()
   if (pathname.endsWith("/sheet")) return null
@@ -65,6 +69,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys }: {
     { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
     ...moduleWorkItems,
+    ...(accountingEnabled ? [{ href: `${base}/accounting`, label: "Accounting", icon: Landmark, exact: false }] : []),
     { href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false },
   ]
 

@@ -46,7 +46,7 @@ export async function pushDocumentToAccountingAction(
     const push = await upsertWorkspaceIntegrationPush(workspaceId, {
       connectionId: connection.id,
       documentId: document.id,
-      provider: connection.provider as "quickbooks" | "xero",
+      provider: connection.provider as "quickbooks" | "xero" | "bigcapital",
       payload: bill,
       createdById: user.id,
     })

@@ -6,7 +6,9 @@ import { auditEventData, getRequestAuditContext } from "@/lib/audit"
 import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
+import config from "@/lib/config"
 import { deleteFiles } from "@/models/files"
+import { enqueueBigcapitalProvisionJob } from "@/models/bigcapital"
 import { User } from "@/prisma/client"
 import crypto, { randomBytes } from "crypto"
 import { cache } from "react"
@@ -35,6 +37,15 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
       members: { create: { userId: user.id, role: "owner" } },
     },
   })
+  // Enqueued, never awaited into the request: provisioning the Bigcapital org is several external
+  // API calls (see models/bigcapital.ts) and must not add that latency to signup/workspace creation.
+  // Best-effort — a failure to enqueue just means no job exists yet; the Accounting tab's repair
+  // action (P2) re-enqueues on demand.
+  if (config.integrations.bigcapital.enabled) {
+    await enqueueBigcapitalProvisionJob(workspace.id, user.id).catch((error) => {
+      console.error("[workspaces] failed to enqueue bigcapital provisioning:", error instanceof Error ? error.message : error)
+    })
+  }
   return workspace
 }
 

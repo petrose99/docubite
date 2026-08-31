@@ -11,6 +11,7 @@ import config from "@/lib/config"
 import { getValidAccessToken, TokenRefreshError } from "@/lib/integration-token-refresh"
 import { listExpenseAccounts as listQuickbooksAccounts } from "@/lib/integrations/quickbooks/client"
 import { listExpenseAccounts as listXeroAccounts } from "@/lib/integrations/xero/client"
+import { listAccounts as listBigcapitalAccounts } from "@/lib/integrations/bigcapital/client"
 import { syncAccountingEntities } from "@/lib/integrations/sync"
 import {
   deleteWorkspaceIntegrationConnection,
@@ -47,9 +48,20 @@ export async function listExpenseAccountsAction(workspaceId: string, connectionI
     })
     if (!connection || !connection.externalTenantId) return { success: false, error: "That connection no longer exists" }
     const accessToken = await getValidAccessToken(connection.id)
-    const accounts = connection.provider === "quickbooks"
-      ? await listQuickbooksAccounts(connection.externalTenantId, accessToken)
-      : (await listXeroAccounts(connection.externalTenantId, accessToken)).map((a) => ({ id: a.code, name: a.name }))
+    let accounts: { id: string; name: string }[]
+    switch (connection.provider) {
+      case "quickbooks":
+        accounts = await listQuickbooksAccounts(connection.externalTenantId, accessToken)
+        break
+      case "xero":
+        accounts = (await listXeroAccounts(connection.externalTenantId, accessToken)).map((a) => ({ id: a.code, name: a.name }))
+        break
+      case "bigcapital":
+        accounts = await listBigcapitalAccounts(accessToken, connection.externalTenantId)
+        break
+      default:
+        return { success: false, error: "Unsupported accounting provider" }
+    }
     return { success: true, data: accounts }
   } catch (error) {
     if (error instanceof TokenRefreshError && error.message === "integration_needs_reauth") {
