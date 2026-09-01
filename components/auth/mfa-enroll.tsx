@@ -3,6 +3,7 @@
 import { AuthField, SubmitButton } from "@/components/auth/fields"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import type { Factor } from "@supabase/supabase-js"
 import { ShieldCheck, Trash2 } from "lucide-react"
@@ -51,6 +52,7 @@ export function MfaEnroll() {
       if (challengeError || !challenge) { setError("Could not verify that code. Please try again."); return }
       const { error: verifyError } = await supabase.auth.mfa.verify({ factorId: enrolling.factorId, challengeId: challenge.id, code: code.trim() })
       if (verifyError) { setError("That code didn't match. Check your authenticator app and try again."); return }
+      reportAuthEvent("auth_mfa_enrolled")
       toast.success("Two-factor authentication is on")
       setEnrolling(null)
       setCode("")
@@ -64,6 +66,7 @@ export function MfaEnroll() {
       const supabase = createClient()
       const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId })
       if (unenrollError) { toast.error("Could not remove that factor"); return }
+      reportAuthEvent("auth_mfa_unenrolled")
       toast.success("Two-factor authentication is off")
       await refresh()
     } finally { setBusy(false) }

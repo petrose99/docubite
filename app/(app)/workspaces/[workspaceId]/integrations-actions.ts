@@ -6,6 +6,7 @@
  * owner-gated, deployment-gated (config.integrations.enabled) and plan-gated, in that order. */
 
 import { ActionState } from "@/lib/actions"
+import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { UnsafeUrlError } from "@/lib/url-safety"
@@ -37,6 +38,7 @@ export async function createApiKeyAction(workspaceId: string, name: string): Pro
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     const { plaintext, record } = await createWorkspaceApiKey(workspaceId, { name, createdById: gate.userId })
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "api_key_created", detail: { keyId: record.id, keyPrefix: record.keyPrefix } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true, data: { id: record.id, plaintext, keyPrefix: record.keyPrefix } }
   } catch (error) {
@@ -49,6 +51,7 @@ export async function revokeApiKeyAction(workspaceId: string, keyId: string): Pr
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await revokeWorkspaceApiKey(workspaceId, keyId)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "api_key_revoked", detail: { keyId } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {
@@ -61,6 +64,7 @@ export async function createWebhookEndpointAction(workspaceId: string, url: stri
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     const { secret, endpoint } = await createWorkspaceWebhookEndpoint(workspaceId, { url, events, createdById: gate.userId })
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "webhook_endpoint_created", detail: { endpointId: endpoint.id, url: endpoint.url } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true, data: { id: endpoint.id, secret, url: endpoint.url } }
   } catch (error) {
@@ -74,6 +78,7 @@ export async function setWebhookEndpointStatusAction(workspaceId: string, endpoi
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await setWorkspaceWebhookEndpointStatus(workspaceId, endpointId, status)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: status === "active" ? "webhook_endpoint_enabled" : "webhook_endpoint_disabled", detail: { endpointId } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {
@@ -86,6 +91,7 @@ export async function deleteWebhookEndpointAction(workspaceId: string, endpointI
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await deleteWorkspaceWebhookEndpoint(workspaceId, endpointId)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "webhook_endpoint_deleted", detail: { endpointId } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {

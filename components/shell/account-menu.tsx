@@ -1,5 +1,6 @@
 "use client"
 
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import { ChevronsUpDown, LogOut } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
@@ -25,6 +26,9 @@ export function AccountMenu({ name, email, collapsed = false }: { name: string; 
   const signOut = async () => {
     setBusy(true)
     try {
+      // Reported before signOut(), not after: the session that attributes this event to an actor
+      // is still valid here and gone the moment signOut() resolves.
+      reportAuthEvent("auth_logout")
       await createClient().auth.signOut()
       // A full navigation rather than router.push: the session cookie is gone, so every
       // cached server component for this user has to be dropped too.

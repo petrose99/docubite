@@ -4,6 +4,7 @@ import { AuthDivider, AuthField, PasswordField, SubmitButton } from "@/component
 import { GoogleButton } from "@/components/auth/google-button"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import type { Route } from "next"
 import Link from "next/link"
@@ -32,8 +33,10 @@ export function LoginForm({ defaultEmail, redirectTo = "/workspaces", googleEnab
         // apart turns this form into an oracle for which addresses have accounts. Supabase's own
         // error codes (invalid_credentials covers both) already collapse the two the same way.
         setError("That email and password do not match an account.")
+        reportAuthEvent("auth_login_failed", { email })
         return
       }
+      reportAuthEvent("auth_login_success")
       // The password step alone only ever reaches aal1. An account with a TOTP factor enrolled
       // needs a second step before it has a session hipaaMode workspaces will accept â€” see
       // /mfa/challenge, which this sends them to instead of redirectTo when one is pending.

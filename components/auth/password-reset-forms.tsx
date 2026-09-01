@@ -4,6 +4,7 @@ import { requestPasswordResetAction } from "@/app/(auth)/auth-actions"
 import { AuthField, PasswordField, SubmitButton } from "@/components/auth/fields"
 import { FormError } from "@/components/forms/error"
 import { Input } from "@/components/ui/input"
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import { MailCheck } from "lucide-react"
 import Link from "next/link"
@@ -86,6 +87,7 @@ export function ResetPasswordForm() {
         setError("This link has expired or has already been used. Request a new one.")
         return
       }
+      reportAuthEvent("auth_password_changed")
       // Straight to sign-in, not the workspace: updateUser leaves the recovery-scoped session in
       // place, which is narrower than a normal sign-in â€” going through /login mints an ordinary one.
       window.location.href = "/login"

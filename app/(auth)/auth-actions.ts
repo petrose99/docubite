@@ -1,6 +1,7 @@
 "use server"
 
 import { ActionState } from "@/lib/actions"
+import { recordAdminAudit } from "@/lib/auth-audit"
 import config from "@/lib/config"
 import { checkRequestRateLimit } from "@/lib/rate-limit"
 import { assertSignupAllowed } from "@/lib/signup-gate"
@@ -40,6 +41,8 @@ export async function signUpAction(input: { name: string; email: string; passwor
     if (error.code === "user_already_exists") return { success: false, error: "account_exists" }
     return { success: false, error: "signup_failed" }
   }
+  // actorId is null: there is no authenticated user yet at the moment of sign-up.
+  await recordAdminAudit({ type: "auth_signup", detail: { email } })
   return { success: true, data: null }
 }
 
@@ -52,10 +55,12 @@ export async function requestPasswordResetAction(email: string): Promise<ActionS
   // outbound-mail budget being spent (via lib/email.ts's Resend wiring for the bulk-migration
   // path; ordinary resets still go through Supabase's own mailer).
   if (await checkRequestRateLimit("password_reset", 5, FIFTEEN_MINUTES_MS)) {
+    const normalized = email.trim().toLowerCase()
     const supabase = await createClient()
-    await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    await supabase.auth.resetPasswordForEmail(normalized, {
       redirectTo: `${config.app.baseURL}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
     }).catch(() => {})
+    await recordAdminAudit({ type: "auth_password_reset_requested", detail: { email: normalized } })
   }
   return { success: true, data: null }
 }

@@ -6,6 +6,7 @@
  * reused there rather than duplicated. */
 
 import { ActionState } from "@/lib/actions"
+import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { enqueueBigcapitalProvisionJob, getWorkspaceProvisionJob } from "@/models/bigcapital"
@@ -35,6 +36,7 @@ export async function repairBigcapitalConnectionAction(workspaceId: string): Pro
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await enqueueBigcapitalProvisionJob(workspaceId, gate.userId)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "bigcapital_provision_enqueued", detail: { isRepair: true } })
     revalidatePath(paths(workspaceId).accounting)
     return { success: true }
   } catch (error) {

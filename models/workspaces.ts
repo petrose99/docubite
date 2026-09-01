@@ -2,7 +2,8 @@
 // their caller-supplied arguments (acceptWorkspaceInvitation takes the user to attach). The
 // directive would publish every export as a callable endpoint, letting a client pass a forged
 // user. Server actions live in app/(app)/workspaces/[workspaceId]/actions.ts and do the auth.
-import { auditEventData, getRequestAuditContext } from "@/lib/audit"
+import { auditEventData, getRequestAuditContext, recordDocumentAudit } from "@/lib/audit"
+import { recordAdminAudit } from "@/lib/auth-audit"
 import { archiveWorkspaceAuditEvents } from "@/lib/audit-archive"
 import { deleteDocumentSource } from "@/lib/document-storage"
 import { prisma } from "@/lib/db"
@@ -46,6 +47,7 @@ export async function createWorkspaceForUser(user: Pick<User, "id" | "name" | "e
       console.error("[workspaces] failed to enqueue bigcapital provisioning:", error instanceof Error ? error.message : error)
     })
   }
+  await recordDocumentAudit({ workspaceId: workspace.id, actorId: user.id, type: "workspace_created", detail: { kind: workspace.kind, name: workspace.name } })
   return workspace
 }
 
@@ -92,20 +94,32 @@ export async function getWorkspaceUsage(_workspaceId: string) {
 
 /* ---------------------------------------------------------------- workspace lifecycle --- */
 
-export async function renameWorkspace(workspaceId: string, name: string) {
+export async function renameWorkspace(workspaceId: string, name: string, actorId: string) {
   const trimmed = name.trim()
   if (trimmed.length < 2 || trimmed.length > 80) throw new Error("invalid_workspace_name")
-  return prisma.workspace.update({ where: { id: workspaceId }, data: { name: trimmed } })
+  const workspace = await prisma.workspace.update({ where: { id: workspaceId }, data: { name: trimmed } })
+  await recordDocumentAudit({ workspaceId, actorId, type: "workspace_renamed", detail: { name: trimmed } })
+  return workspace
 }
 
 /** Deliberately does NOT re-check any seat limit: there is none anymore, and this exists purely
  * so the owner can reorganise roles. */
-export async function updateWorkspaceMemberRole(input: { workspaceId: string; memberUserId: string; role: WorkspaceRole }) {
+export async function updateWorkspaceMemberRole(input: { workspaceId: string; actorId: string; memberUserId: string; role: WorkspaceRole }) {
   const role = parseRole(input.role)
   const member = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.memberUserId } } })
   if (!member) throw new Error("member_not_found")
   if (member.role === "owner" && role !== "owner" && (await countOwners(input.workspaceId)) <= 1) throw new Error("last_owner_required")
-  return prisma.workspaceMember.update({ where: { id: member.id }, data: { role } })
+  const context = await getRequestAuditContext()
+  const [updated] = await prisma.$transaction([
+    prisma.workspaceMember.update({ where: { id: member.id }, data: { role } }),
+    prisma.documentAuditEvent.create({
+      data: auditEventData(
+        { workspaceId: input.workspaceId, actorId: input.actorId, type: "workspace_member_role_changed", detail: { targetUserId: input.memberUserId, from: member.role, to: role } },
+        context
+      ),
+    }),
+  ])
+  return updated
 }
 
 /** Removing someone also drops the per-email file shares they hold in this workspace.
@@ -154,9 +168,16 @@ export async function transferWorkspaceOwnership(input: { workspaceId: string; a
   const target = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } } })
   if (!target) throw new Error("member_not_found")
   const stepDown = input.stepDown !== false
+  const context = await getRequestAuditContext()
   await prisma.$transaction([
     prisma.workspaceMember.update({ where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } }, data: { role: "owner" } }),
     ...(stepDown ? [prisma.workspaceMember.update({ where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.actorId } }, data: { role: "member" } })] : []),
+    prisma.documentAuditEvent.create({
+      data: auditEventData(
+        { workspaceId: input.workspaceId, actorId: input.actorId, type: "workspace_ownership_transferred", detail: { targetUserId: input.targetUserId, stepDown } },
+        context
+      ),
+    }),
   ])
 }
 
@@ -168,6 +189,12 @@ export async function transferWorkspaceOwnership(input: { workspaceId: string; a
  * a single call would silently leave the 101st file's blobs behind. There is no directory-level
  * delete in lib/document-storage.ts, so per-object is the only correct approach. */
 export async function deleteWorkspace(input: { workspaceId: string; actorId: string }) {
+  const workspace = await prisma.workspace.findUnique({ where: { id: input.workspaceId }, select: { name: true, kind: true } })
+  // Written first, to AdminAuditEvent rather than DocumentAuditEvent: the workspace cascade below
+  // would destroy a DocumentAuditEvent row, and this record — "who deleted which workspace" — must
+  // survive the workspace it describes.
+  await recordAdminAudit({ actorId: input.actorId, type: "workspace_deleted", targetWorkspaceId: input.workspaceId, detail: { name: workspace?.name, kind: workspace?.kind } })
+
   for (;;) {
     const batch = await prisma.documentFile.findMany({ where: { workspaceId: input.workspaceId }, select: { id: true }, take: 100 })
     if (!batch.length) break
@@ -202,6 +229,7 @@ export async function createWorkspaceInvitation(input: { workspaceId: string; ow
   const token = randomBytes(32).toString("base64url")
   await prisma.workspaceInvitation.deleteMany({ where: { workspaceId: input.workspaceId, email, acceptedAt: null } })
   const invitation = await prisma.workspaceInvitation.create({ data: { workspaceId: input.workspaceId, sentById: input.ownerId, email, role: parseRole(input.role || "member"), tokenHash: invitationHash(token), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } })
+  await recordDocumentAudit({ workspaceId: input.workspaceId, actorId: input.ownerId, type: "invitation_created", detail: { email, role: invitation.role } })
   return { token, invitation, workspaceName: workspace.name }
 }
 
@@ -213,10 +241,15 @@ export const listWorkspaceInvitations = cache(async (workspaceId: string) => pri
   take: 200,
 }))
 
-export async function revokeWorkspaceInvitation(workspaceId: string, invitationId: string) {
+export async function revokeWorkspaceInvitation(workspaceId: string, invitationId: string, actorId: string) {
   // Scoped by workspaceId as well as id: the id alone is a caller-supplied uuid, and matching on
   // it by itself would let an owner of one workspace revoke another workspace's invitation.
-  return prisma.workspaceInvitation.deleteMany({ where: { id: invitationId, workspaceId } })
+  const invitation = await prisma.workspaceInvitation.findFirst({ where: { id: invitationId, workspaceId }, select: { email: true } })
+  const result = await prisma.workspaceInvitation.deleteMany({ where: { id: invitationId, workspaceId } })
+  if (result.count && invitation) {
+    await recordDocumentAudit({ workspaceId, actorId, type: "invitation_revoked", detail: { email: invitation.email } })
+  }
+  return result
 }
 
 /** Deliberately NOT cache()-wrapped, unlike its neighbours. This runs on the auth request path
@@ -250,9 +283,13 @@ export async function acceptWorkspaceInvitation(token: string, user: Pick<User, 
     throw new Error("invitation_invalid")
   }
   if (invitation.expiresAt < new Date()) throw new Error("invitation_invalid")
+  const context = await getRequestAuditContext()
   await prisma.$transaction([
     prisma.workspaceMember.upsert({ where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: user.id } }, update: { role: invitation.role }, create: { workspaceId: invitation.workspaceId, userId: user.id, role: invitation.role } }),
     prisma.workspaceInvitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } }),
+    prisma.documentAuditEvent.create({
+      data: auditEventData({ workspaceId: invitation.workspaceId, actorId: user.id, type: "invitation_accepted", detail: { role: invitation.role } }, context),
+    }),
   ])
   return invitation.workspaceId
 }

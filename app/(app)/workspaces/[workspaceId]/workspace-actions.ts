@@ -54,7 +54,7 @@ export async function renameWorkspaceAction(workspaceId: string, name: string): 
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
   try {
-    const workspace = await renameWorkspace(workspaceId, name)
+    const workspace = await renameWorkspace(workspaceId, name, user.id)
     revalidatePath(paths(workspaceId).workspace)
     revalidateWorkspaceLayout()
     return { success: true, data: { name: workspace.name } }
@@ -103,7 +103,7 @@ export async function changeWorkspaceMemberRoleAction(workspaceId: string, membe
   if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
   if (role !== "owner" && role !== "member") return { success: false, error: "Choose a valid role" }
   try {
-    await updateWorkspaceMemberRole({ workspaceId, memberUserId, role: role as WorkspaceRole })
+    await updateWorkspaceMemberRole({ workspaceId, actorId: user.id, memberUserId, role: role as WorkspaceRole })
     revalidatePath(paths(workspaceId).workspace)
     return { success: true, data: null }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not change the role") } }
@@ -155,7 +155,7 @@ export async function revokeWorkspaceInvitationAction(workspaceId: string, invit
   const user = await getCurrentUser()
   if (!(await requireMember(workspaceId, user.id, ["owner"]))) return { success: false, error: NO_ACCESS }
   try {
-    const { count } = await revokeWorkspaceInvitation(workspaceId, invitationId)
+    const { count } = await revokeWorkspaceInvitation(workspaceId, invitationId, user.id)
     if (!count) return { success: false, error: "Invitation not found" }
     revalidatePath(paths(workspaceId).workspace)
     return { success: true, data: null }

@@ -74,7 +74,7 @@ describe("updateWorkspaceMemberRole", () => {
       count: vi.fn().mockResolvedValue(1),
       update: vi.fn(),
     }
-    await expect(updateWorkspaceMemberRole({ workspaceId: "w1", memberUserId: "u1", role: "member" })).rejects.toThrow("last_owner_required")
+    await expect(updateWorkspaceMemberRole({ workspaceId: "w1", actorId: "u2", memberUserId: "u1", role: "member" })).rejects.toThrow("last_owner_required")
     expect(db.workspaceMember.update).not.toHaveBeenCalled()
   })
 
@@ -82,17 +82,19 @@ describe("updateWorkspaceMemberRole", () => {
     db.workspaceMember = {
       findUnique: vi.fn().mockResolvedValue({ id: "m1", role: "owner" }),
       count: vi.fn().mockResolvedValue(2),
-      update: vi.fn().mockResolvedValue({ id: "m1", role: "member" }),
+      update: vi.fn().mockReturnValue({ id: "m1", role: "member" }),
     }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
 
-    await updateWorkspaceMemberRole({ workspaceId: "w1", memberUserId: "u1", role: "member" })
+    await updateWorkspaceMemberRole({ workspaceId: "w1", actorId: "u2", memberUserId: "u1", role: "member" })
 
     expect(db.workspaceMember.update).toHaveBeenCalledWith({ where: { id: "m1" }, data: { role: "member" } })
+    expect(db.$transaction).toHaveBeenCalledTimes(1)
   })
 
   it("rejects an unknown member", async () => {
     db.workspaceMember = { findUnique: vi.fn().mockResolvedValue(null), count: vi.fn(), update: vi.fn() }
-    await expect(updateWorkspaceMemberRole({ workspaceId: "w1", memberUserId: "nobody", role: "owner" })).rejects.toThrow("member_not_found")
+    await expect(updateWorkspaceMemberRole({ workspaceId: "w1", actorId: "u2", memberUserId: "nobody", role: "owner" })).rejects.toThrow("member_not_found")
   })
 })
 
@@ -155,6 +157,7 @@ describe("transferWorkspaceOwnership", () => {
       findUnique: vi.fn().mockResolvedValue({ id: "m2", role: "member" }),
       update: vi.fn((args: unknown) => args),
     }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
 
     await transferWorkspaceOwnership({ workspaceId: "w1", actorId: "u1", targetUserId: "u2" })
 
@@ -162,6 +165,7 @@ describe("transferWorkspaceOwnership", () => {
     expect(db.$transaction.mock.calls[0][0]).toEqual([
       { where: { workspaceId_userId: { workspaceId: "w1", userId: "u2" } }, data: { role: "owner" } },
       { where: { workspaceId_userId: { workspaceId: "w1", userId: "u1" } }, data: { role: "member" } },
+      "audit",
     ])
   })
 
@@ -183,7 +187,8 @@ describe("deleteWorkspace", () => {
   it("pages through deleteFiles so blobs past the first 100 are not orphaned", async () => {
     db.documentFile = { findMany: filePages(250) }
     db.document = { findMany: vi.fn().mockResolvedValue([]) }
-    db.workspace = { delete: vi.fn() }
+    db.workspace = { findUnique: vi.fn().mockResolvedValue({ name: "W", kind: "team" }), delete: vi.fn() }
+    db.adminAuditEvent = { create: vi.fn() }
     vi.mocked(deleteFiles).mockImplementation(async (_workspaceId, ids) => ({ deleted: ids.length }))
 
     await deleteWorkspace({ workspaceId: "w1", actorId: "u1" })
@@ -196,8 +201,9 @@ describe("deleteWorkspace", () => {
 
 describe("revokeWorkspaceInvitation", () => {
   it("scopes the delete by workspace as well as invitation id", async () => {
-    db.workspaceInvitation = { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) }
-    await revokeWorkspaceInvitation("w1", "i1")
+    db.workspaceInvitation = { findFirst: vi.fn().mockResolvedValue({ email: "b@example.com" }), deleteMany: vi.fn().mockResolvedValue({ count: 1 }) }
+    db.documentAuditEvent = { create: vi.fn() }
+    await revokeWorkspaceInvitation("w1", "i1", "u1")
     expect(db.workspaceInvitation.deleteMany).toHaveBeenCalledWith({ where: { id: "i1", workspaceId: "w1" } })
   })
 })
@@ -248,8 +254,9 @@ describe("acceptWorkspaceInvitation", () => {
   it("adds the member and marks the invitation accepted, with no seat limit to check", async () => {
     db.workspaceInvitation = { findUnique: vi.fn().mockResolvedValue({ id: "i1", workspaceId: "w1", email: user.email, role: "member", acceptedAt: null, expiresAt: future() }), update: vi.fn().mockReturnValue("accept") }
     db.workspaceMember = { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn().mockReturnValue("upsert") }
+    db.documentAuditEvent = { create: vi.fn().mockReturnValue("audit") }
 
     expect(await acceptWorkspaceInvitation("token", user)).toBe("w1")
-    expect(db.$transaction).toHaveBeenCalledWith(["upsert", "accept"])
+    expect(db.$transaction).toHaveBeenCalledWith(["upsert", "accept", "audit"])
   })
 })
