@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -17,6 +18,7 @@ export function SignOutEverywhereButton() {
     onClick={async () => {
       setBusy(true)
       try {
+        reportAuthEvent("auth_logout", { method: "everywhere" })
         const { error } = await createClient().auth.signOut({ scope: "global" })
         if (error) { toast.error("Could not sign out everywhere"); setBusy(false); return }
         window.location.href = "/login"

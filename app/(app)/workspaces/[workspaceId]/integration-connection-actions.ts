@@ -6,6 +6,7 @@
  * rather than duplicated. */
 
 import { ActionState } from "@/lib/actions"
+import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { getValidAccessToken, TokenRefreshError } from "@/lib/integration-token-refresh"
@@ -76,6 +77,7 @@ export async function setDefaultExpenseAccountAction(workspaceId: string, connec
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await setWorkspaceIntegrationDefaultAccount(workspaceId, connectionId, { id: accountId, name: accountName })
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "integration_default_account_changed", detail: { connectionId, accountId, accountName } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {
@@ -93,6 +95,7 @@ export async function syncAccountingEntitiesAction(workspaceId: string, connecti
     const connection = await prisma.integrationConnection.findFirst({ where: { id: connectionId, workspaceId }, select: { id: true } })
     if (!connection) return { success: false, error: "That connection no longer exists" }
     await syncAccountingEntities(connection.id)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "integration_entities_synced", detail: { connectionId } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {
@@ -108,6 +111,7 @@ export async function disconnectIntegrationAction(workspaceId: string, connectio
   if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
   try {
     await deleteWorkspaceIntegrationConnection(workspaceId, connectionId)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "integration_disconnected", detail: { connectionId } })
     revalidatePath(paths(workspaceId).integrations)
     return { success: true }
   } catch (error) {

@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto"
+import { recordSystemAudit } from "@/lib/audit"
 import { prisma } from "@/lib/db"
 import { unscoped } from "@/lib/workspace-scope"
 import { encryptSecret, decryptSecret } from "@/lib/secret-crypto"
@@ -229,6 +230,7 @@ export async function attemptProvisionJob(jobId: string, now = new Date()): Prom
       where: { id: job.id },
       data: { status: "succeeded", attempts, leaseUntil: null, errorCode: null, externalRef: null, completedAt: now },
     })
+    await recordSystemAudit({ workspaceId: job.workspaceId, type: "bigcapital_provisioned", detail: { provider: "bigcapital", attempts } })
     return
   }
 
@@ -245,6 +247,11 @@ export async function attemptProvisionJob(jobId: string, now = new Date()): Prom
       completedAt: exhausted ? now : null,
     },
   })
+  // Terminal only — a retryable attempt just tries again, and auditing every intermediate retry
+  // would drown the terminal failure that actually matters in noise.
+  if (exhausted) {
+    await recordSystemAudit({ workspaceId: job.workspaceId, type: "bigcapital_provision_failed", detail: { provider: "bigcapital", errorCode: outcome.errorCode, attempts } })
+  }
 }
 
 export async function processNextProvisionJob(now = new Date()): Promise<string | null> {

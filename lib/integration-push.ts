@@ -1,4 +1,5 @@
 import config from "@/lib/config"
+import { recordSystemAudit } from "@/lib/audit"
 import { prisma } from "@/lib/db"
 import { unscoped } from "@/lib/workspace-scope"
 import { getValidAccessToken, TokenRefreshError } from "@/lib/integration-token-refresh"
@@ -91,7 +92,7 @@ export async function attemptIntegrationPush(pushId: string, now = new Date()): 
   const push = await prisma.integrationPush.findUnique({
     where: { id: pushId },
     select: {
-      id: true, workspaceId: true, status: true, attempts: true, payload: true,
+      id: true, workspaceId: true, documentId: true, status: true, attempts: true, payload: true,
       connection: {
         select: {
           id: true, provider: true, status: true, externalTenantId: true,
@@ -154,6 +155,21 @@ export async function attemptIntegrationPush(pushId: string, now = new Date()): 
 
   const update = computePushUpdate(push.attempts, result, now, forceTerminal)
   await prisma.integrationPush.update({ where: { id: push.id }, data: update })
+
+  if (result.success) {
+    await recordSystemAudit({
+      workspaceId: push.workspaceId,
+      type: "integration_push_succeeded",
+      detail: { pushId: push.id, connectionId: connection.id, documentId: push.documentId, provider: connection.provider, externalBillId: result.externalBillId },
+    })
+  } else if (update.status === "failed") {
+    // Terminal only — every retry would otherwise get its own row and drown the signal in noise.
+    await recordSystemAudit({
+      workspaceId: push.workspaceId,
+      type: "integration_push_failed",
+      detail: { pushId: push.id, connectionId: connection.id, documentId: push.documentId, provider: connection.provider, errorCode: result.errorCode, attempts: update.attempts },
+    })
+  }
 }
 
 /** Claim + attempt the next due push. Returns its id if one ran, null if the queue was empty.

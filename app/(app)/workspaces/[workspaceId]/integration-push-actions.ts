@@ -7,6 +7,7 @@
  * redeliverDeliveryAction kicks the webhook drain). */
 
 import { ActionState } from "@/lib/actions"
+import { recordDocumentAudit } from "@/lib/audit"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { BillMappingError, normalizeBillFromDocument } from "@/lib/integration-bill-mapping"
@@ -67,6 +68,7 @@ export async function pushDocumentToAccountingAction(
 
   try {
     const result = await pushDocumentToConnection(workspaceId, documentId, connectionId, user.id)
+    await recordDocumentAudit({ workspaceId, actorId: user.id, documentId, type: "integration_push_enqueued", detail: { connectionId } })
     revalidatePath(`/workspaces/${workspaceId}/documents/${documentId}`)
     revalidatePath(`/workspaces/${workspaceId}/accounting`)
     return { success: true, data: result }
@@ -102,6 +104,7 @@ export async function pushAllReadyDocumentsAction(
       failed += 1
     }
   }
+  await recordDocumentAudit({ workspaceId, actorId: user.id, type: "integration_batch_push", detail: { connectionId, pushed, failed, totalReady: ready.length } })
   revalidatePath(`/workspaces/${workspaceId}/accounting`)
   return { success: true, data: { pushed, failed } }
 }

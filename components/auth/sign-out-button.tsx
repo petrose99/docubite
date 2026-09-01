@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { reportAuthEvent } from "@/lib/auth-audit-client"
 import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -13,6 +14,9 @@ export function SignOutButton({ label = "Sign out", redirectTo = "/login" }: { l
   return <Button type="button" variant="outline" disabled={busy} onClick={async () => {
     setBusy(true)
     try {
+      // Reported before signOut(), not after: the session that attributes this event to an actor
+      // is still valid here and gone the moment signOut() resolves.
+      reportAuthEvent("auth_logout")
       await createClient().auth.signOut()
       window.location.href = redirectTo
     } catch {
