@@ -60,7 +60,7 @@ export const MODULES: ModuleDefinition[] = [
 
   { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "finance", tier: "always", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },
 
-  { key: "data-health", name: "Data health", description: "Automated bookkeeping quality audits with source-document-linked findings.", industry: "finance", tier: "always", activation: "enable", navItems: [{ href: "health", label: "Health", icon: "heart-pulse" }] },
+  { key: "data-health", name: "Data health", description: "Automated bookkeeping quality audits with source-document-linked findings.", industry: "finance", tier: "always", activation: "enable", navItems: [{ href: "health", label: "Health Checks", icon: "heart-pulse" }] },
 ]
 
 export function findModule(key: string | null | undefined): ModuleDefinition | null {

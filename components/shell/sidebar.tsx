@@ -81,8 +81,8 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
     { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
   ]
   const moduleItems = [
-    ...moduleWorkItems,
     ...(accountingEnabled ? [{ href: `${base}/accounting`, label: "Accounting", icon: Landmark, exact: false }] : []),
+    ...moduleWorkItems,
   ]
   const settingsItems = [{ href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false }]
 
