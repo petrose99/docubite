@@ -13,8 +13,8 @@ export function MobileTabBar({ workspaceId, pipelineReviewCount = 0 }: {
 
   const base = `/workspaces/${workspaceId}`
   const tabs = [
-    { href: base, label: "Home", icon: BarChart3, exact: true },
-    { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
+    { href: base, label: "Dashboard", icon: BarChart3, exact: true },
+    { href: `${base}/pipeline`, label: "Extraction", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
     { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
     { href: `${base}/settings/workspace`, label: "More", icon: MoreHorizontal, exact: false },

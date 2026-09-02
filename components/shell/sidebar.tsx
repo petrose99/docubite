@@ -60,7 +60,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   const moduleWorkItems = MODULES
     .filter((module) => enabled.has(module.key))
     .flatMap((module) => module.navItems ?? [])
-    .filter((item) => !item.href.startsWith("settings/") && item.href !== "review" && item.href !== "expenses")
+    .filter((item) => !item.href.startsWith("settings/") && item.href !== "review" && item.href !== "expenses" && item.href !== "dictation")
     .map((item) => ({ href: `${base}/${item.href}`, label: item.label, icon: ICONS[item.icon] ?? Files, exact: false }))
 
   // Home is every workspace's unconditional first entry — exact-matched so it doesn't stay lit on
@@ -75,8 +75,8 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   // Pipeline/Files trio since they come and go per workspace, and Settings is its own section of
   // one so it doesn't read as just another workspace destination.
   const workItems = [
-    { href: base, label: "Home", icon: BarChart3, exact: true },
-    { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
+    { href: base, label: "Dashboard", icon: BarChart3, exact: true },
+    { href: `${base}/pipeline`, label: "Extraction", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
     { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
   ]
