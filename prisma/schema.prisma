@@ -62,6 +62,8 @@ model User {
   submittedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimSubmitter")
   bigcapitalAccounts    BigcapitalAccount[]
   provisionedIntegrationJobs IntegrationProvisionJob[] @relation("IntegrationProvisionJobOwner")
+  resolvedHealthCheckResults HealthCheckResult[] @relation("HealthCheckResultResolver")
+  dismissedHealthCheckResults HealthCheckResult[] @relation("HealthCheckResultDismisser")
 
   @@map("users")
 }
@@ -135,6 +137,10 @@ model Workspace {
   expenseClaims ExpenseClaim[]
   expenseClaimItems ExpenseClaimItem[]
   listPreferences UserListPreference[]
+  healthCheckResults HealthCheckResult[]
+  healthScores HealthScore[]
+  healthScoreConfigs HealthScoreConfig[]
+  ledgerTransactions LedgerTransaction[]
 
   @@map("workspaces")
 }
@@ -462,6 +468,7 @@ model Document {
   bankMatchesAsStatement BankMatch[] @relation("BankMatchStatement")
   bankMatchesAsMatched   BankMatch[] @relation("BankMatchMatched")
   expenseClaimItems ExpenseClaimItem[]
+  healthCheckResults HealthCheckResult[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -848,6 +855,7 @@ model IntegrationConnection {
   createdBy                 User?             @relation("IntegrationConnectionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   pushes                    IntegrationPush[]
   accountingEntities        AccountingEntity[]
+  ledgerTransactions        LedgerTransaction[]
 
   @@unique([workspaceId, provider])
   @@map("integration_connections")
@@ -1135,6 +1143,96 @@ model ReviewTask {
   @@index([documentId])
   @@index([workflowId])
   @@map("review_tasks")
+}
+
+/// Data Health Phase A: one open (or since-decided) finding produced by a lib/health/checks/*
+/// check run — the workspace-wide analogue of DocumentCheckResult, which is per-document and
+/// per-check-run rather than dedupe-and-persist. `fingerprint` is the app-computed dedupe key
+/// (`${checkCode}:${documentId ?? ""}:${externalTransactionId ?? ""}`), kept as its own column
+/// rather than a compound `@@unique([workspaceId, checkCode, documentId, externalTransactionId])`
+/// because Postgres treats NULLs as distinct in a unique index — two rows that are both
+/// `(checkCode, null, null)` would NOT collide under a compound unique, silently defeating the
+/// dedupe. A single computed string column sidesteps that entirely.
+///
+/// category is always "pipeline" in Phase A (the only category any check here belongs to);
+/// "cleanup" | "tax" | "activity" are later phases' categories, kept in the column comment so the
+/// UI's sidebar nav (components/health/health-sidebar-nav.tsx) already knows the full set to render.
+model HealthCheckResult {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  /// e.g. review_backlog | push_failures | confidence_drift | uncorrected_low_confidence |
+  /// rule_coverage | stale_documents — see lib/health/registry.ts.
+  checkCode   String    @map("check_code")
+  /// cleanup | pipeline | tax | activity — Phase A only ever writes "pipeline".
+  category    String
+  /// critical | warning | info
+  severity    String
+  /// open | dismissed | resolved
+  status      String    @default("open")
+  title       String
+  description String
+  fingerprint String
+  documentId  String?   @map("document_id") @db.Uuid
+  /// Always null in Phase A — no ledger/transaction table exists yet. Column exists for later
+  /// phases' ledger-reconciliation checks.
+  externalTransactionId String? @map("external_transaction_id")
+  suggestedAction        String? @map("suggested_action")
+  suggestedActionPayload Json?   @map("suggested_action_payload")
+  /// Set by runHealthChecks' own auto-resolve pass (a check ran and no longer produced this
+  /// fingerprint) — distinct from a person dismissing a finding, which sets dismissedAt instead.
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedById   String?   @map("resolved_by_id") @db.Uuid
+  resolvedAction String?   @map("resolved_action")
+  dismissedAt    DateTime? @map("dismissed_at")
+  dismissedById  String?   @map("dismissed_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document       Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  resolvedBy     User?     @relation("HealthCheckResultResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  dismissedBy    User?     @relation("HealthCheckResultDismisser", fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, fingerprint])
+  @@index([workspaceId, status, category])
+  @@index([workspaceId, checkCode])
+  @@map("health_check_results")
+}
+
+/// Data Health Phase A: one append-only daily snapshot of a workspace's overall health score
+/// (lib/health/score.ts's computeHealthScore), written by computeAndSnapshotHealthScore. Unique on
+/// (workspaceId, computedOn) so re-running the snapshot the same day updates in place rather than
+/// accumulating duplicate same-day rows — the sparkline reads one point per day, not one per run.
+model HealthScore {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  computedOn  DateTime  @map("computed_on") @db.Date
+  score       Float
+  /// CheckScoreBreakdownEntry[] from lib/health/score.ts — per-check score/weight/counts, so the
+  /// UI can explain "why" a score is what it is without recomputing it.
+  breakdown   Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, computedOn])
+  @@index([workspaceId, computedOn])
+  @@map("health_scores")
+}
+
+/// Data Health Phase A: a per-workspace override of one check's enabled/weight state, read by
+/// lib/health/score.ts's computeHealthScore (falls back to the check's own CheckDefinition.defaultWeight
+/// when no row exists here, or when weight is null). No row means "use the check's own defaults" —
+/// most workspaces never need one.
+model HealthScoreConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  checkCode   String   @map("check_code")
+  enabled     Boolean  @default(true)
+  /// Null means "use the check's own defaultWeight".
+  weight      Float?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, checkCode])
+  @@map("health_score_configs")
 }
 
 /// Dext-parity Phase 3 WP3.1: a named, ordered sequence of approval stages a workspace can attach
@@ -1439,6 +1537,41 @@ model AccountingEntity {
   @@unique([connectionId, entityType, externalId])
   @@index([workspaceId, entityType, name])
   @@map("accounting_entities")
+}
+
+/// Data Health Phase B: one bill / expense / bank-transaction row pulled from an
+/// IntegrationConnection's provider by lib/health/sync.ts's syncLedgerTransactions — the local
+/// cache the cleanup-category health checks (lib/health/checks/*, see lib/health/registry.ts)
+/// read from, mirroring how AccountingEntity caches accounts/vendors/tax rates for WP1.5. A row
+/// from a prior sync that the provider no longer returns is marked inactive rather than deleted,
+/// same soft-retire convention as AccountingEntity/syncAccountingEntities.
+model LedgerTransaction {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @map("workspace_id") @db.Uuid
+  connectionId      String   @map("connection_id") @db.Uuid
+  externalId        String   @map("external_id")
+  /// "bill" | "expense" | "bank_transaction"
+  kind              String
+  contactExternalId String?  @map("contact_external_id")
+  contactName       String?  @map("contact_name")
+  accountExternalId String?  @map("account_external_id")
+  accountName       String?  @map("account_name")
+  docNumber         String?  @map("doc_number")
+  amount            Float?
+  taxAmount         Float?   @map("tax_amount")
+  currencyCode      String?  @map("currency_code")
+  txnDate           DateTime? @db.Date @map("txn_date")
+  reconciled        Boolean  @default(false)
+  active            Boolean  @default(true)
+  raw               Json?
+  syncedAt          DateTime @map("synced_at")
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection        IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, kind, externalId])
+  @@index([workspaceId, kind, txnDate])
+  @@index([workspaceId, contactExternalId])
+  @@map("ledger_transactions")
 }
 
 /// WP2.1/WP2.3: one suggested-or-decided match between a line inside a bank/supplier statement
