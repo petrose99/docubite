@@ -4,7 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, ClipboardCheck, Files, Landmark, ListChecks, Mic, Settings } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, HeartPulse, History, Landmark, ListChecks, Mic, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -21,6 +21,7 @@ import { usePathname } from "next/navigation"
 const ICONS: Record<string, typeof Files> = {
   inbox: ClipboardCheck,
   mic: Mic,
+  "heart-pulse": HeartPulse,
 }
 
 /** Lido's left rail. The repo had no sidebar component at all — the nav was inline in two
@@ -77,6 +78,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
     { href: base, label: "Home", icon: BarChart3, exact: true },
     { href: `${base}/pipeline`, label: "Pipeline", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
     { href: `${base}/files`, label: "Files", icon: Files, exact: false },
+    { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
   ]
   const moduleItems = [
     ...moduleWorkItems,

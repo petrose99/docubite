@@ -35,7 +35,7 @@ export default async function ActivityPage({ params, searchParams }: {
   ])
 
   const hasFilters = !!(type || actorId || query.from || query.to)
-  const exportHref = `/workspaces/${workspaceId}/settings/activity/export${hasFilters ? `?${new URLSearchParams({
+  const exportHref = `/workspaces/${workspaceId}/activity/export${hasFilters ? `?${new URLSearchParams({
     ...(type ? { type } : {}), ...(actorId ? { actor: actorId } : {}), ...(query.from ? { from: query.from } : {}), ...(query.to ? { to: query.to } : {}),
   }).toString()}` : ""}`
 
@@ -76,7 +76,7 @@ export default async function ActivityPage({ params, searchParams }: {
             <Input id="to" name="to" type="date" defaultValue={query.to ?? ""} className="w-40" />
           </div>
           <Button type="submit">Filter</Button>
-          {hasFilters && <Button asChild variant="ghost"><a href={`/workspaces/${workspaceId}/settings/activity`}>Clear</a></Button>}
+          {hasFilters && <Button asChild variant="ghost"><a href={`/workspaces/${workspaceId}/activity`}>Clear</a></Button>}
         </form>
       </CardContent>
     </Card>

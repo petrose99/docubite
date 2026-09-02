@@ -24,6 +24,7 @@ export type ReviewQueueRow = {
     minConfidence: number | null
     appliedRuleName: string | null
     checks: { code: string; status: "warn" | "fail"; message: string }[]
+    review: { supplier: string | null; category: string; total: string | null }
   }
   assignee: { id: string; name: string } | null
 }
@@ -301,7 +302,9 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
           <tr className="border-b text-left text-slate-500">
             <th className="w-8 py-2"><input type="checkbox" checked={bulkSelected.size === visibleTasks.length && visibleTasks.length > 0} onChange={toggleBulkAll} aria-label="Select all" /></th>
             <th className="w-6 py-2"></th>
-            <th className="py-2 pr-4 font-medium">Document</th>
+            <th className="py-2 pr-4 font-medium">Supplier</th>
+            <th className="py-2 pr-4 font-medium">Category</th>
+            <th className="py-2 pr-4 font-medium">Total</th>
             <th className="py-2 pr-4 font-medium">Flags</th>
             <th className="py-2 pr-4 font-medium">Reason</th>
             <th className="py-2 font-medium">Status</th>
@@ -313,9 +316,14 @@ export function ReviewInbox({ workspaceId, tasks, currentStatus, members, financ
             const selected = task.id === effectiveSelectedId
             return <tr key={task.id} onClick={() => setSelectedId(task.id)}
               className={`cursor-pointer border-b last:border-0 ${selected ? "bg-emerald-50" : "hover:bg-slate-50"}`}>
-              <td className="py-2" onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={bulkSelected.has(task.id)} onChange={() => toggleBulk(task.id)} aria-label={`Select ${task.document.filename}`} /></td>
+              <td className="py-2" onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={bulkSelected.has(task.id)} onChange={() => toggleBulk(task.id)} aria-label={`Select ${task.document.review.supplier ?? task.document.filename}`} /></td>
               <td className="py-2"><ConfidenceDot score={task.document.minConfidence} /></td>
-              <td className="py-2 pr-4"><span className="font-medium text-slate-900">{task.document.filename}</span>{task.document.templateName && <span className="ml-1.5 text-xs text-slate-400">{task.document.templateName}</span>}</td>
+              <td className="py-2 pr-4">
+                <span className="font-medium text-slate-900">{task.document.review.supplier ?? "Unknown supplier"}</span>
+                {task.document.templateName && <span className="ml-1.5 text-xs text-slate-400">{task.document.templateName}</span>}
+              </td>
+              <td className="py-2 pr-4 text-slate-500">{task.document.review.category}</td>
+              <td className="py-2 pr-4 text-slate-500">{task.document.review.total ?? "—"}</td>
               <td className="py-2 pr-4">
                 <div className="flex flex-wrap gap-1">
                   {task.document.appliedRuleName && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600" title={`Rule: ${task.document.appliedRuleName}`}>Rule applied</span>}

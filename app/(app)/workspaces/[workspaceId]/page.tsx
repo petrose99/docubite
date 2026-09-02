@@ -11,7 +11,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { getWorkspaceAnalytics, resolvePeriod } from "@/lib/analytics/workspace-analytics"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
-import { countDocumentsByStage, countDocumentsThisMonth, countToReviewByFile, flaggedFieldsFromConfidence, listWorkspaceDocuments } from "@/models/documents"
+import { countDocumentsByStage, countDocumentsThisMonth, countToReviewByFile, flaggedFieldsFromConfidence, listWorkspaceDocuments, summarizeDocumentForReview } from "@/models/documents"
 import { ensurePipelineFile, getFileTemplates, listRecentFiles } from "@/models/files"
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
 import { Archive, CheckCircle2, ChevronRight, FileText, SearchCheck, Table2 } from "lucide-react"
@@ -156,9 +156,10 @@ export default async function WorkspaceHomePage({ params, searchParams }: {
         {needsReview.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">Nothing needs a look right now.</p> : <>
           {needsReview.slice(0, 3).map((doc) => {
             const reasons = flaggedFieldsFromConfidence(doc.confidence).slice(0, 2).map(formatFieldKey)
+            const review = summarizeDocumentForReview(doc)
             return <Link key={doc.id} href={`/workspaces/${workspaceId}/documents/${doc.id}?stage=to_review`} className="flex items-center gap-2.5 border-t py-2.5 first:border-t-0 hover:text-emerald-800">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold text-slate-800">{doc.filename}</div>
+                <div className="truncate text-[13.5px] font-semibold text-slate-800">{review.supplier ?? "Unknown supplier"} · {review.category}{review.total ? ` · ${review.total}` : ""}</div>
                 <div className="text-xs text-slate-500">{reasons.length > 0 ? `${reasons.join(", ")} unclear` : "Ready for a look"}</div>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
