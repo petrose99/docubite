@@ -39,9 +39,9 @@ const STATUS_BADGE: Record<string, string> = {
 /** What each stage's empty table says, so "nothing here" reads as expected-and-fine on Archive
  * but as an invitation to upload on Inbox. */
 const EMPTY_COPY: Record<PipelineStage, string> = {
-  inbox: "Nothing waiting — uploaded documents land here while they're being extracted.",
+  inbox: "Drop PDFs or a folder. We OCR, split and extract; you review; then use them in Sheets.",
   to_review: "Nothing needs a look right now.",
-  ready: "Nothing marked ready yet.",
+  ready: "Nothing marked ready yet — approve documents to use them in Sheets.",
   approvals: "No documents are waiting on an approval.",
   archive: "Nothing archived.",
 }

@@ -1,10 +1,11 @@
 "use client"
 
 import { AccountMenu } from "@/components/shell/account-menu"
+import { GlobalSearch } from "@/components/shell/global-search"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
-import { BarChart3, ClipboardCheck, Files, HeartPulse, History, Landmark, ListChecks, Mic, Settings } from "lucide-react"
+import { BarChart3, ClipboardCheck, Files, HeartPulse, History, Landmark, ListChecks, Mic, Settings, Table2 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -76,8 +77,8 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   // one so it doesn't read as just another workspace destination.
   const workItems = [
     { href: base, label: "Dashboard", icon: BarChart3, exact: true },
-    { href: `${base}/pipeline`, label: "Extraction", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
-    { href: `${base}/files`, label: "Files", icon: Files, exact: false },
+    { href: `${base}/pipeline`, label: "Extraction", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined, tourTarget: "extraction" as const },
+    { href: `${base}/files`, label: "Sheets", icon: Table2, exact: false, tourTarget: "sheets" as const },
     { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
   ]
   const moduleItems = [
@@ -86,11 +87,12 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   ]
   const settingsItems = [{ href: `${base}/settings/workspace`, label: "Settings", icon: Settings, exact: false }]
 
-  const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean; badge?: number }) => {
+  const navLink = (item: { href: string; label: string; icon: typeof Files; exact: boolean; badge?: number; tourTarget?: string }) => {
     // Non-exact entries stay lit while you're inside a page under them — Settings while you're on
     // any settings leaf, a module item while you're on its own sub-pages.
     const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.label === "Settings" && pathname.startsWith(`${base}/settings`))
     return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
+      {...(item.tourTarget ? { "data-tour-target": item.tourTarget } : {})}
       className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "relative bg-white text-emerald-800 shadow-[0_1px_2px_rgba(15,23,42,0.07),inset_0_0_0_1px_rgba(4,120,87,0.10)]" : "text-slate-600 hover:bg-[rgba(148,163,184,0.16)] hover:text-slate-900"}`}>
       {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-emerald-700" />}
       <item.icon className="h-4 w-4 shrink-0" />{item.label}
@@ -107,6 +109,8 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
     </Link>
 
     <div className="mb-1 mt-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>
+
+    <div className="mb-1"><GlobalSearch workspaceId={workspaceId} /></div>
 
     <nav className="flex flex-col">
       {sectionLabel("Workspace")}

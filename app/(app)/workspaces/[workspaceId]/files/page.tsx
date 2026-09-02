@@ -1,4 +1,5 @@
 import { FilesBrowser } from "@/components/files/files-browser"
+import { SectionIntro } from "@/components/shell/section-intro"
 import { getCurrentUser } from "@/lib/auth"
 import config from "@/lib/config"
 import { searchDocumentsByContent } from "@/lib/retrieval"
@@ -66,7 +67,10 @@ export default async function FilesPage({ params, searchParams }: {
 
   return <main className="flex min-h-0 flex-1 flex-col">
     <header className="flex flex-wrap items-center gap-3 border-b px-6 py-4">
-      <h1 className="text-xl font-bold text-slate-900">Files</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-bold text-slate-900">Sheets</h1>
+        <SectionIntro section="sheets" workspaceId={workspaceId} />
+      </div>
       <nav className="ml-4 flex items-center gap-1 text-sm">
         <Link href={base} className={`rounded-md px-2.5 py-1 font-medium ${tab === "mine" ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"}`}>My Files</Link>
         <Link href={`${base}?tab=shared`} className={`rounded-md px-2.5 py-1 font-medium ${tab === "shared" ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"}`}>Shared With Me</Link>

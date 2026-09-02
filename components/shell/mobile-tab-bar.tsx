@@ -1,6 +1,6 @@
 "use client"
 
-import { BarChart3, Files, History, ListChecks, MoreHorizontal } from "lucide-react"
+import { BarChart3, History, ListChecks, MoreHorizontal, Table2 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -15,7 +15,7 @@ export function MobileTabBar({ workspaceId, pipelineReviewCount = 0 }: {
   const tabs = [
     { href: base, label: "Dashboard", icon: BarChart3, exact: true },
     { href: `${base}/pipeline`, label: "Extraction", icon: ListChecks, exact: false, badge: pipelineReviewCount > 0 ? pipelineReviewCount : undefined },
-    { href: `${base}/files`, label: "Files", icon: Files, exact: false },
+    { href: `${base}/files`, label: "Sheets", icon: Table2, exact: false },
     { href: `${base}/activity`, label: "Activity", icon: History, exact: false },
     { href: `${base}/settings/workspace`, label: "More", icon: MoreHorizontal, exact: false },
   ]

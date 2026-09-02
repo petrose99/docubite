@@ -1,3 +1,4 @@
+import { ResetTourButton } from "@/components/onboarding/reset-tour-button"
 import { WorkspaceAiToggle } from "@/components/workspace/ai-toggle"
 import { WorkspaceDangerZone } from "@/components/workspace/danger-zone"
 import { InvitePanel } from "@/components/workspace/invite-panel"
@@ -62,6 +63,16 @@ export default async function WorkspaceSettingsPage({ params }: { params: Promis
         <CardDescription>A separate workspace with its own files, members, and usage.</CardDescription>
       </CardHeader>
       <CardContent><TeamWorkspaceForm /></CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Onboarding</CardTitle>
+        <CardDescription>The welcome tour introduces new users to the workspace layout.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResetTourButton workspaceId={workspaceId} />
+      </CardContent>
     </Card>
 
     <WorkspaceDangerZone workspaceId={workspaceId} workspaceName={membership.workspace.name} workspaceKind={membership.workspace.kind} viewerRole={membership.role} />

@@ -143,16 +143,17 @@ function stageWhereClause(stage: PipelineStage): Prisma.DocumentWhereInput {
  * status. It composes with (does not replace) `status`, though callers normally pass one or the
  * other. Archive is its own axis: every stage except "archive" implicitly excludes an archived
  * document, so a document doesn't linger on "Ready" after being archived from it. */
-export async function listWorkspaceDocuments(workspaceId: string, filters: { status?: string; query?: string; templateId?: string; fileId?: string; stage?: PipelineStage } = {}) {
+export async function listWorkspaceDocuments(workspaceId: string, filters: { status?: string; query?: string; templateId?: string; fileId?: string; stage?: PipelineStage; documentIds?: string[] } = {}) {
   const where: Prisma.DocumentWhereInput = {
     workspaceId,
     ...(filters.fileId ? { fileId: filters.fileId } : {}),
+    ...(filters.documentIds?.length ? { id: { in: filters.documentIds } } : {}),
     ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
     ...(filters.stage ? stageWhereClause(filters.stage) : {}),
     ...(filters.query?.trim() ? { OR: [{ searchText: { contains: filters.query.trim(), mode: "insensitive" as const } }, { ocrText: { contains: filters.query.trim(), mode: "insensitive" as const } }] } : {}),
     ...(filters.templateId ? { templateId: filters.templateId } : {}),
   }
-  return prisma.document.findMany({ where, include: { template: true, templateVersion: true }, orderBy: { receivedAt: "desc" }, take: 100 })
+  return prisma.document.findMany({ where, include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } }, templateVersion: true }, orderBy: { receivedAt: "desc" }, take: 100 })
 }
 
 /** Per-stage counts for the pipeline tabs, sharing stageWhereClause with listWorkspaceDocuments so
