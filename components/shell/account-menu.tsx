@@ -42,8 +42,8 @@ export function AccountMenu({ name, email, collapsed = false }: { name: string; 
   const initial = (name || email).trim().charAt(0).toUpperCase() || "?"
 
   return <div ref={wrapper} className="relative">
-    <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-slate-100" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-700 text-xs font-bold text-white">{initial}</span>
+    <button type="button" className="flex w-full items-center gap-2 border border-transparent rounded-[11px] px-2 py-2 text-left transition-all hover:border-[#dbe3ea] hover:bg-white hover:shadow-[0_1px_3px_rgba(15,23,42,0.06)]" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
+      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-emerald-700 text-xs font-bold text-white">{initial}</span>
       {!collapsed && <>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-slate-800">{name || email}</span>

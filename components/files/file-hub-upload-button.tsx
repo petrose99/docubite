@@ -42,7 +42,7 @@ export function FileHubUploadButton({ workspaceId, fileId, fileName, template, t
   return <>
     <button type="button" onClick={() => setOpen(true)}
       className={primary
-        ? "inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+        ? "inline-flex items-center gap-2 rounded-[11px] bg-[linear-gradient(180deg,#0b8f66,#047857)] px-[18px] py-[11px] text-sm font-semibold text-white shadow-[0_1px_2px_rgba(4,120,87,0.4),0_6px_16px_rgba(4,120,87,0.22)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(4,120,87,0.4),0_10px_22px_rgba(4,120,87,0.28)]"
         : "inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"}>
       <Upload className="h-4 w-4" />Upload documents
     </button>

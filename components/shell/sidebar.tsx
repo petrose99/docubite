@@ -91,15 +91,16 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
     // any settings leaf, a module item while you're on its own sub-pages.
     const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`) || (item.label === "Settings" && pathname.startsWith(`${base}/settings`))
     return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-white text-emerald-800 shadow-sm" : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"}`}>
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${active ? "relative bg-white text-emerald-800 shadow-[0_1px_2px_rgba(15,23,42,0.07),inset_0_0_0_1px_rgba(4,120,87,0.10)]" : "text-slate-600 hover:bg-[rgba(148,163,184,0.16)] hover:text-slate-900"}`}>
+      {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-emerald-700" />}
       <item.icon className="h-4 w-4 shrink-0" />{item.label}
       {item.badge != null && <span className="ml-auto flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-bold text-white">{item.badge}</span>}
     </Link>
   }
 
-  const sectionLabel = (label: string) => <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-wide text-slate-400 first:pt-0">{label}</div>
+  const sectionLabel = (label: string) => <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400 first:pt-0">{label}</div>
 
-  return <aside className="flex w-56 shrink-0 flex-col gap-0.5 border-r bg-slate-100 px-2.5 py-3">
+  return <aside className="hidden w-[236px] shrink-0 flex-col gap-0.5 border-r border-[#e6ebf1] bg-gradient-to-b from-[#f4f7f9] to-[#eef2f6] px-3 py-3.5 md:flex">
     <Link href={base} className="flex items-center gap-2 px-1.5 py-1">
       <BiteMark className="h-7 w-7 shrink-0" />
       <span className="truncate text-sm font-bold font-display text-slate-900">DocuBite</span>

@@ -1,3 +1,5 @@
+import { MobileHeader } from "@/components/shell/mobile-header"
+import { MobileTabBar } from "@/components/shell/mobile-tab-bar"
 import { Sidebar } from "@/components/shell/sidebar"
 import { getCurrentUser, getSession } from "@/lib/auth"
 import config from "@/lib/config"
@@ -45,14 +47,20 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     countDocumentsByStage(workspaceId),
   ])
 
+  const switchable = workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))
+
   return <div className="flex min-h-screen bg-white text-slate-900">
     <Sidebar
       workspaceId={workspaceId}
-      workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind, role: workspace.members[0]?.role }))}
+      workspaces={switchable}
       user={{ name: user.name, email: user.email }}
       enabledModuleKeys={[...capabilities.enabled]}
       accountingEnabled={config.integrations.bigcapital.enabled}
       pipelineReviewCount={pipelineCounts.to_review} />
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[radial-gradient(1200px_480px_at_100%_-10%,rgba(4,120,87,0.05),transparent_60%),#fafbfc]">
+      <MobileHeader workspaceId={workspaceId} workspaces={switchable} user={{ name: user.name, email: user.email }} />
+      <div className="flex-1 pb-[72px] md:pb-0">{children}</div>
+      <MobileTabBar workspaceId={workspaceId} pipelineReviewCount={pipelineCounts.to_review} />
+    </div>
   </div>
 }
