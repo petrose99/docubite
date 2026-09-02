@@ -14,6 +14,7 @@ import { listExpenseAccounts as listQuickbooksAccounts } from "@/lib/integration
 import { listExpenseAccounts as listXeroAccounts } from "@/lib/integrations/xero/client"
 import { listAccounts as listBigcapitalAccounts } from "@/lib/integrations/bigcapital/client"
 import { syncAccountingEntities } from "@/lib/integrations/sync"
+import { syncLedgerTransactions } from "@/lib/health/sync"
 import {
   deleteWorkspaceIntegrationConnection,
   listWorkspaceIntegrationConnections,
@@ -103,6 +104,28 @@ export async function syncAccountingEntitiesAction(workspaceId: string, connecti
       return { success: false, error: "This connection needs to be reconnected before it can be synced" }
     }
     return { success: false, error: errorMessage(error, "Could not sync accounts") }
+  }
+}
+
+/** Manual re-sync of the connection's bills/expenses/bank transactions into LedgerTransaction
+ * (Phase B) — the ledger-side counterpart of syncAccountingEntitiesAction above. Reachable from
+ * the Data Health page (next to "Run checks now"), since the ledger checks are what this data
+ * actually feeds — see components/health/sync-ledger-button.tsx. */
+export async function syncLedgerTransactionsAction(workspaceId: string, connectionId: string): Promise<ActionState> {
+  const gate = await guardIntegrations(workspaceId)
+  if ("error" in gate) return { success: false, error: errorMessage(new Error(gate.error), NO_ACCESS) }
+  try {
+    const connection = await prisma.integrationConnection.findFirst({ where: { id: connectionId, workspaceId }, select: { id: true } })
+    if (!connection) return { success: false, error: "That connection no longer exists" }
+    await syncLedgerTransactions(connection.id)
+    await recordDocumentAudit({ workspaceId, actorId: gate.userId, type: "integration_ledger_synced", detail: { connectionId } })
+    revalidatePath(`/workspaces/${workspaceId}/health`)
+    return { success: true }
+  } catch (error) {
+    if (error instanceof TokenRefreshError && error.message === "integration_needs_reauth") {
+      return { success: false, error: "This connection needs to be reconnected before its ledger can be synced" }
+    }
+    return { success: false, error: errorMessage(error, "Could not sync ledger transactions") }
   }
 }
 

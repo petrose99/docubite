@@ -141,3 +141,79 @@ export async function createBill(tenantId: string, accessToken: string, body: un
   })
   return { id: created.Invoices[0].InvoiceID }
 }
+
+/** Voids a bill (an ACCPAY invoice) — Xero has no separate delete endpoint for invoices, only a
+ * status transition: `POST Invoices/{id}` with `{ Status: "VOIDED" }` in the body, same
+ * authenticated-request shape createBill uses. Throws exactly like createBill on any non-2xx
+ * response (apiRequest's own error handling). A real, irreversible write against whatever tenant
+ * tenantId points at — callers must treat it with the same care as createBill. */
+export async function voidBill(tenantId: string, accessToken: string, invoiceId: string): Promise<void> {
+  await apiRequest(tenantId, accessToken, `/Invoices/${invoiceId}`, {
+    method: "POST",
+    body: JSON.stringify({ Status: "VOIDED" }),
+  })
+}
+
+// ---- Phase B: ledger sync ----------------------------------------------------------------------
+
+export type XeroLedgerTransaction = {
+  id: string
+  docNumber: string | null
+  txnDate: string | null
+  total: number | null
+  currencyCode: string | null
+  contactId: string | null
+  contactName: string | null
+  /** The first line item's account code — an invoice/bank transaction can have several lines
+   * against several accounts; the first is taken as this transaction's representative account,
+   * same simplification the QuickBooks/Bigcapital ledger-sync functions make. */
+  accountCode: string | null
+}
+
+type XeroLineItem = { AccountCode?: string }
+
+function firstLineAccountCode(lineItems: XeroLineItem[] | undefined): string | null {
+  return lineItems?.find((item) => item.AccountCode)?.AccountCode ?? null
+}
+
+/** ACCPAY invoices (vendor bills) for Phase B's ledger sync — Xero has no separate "Bill" entity,
+ * an ACCPAY Invoice IS a bill, same distinction lib/integrations/xero/bill-mapper.ts already
+ * relies on for the write path. Paginated the same way listContacts is. */
+export async function listBills(tenantId: string, accessToken: string): Promise<XeroLedgerTransaction[]> {
+  type Row = { InvoiceID: string; InvoiceNumber?: string; Date?: string; Total?: number; CurrencyCode?: string; Contact?: { ContactID: string; Name?: string }; LineItems?: XeroLineItem[] }
+  const invoices: XeroLedgerTransaction[] = []
+  for (let page = 1; ; page++) {
+    const result = await apiRequest<{ Invoices?: Row[] }>(tenantId, accessToken, `/Invoices?where=${encodeURIComponent('Type=="ACCPAY"')}&page=${page}`)
+    const rows = result.Invoices ?? []
+    invoices.push(...rows.map((row): XeroLedgerTransaction => ({
+      id: row.InvoiceID, docNumber: row.InvoiceNumber ?? null, txnDate: row.Date ?? null,
+      total: row.Total ?? null, currencyCode: row.CurrencyCode ?? null,
+      contactId: row.Contact?.ContactID ?? null, contactName: row.Contact?.Name ?? null,
+      accountCode: firstLineAccountCode(row.LineItems),
+    })))
+    if (rows.length < CONTACTS_PAGE_SIZE) return invoices
+  }
+}
+
+/** Bank transactions (SPEND type — money going out through a bank account, not routed through
+ * the AP bill workflow) for Phase B's ledger sync. Xero has no separate "Expense" entity distinct
+ * from a bill or a bank transaction, so no listExpenses is implemented for this provider — see
+ * lib/health/sync.ts. Paginated the same way /Contacts is (Xero has no server-side pagination for
+ * plain /Accounts, but both /Contacts and /BankTransactions do page). */
+const BANK_TRANSACTIONS_PAGE_SIZE = 100
+
+export async function listBankTransactions(tenantId: string, accessToken: string): Promise<XeroLedgerTransaction[]> {
+  type Row = { BankTransactionID: string; Reference?: string; Date?: string; Total?: number; CurrencyCode?: string; Contact?: { ContactID: string; Name?: string }; LineItems?: XeroLineItem[] }
+  const transactions: XeroLedgerTransaction[] = []
+  for (let page = 1; ; page++) {
+    const result = await apiRequest<{ BankTransactions?: Row[] }>(tenantId, accessToken, `/BankTransactions?where=${encodeURIComponent('Type=="SPEND"')}&page=${page}`)
+    const rows = result.BankTransactions ?? []
+    transactions.push(...rows.map((row): XeroLedgerTransaction => ({
+      id: row.BankTransactionID, docNumber: row.Reference ?? null, txnDate: row.Date ?? null,
+      total: row.Total ?? null, currencyCode: row.CurrencyCode ?? null,
+      contactId: row.Contact?.ContactID ?? null, contactName: row.Contact?.Name ?? null,
+      accountCode: firstLineAccountCode(row.LineItems),
+    })))
+    if (rows.length < BANK_TRANSACTIONS_PAGE_SIZE) return transactions
+  }
+}

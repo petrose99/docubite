@@ -6,7 +6,7 @@ import config from "@/lib/config"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { PIPELINE_STAGES, type PipelineStage } from "@/lib/documents/stages"
 import { searchDocumentsByContent } from "@/lib/retrieval"
-import { activeJobDocumentIds, countDocumentsByStage, documentIdsInStage, flaggedFieldsFromConfidence, listWorkspaceDocuments } from "@/models/documents"
+import { activeJobDocumentIds, countDocumentsByStage, documentIdsInStage, flaggedFieldsFromConfidence, listWorkspaceDocuments, summarizeDocumentForReview } from "@/models/documents"
 import { ensurePipelineFile, getFileTemplates } from "@/models/files"
 import { getListPreference } from "@/models/list-preferences"
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
@@ -72,6 +72,10 @@ export default async function PipelinePage({ params, searchParams }: {
     flagged: doc.flaggedAt !== null,
     hasActiveJob: activeJobs.has(doc.id),
     missingRequiredFields: flaggedFieldsFromConfidence(doc.confidence),
+    // Every stage but Inbox shows this — a document still in Inbox hasn't been extracted yet, so
+    // there's nothing to summarize. Computed for every row is cheap (pure JSON reads) and keeps
+    // this map a single pass rather than a second one keyed by stage.
+    review: stage === "inbox" ? null : summarizeDocumentForReview(doc),
   }))
 
   // preference is read for a future column-picker refinement; the fixed column set ships first.

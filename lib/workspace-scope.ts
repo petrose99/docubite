@@ -63,6 +63,8 @@ export const WORKSPACE_SCOPED_MODELS = new Set([
   "FieldCorrection",
   // Dext-parity WP1.5: chart-of-accounts/vendor/tax-rate sync.
   "AccountingEntity",
+  // Data Health Phase B: bill/expense/bank-transaction ledger sync.
+  "LedgerTransaction",
   // Dext-parity WP2.1/WP2.3: bank + supplier statement reconciliation.
   "BankMatch",
   // Dext-parity Phase 3 WP3.1: multi-stage approval workflows.

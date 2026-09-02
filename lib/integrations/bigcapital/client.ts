@@ -223,3 +223,98 @@ export async function createBill(apiKey: string, organizationId: string, body: u
   )
   return { id: String(created.id) }
 }
+
+/** Voids (deletes) a bill via `DELETE /api/bills/{id}` — Bigcapital has no separate void/cancel
+ * status transition for bills the way QuickBooks/Xero do, only a hard delete of the bill record,
+ * per its route table. Throws exactly like createBill on any non-2xx response (`request`'s own
+ * error handling). This IS a real, irreversible write against whatever organizationId points at —
+ * callers must treat it with the same care as createBill, and it must never be exercised against a
+ * live organization without explicit human go-ahead first. */
+export async function voidBill(apiKey: string, organizationId: string, billId: string): Promise<void> {
+  await request<void>(`/api/bills/${billId}`, { method: "DELETE" }, { token: apiKey, organizationId })
+}
+
+// ---- Phase B: ledger sync ----------------------------------------------------------------------
+
+export type BigcapitalLedgerTransaction = {
+  id: string
+  docNumber: string | null
+  txnDate: string | null
+  total: number | null
+  taxAmount: number | null
+  currencyCode: string | null
+  contactId: string | null
+  contactName: string | null
+  /** The first entry's cost_account_id — a bill/expense can have several lines against several
+   * accounts (see the `entries` shape verified against a real instance below); the first is taken
+   * as this transaction's representative account, same simplification the QuickBooks/Xero
+   * ledger-sync functions make. */
+  accountId: string | null
+  accountName: string | null
+}
+
+type BigcapitalBillEntry = { cost_account_id: number | null; item?: { name?: string; cost_account_id?: number | null } }
+
+function firstEntryAccount(entries: BigcapitalBillEntry[] | undefined): { accountId: string | null; accountName: string | null } {
+  const entry = entries?.find((e) => e.cost_account_id != null)
+  if (!entry) return { accountId: null, accountName: null }
+  return { accountId: String(entry.cost_account_id), accountName: entry.item?.name ?? null }
+}
+
+/** Bills (vendor bills, AP) for Phase B's ledger sync — the exact response envelope (`{data:
+ * [...], pagination}`, per-entry `cost_account_id`, `bill_number`/`bill_date`/`total`/
+ * `tax_amount_withheld` field names) was verified against a real running Bigcapital instance, not
+ * guessed from docs, same as every other function in this file. */
+export async function listBills(apiKey: string, organizationId: string): Promise<BigcapitalLedgerTransaction[]> {
+  type Row = {
+    id: number; bill_number: string | null; bill_date: string | null; total: number | null
+    tax_amount_withheld: number | null; currency_code: string | null
+    vendor_id: number | null; vendor?: { id: number; display_name: string } | null
+    entries?: BigcapitalBillEntry[]
+  }
+  const bills: BigcapitalLedgerTransaction[] = []
+  for (let page = 1; ; page++) {
+    const result = await request<{ data: Row[]; pagination: { total: number; page: number; page_size: number } }>(
+      `/api/bills?page=${page}`, { method: "GET" }, { token: apiKey, organizationId }
+    )
+    bills.push(...result.data.map((row): BigcapitalLedgerTransaction => ({
+      id: String(row.id), docNumber: row.bill_number, txnDate: row.bill_date, total: row.total,
+      taxAmount: row.tax_amount_withheld, currencyCode: row.currency_code,
+      contactId: row.vendor_id != null ? String(row.vendor_id) : null, contactName: row.vendor?.display_name ?? null,
+      ...firstEntryAccount(row.entries),
+    })))
+    if (result.data.length === 0 || result.data.length < result.pagination.page_size) return bills
+  }
+}
+
+/** Quick expenses (petty-cash/card spend not routed through the AP bill workflow) for Phase B's
+ * ledger sync — Bigcapital DOES distinguish expenses from bills (a separate `/api/expenses`
+ * endpoint exists on the real instance verified for this phase, returning the same `{data: [...],
+ * pagination}` envelope as every other list endpoint here), but that organization had zero
+ * expenses recorded, so this mapping's field names (`payment_date`/`reference_no`/`total_amount`/
+ * `payment_account_id`) are inferred from the same naming conventions every other Bigcapital
+ * endpoint in this file uses, NOT verified against a real expense row — flagged explicitly as
+ * unverified in the Phase B report. */
+export async function listExpenses(apiKey: string, organizationId: string): Promise<BigcapitalLedgerTransaction[]> {
+  type Row = {
+    id: number; reference_no: string | null; payment_date: string | null
+    total_amount: number | null; currency_code: string | null
+    payee_id: number | null; payee?: { id: number; display_name?: string; formatted_name?: string } | null
+    payment_account_id: number | null; payment_account?: { name?: string } | null
+  }
+  const expenses: BigcapitalLedgerTransaction[] = []
+  for (let page = 1; ; page++) {
+    const result = await request<{ data: Row[]; pagination: { total: number; page: number; page_size: number } }>(
+      `/api/expenses?page=${page}`, { method: "GET" }, { token: apiKey, organizationId }
+    )
+    expenses.push(...result.data.map((row): BigcapitalLedgerTransaction => ({
+      id: String(row.id), docNumber: row.reference_no, txnDate: row.payment_date, total: row.total_amount,
+      taxAmount: null, currencyCode: row.currency_code,
+      contactId: row.payee_id != null ? String(row.payee_id) : null,
+      contactName: row.payee?.display_name ?? row.payee?.formatted_name ?? null,
+      accountId: row.payment_account_id != null ? String(row.payment_account_id) : null,
+      accountName: row.payment_account?.name ?? null,
+    })))
+    if (result.data.length === 0 || result.data.length < result.pagination.page_size) return expenses
+  }
+}

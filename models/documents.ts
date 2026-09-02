@@ -418,6 +418,37 @@ export function flaggedFieldsFromConfidence(confidence: unknown): string[] {
   return [...new Set([...missing, ...low])]
 }
 
+export type DocumentReviewSummary = { supplier: string | null; category: string; total: string | null }
+
+/** What a reviewer needs to triage a to-review document at a glance, in place of its filename:
+ * who it's from, what it's coded as, and how much. Read off the same fields the automation-rule
+ * engine (SUPPLIER_FIELD_BY_TEMPLATE) and the spend-by-category analytics (codingData.account)
+ * already treat as the supplier/category source of truth, so this agrees with those rather than
+ * introducing a third convention. */
+export function summarizeDocumentForReview(doc: { reviewedData: unknown; codingData: unknown; template: { code: string } | null }): DocumentReviewSummary {
+  const reviewed = (doc.reviewedData as Record<string, unknown> | null) ?? {}
+  const coding = (doc.codingData as Record<string, unknown> | null) ?? {}
+  const templateCode = doc.template?.code ?? ""
+  const supplierField = SUPPLIER_FIELD_BY_TEMPLATE[templateCode]
+  const supplier = supplierField ? asScalarString(reviewed[supplierField]) : null
+  const category = asScalarString(coding.account) ?? asScalarString(reviewed.category) ?? "Uncategorized"
+  const totalValue = reviewed.total
+  const total = typeof totalValue === "number" ? formatDocumentTotal(totalValue, asScalarString(reviewed.currency_code)) : null
+  return { supplier, category, total }
+}
+
+function formatDocumentTotal(value: number, currencyCode: string | null): string {
+  if (currencyCode) {
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode, maximumFractionDigits: 0 }).format(value)
+    } catch {
+      // A currency code the model read off the document but Intl doesn't recognise — fall through
+      // to a plain number rather than throwing the whole list.
+    }
+  }
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)
+}
+
 export async function getDocumentsStatus(workspaceId: string, documentIds: string[]) {
   if (!documentIds.length) return []
   const where = { workspaceId, id: { in: documentIds.slice(0, 50) } }

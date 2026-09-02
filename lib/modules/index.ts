@@ -59,6 +59,8 @@ export const MODULES: ModuleDefinition[] = [
   { key: "finance-analytics", name: "Financial analytics", description: "Spend by category, cash flow trend, and AP aging built from your extracted documents.", industry: "finance", tier: "always", activation: "enable" },
 
   { key: "dictation", name: "Dictation", description: "Speech-to-structured-report dictation.", industry: "finance", tier: "always", activation: "enable", requiresConfig: "asr", navItems: [{ href: "dictation", label: "Dictation", icon: "mic" }] },
+
+  { key: "data-health", name: "Data health", description: "Automated bookkeeping quality audits with source-document-linked findings.", industry: "finance", tier: "always", activation: "enable", navItems: [{ href: "health", label: "Health", icon: "heart-pulse" }] },
 ]
 
 export function findModule(key: string | null | undefined): ModuleDefinition | null {

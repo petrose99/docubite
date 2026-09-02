@@ -2,6 +2,7 @@ import { ReviewInbox } from "@/components/workspace/review-inbox"
 import config from "@/lib/config"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listReviewTasks, parseReviewTaskStatus, type ReviewTaskStatus } from "@/models/review-tasks"
+import { summarizeDocumentForReview } from "@/models/documents"
 import { getWorkspaceMembers, requireWorkspaceRole } from "@/models/workspaces"
 import { getCurrentUser } from "@/lib/auth"
 import { notFound } from "next/navigation"
@@ -70,6 +71,7 @@ export default async function ReviewQueuePage({ params, searchParams }: {
             minConfidence: scores.length ? Math.min(...scores) : null,
             appliedRuleName: task.document.appliedRule?.name ?? null,
             checks: task.document.checkResults.map((check) => ({ code: check.checkCode, status: check.status as "warn" | "fail", message: check.message })),
+            review: summarizeDocumentForReview(task.document),
           },
           assignee: task.assignee ? { id: task.assignee.id, name: task.assignee.name } : null,
         }

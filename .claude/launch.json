@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "docubite-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-with-system-ca.mjs"],
       "port": 7331,
       "autoPort": true
     }

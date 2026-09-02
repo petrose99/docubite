@@ -147,3 +147,79 @@ export async function createBill(realmId: string, accessToken: string, body: unk
   })
   return { id: created.Bill.Id }
 }
+
+/** Fetches just the Id/SyncToken QBO's void operation needs — voidBill below can't just send the
+ * bare externalId, QBO requires the bill's *current* SyncToken (an optimistic-concurrency stamp
+ * that increments on every edit) or the void request is rejected as a stale-object conflict. */
+async function getBillRef(realmId: string, accessToken: string, billId: string): Promise<{ id: string; syncToken: string }> {
+  const query = `select Id, SyncToken from Bill where Id = '${escapeQbQuery(billId)}'`
+  const result = await apiRequest<{ QueryResponse?: { Bill?: Array<{ Id: string; SyncToken: string }> } }>(realmId, accessToken, `/query?query=${encodeURIComponent(query)}`)
+  const bill = result.QueryResponse?.Bill?.[0]
+  if (!bill) throw quickbooksApiError(404, "bill_not_found")
+  return { id: bill.Id, syncToken: bill.SyncToken }
+}
+
+/** Voids a bill via QBO's documented `POST /bill?operation=void` — per QBO's API, this needs the
+ * bill's current Id + SyncToken, not just an id, so this first re-reads the bill (getBillRef) to
+ * pick up its latest SyncToken before voiding. Throws exactly like createBill on any non-2xx
+ * response (apiRequest's own error handling), and just as much a real irreversible write against
+ * whatever org realmId points at — callers must treat it with the same care as createBill. */
+export async function voidBill(realmId: string, accessToken: string, billId: string): Promise<void> {
+  const ref = await getBillRef(realmId, accessToken, billId)
+  await apiRequest(realmId, accessToken, "/bill?operation=void", {
+    method: "POST",
+    body: JSON.stringify({ Id: ref.id, SyncToken: ref.syncToken }),
+  })
+}
+
+// ---- Phase B: ledger sync ----------------------------------------------------------------------
+
+export type QuickBooksLedgerTransaction = {
+  id: string
+  docNumber: string | null
+  txnDate: string | null
+  totalAmt: number | null
+  currencyCode: string | null
+  contactId: string | null
+  contactName: string | null
+  /** The first expense line's account — a Bill/Purchase can have several lines against several
+   * accounts; lib/health/sync.ts takes the first as this transaction's representative account,
+   * same simplification each provider's bill-mapper.ts's single-account default-expense-account
+   * flow already makes for the write path. */
+  accountId: string | null
+  accountName: string | null
+}
+
+type QbLine = { AccountBasedExpenseLineDetail?: { AccountRef?: { value: string; name?: string } } }
+
+function firstLineAccount(lines: QbLine[] | undefined): { accountId: string | null; accountName: string | null } {
+  const ref = lines?.find((line) => line.AccountBasedExpenseLineDetail?.AccountRef)?.AccountBasedExpenseLineDetail?.AccountRef
+  return { accountId: ref?.value ?? null, accountName: ref?.name ?? null }
+}
+
+/** Bills (vendor bills, AP) for Phase B's ledger sync. */
+export async function listBills(realmId: string, accessToken: string): Promise<QuickBooksLedgerTransaction[]> {
+  type Row = { Id: string; DocNumber?: string; TxnDate?: string; TotalAmt?: number; CurrencyRef?: { value: string }; VendorRef?: { value: string; name?: string }; Line?: QbLine[] }
+  const rows = await paginatedQuery<Row>(realmId, accessToken, "select * from Bill", "Bill")
+  return rows.map((row) => ({
+    id: row.Id, docNumber: row.DocNumber ?? null, txnDate: row.TxnDate ?? null,
+    totalAmt: row.TotalAmt ?? null, currencyCode: row.CurrencyRef?.value ?? null,
+    contactId: row.VendorRef?.value ?? null, contactName: row.VendorRef?.name ?? null,
+    ...firstLineAccount(row.Line),
+  }))
+}
+
+/** Purchase entities (QuickBooks' expense/purchase transaction — cash/check/credit-card spend not
+ * routed through the AP bill workflow) for Phase B's ledger sync. QuickBooks has no separate
+ * "BankTransaction" list entity the way Xero does, so Purchase doubles as this app's "expense" kind
+ * and no listBankTransactions is implemented for this provider — see lib/health/sync.ts. */
+export async function listExpenses(realmId: string, accessToken: string): Promise<QuickBooksLedgerTransaction[]> {
+  type Row = { Id: string; DocNumber?: string; TxnDate?: string; TotalAmt?: number; CurrencyRef?: { value: string }; EntityRef?: { value: string; name?: string }; Line?: QbLine[] }
+  const rows = await paginatedQuery<Row>(realmId, accessToken, "select * from Purchase", "Purchase")
+  return rows.map((row) => ({
+    id: row.Id, docNumber: row.DocNumber ?? null, txnDate: row.TxnDate ?? null,
+    totalAmt: row.TotalAmt ?? null, currencyCode: row.CurrencyRef?.value ?? null,
+    contactId: row.EntityRef?.value ?? null, contactName: row.EntityRef?.name ?? null,
+    ...firstLineAccount(row.Line),
+  }))
+}

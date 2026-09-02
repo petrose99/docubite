@@ -62,6 +62,7 @@ export const listReviewTasks = cache(async (workspaceId: string, filters: Review
     document: {
       select: {
         id: true, filename: true, status: true, receivedAt: true, confidence: true,
+        reviewedData: true, codingData: true,
         template: { select: { name: true, code: true } },
         appliedRule: { select: { name: true } },
         checkResults: { select: { checkCode: true, status: true, message: true }, where: { status: { not: "pass" } } },
