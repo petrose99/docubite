@@ -15,14 +15,21 @@ import type { FUniver } from "@univerjs/presets"
  *
  * Returns how many rows were written — 0 when the sheet is not in this workbook, which happens
  * if the user deleted the tab while a document was still processing. */
-export function appendExtractionRows(api: FUniver, group: ExtractionRows): number {
+export function appendExtractionRows(api: FUniver, group: ExtractionRows, options?: { writeHeader?: boolean }): number {
   const workbook = api.getActiveWorkbook()
   const sheet = workbook?.getSheetBySheetId(group.sheetId)
   if (!sheet || !group.rows.length || !group.columns.length) return 0
 
-  // getLastRow is the last row with content; row 0 is the header, so the first data row can
-  // never be less than 1 even on a sheet whose header has somehow gone missing.
-  const start = Math.max(sheet.getLastRow() + 1, 1)
+  let start: number
+
+  if (options?.writeHeader) {
+    const headerValues = group.columns.map((col) => ({ v: col.label, t: 1 as const, s: "dbHeader" }))
+    sheet.getRange(0, 0, 1, headerValues.length).setValues([headerValues])
+    start = 1
+  } else {
+    start = Math.max(sheet.getLastRow() + 1, 1)
+  }
+
   const values = group.rows.map((row) => buildRowCellArray(row, group.columns))
 
   sheet.getRange(start, 0, values.length, group.columns.length).setValues(values)

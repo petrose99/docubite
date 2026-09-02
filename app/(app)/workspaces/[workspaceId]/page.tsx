@@ -1,5 +1,8 @@
 import type { SheetTemplate } from "@/components/extract/types"
 import { FileHubUploadButton } from "@/components/files/file-hub-upload-button"
+import { GettingStartedCard } from "@/components/onboarding/getting-started"
+import { WelcomeTour } from "@/components/onboarding/welcome-tour"
+import { SectionIntro } from "@/components/shell/section-intro"
 import { LastUpdated } from "@/components/shared/relative-time"
 import config from "@/lib/config"
 import { getCurrentUser } from "@/lib/auth"
@@ -8,7 +11,8 @@ import { countDocumentsByStage, countDocumentsThisMonth, countToReviewByFile, fl
 import { ensurePipelineFile, getFileTemplates, listRecentFiles } from "@/models/files"
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
 import { MobileUploadButtons } from "@/components/shell/mobile-upload-buttons"
-import { Archive, CheckCircle2, ChevronRight, FileText, SearchCheck, Table2 } from "lucide-react"
+import { getOnboardingStateAction } from "./onboarding-actions"
+import { Archive, ArrowRight, CheckCircle2, ChevronRight, FileText, ListChecks, SearchCheck, Table2, Upload } from "lucide-react"
 import Link from "next/link"
 
 export const dynamic = "force-dynamic"
@@ -35,12 +39,13 @@ export default async function WorkspaceHomePage({ params }: {
 
   const documentSearchEnabled = config.embeddings.enabled
 
-  const [pipelineFile, usage, stageCounts, documentsThisMonth, recentFiles] = await Promise.all([
+  const [pipelineFile, usage, stageCounts, documentsThisMonth, recentFiles, onboardingState] = await Promise.all([
     ensurePipelineFile(workspaceId, user.id),
     getWorkspaceUsage(workspaceId),
     countDocumentsByStage(workspaceId),
     countDocumentsThisMonth(workspaceId),
     listRecentFiles(workspaceId, 4),
+    getOnboardingStateAction(workspaceId),
   ])
   const pipelineTemplates = await getFileTemplates(workspaceId, pipelineFile.id)
   const uploadTemplates: SheetTemplate[] = pipelineTemplates.flatMap((candidate) => {
@@ -62,10 +67,14 @@ export default async function WorkspaceHomePage({ params }: {
   ]
 
   return <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-[18px] md:space-y-6 md:p-6">
+    <WelcomeTour workspaceId={workspaceId} tourSeen={onboardingState.tourSeen} />
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div>
         <p className="mb-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em] text-[#0f9d6f] md:text-xs">{greeting(new Date())}, {(user.name || user.email).split(" ")[0]}</p>
-        <h1 className="font-display text-[25px] font-extrabold leading-[1.15] tracking-[-0.025em] text-slate-900 md:text-[33px] md:leading-normal">Welcome back to {membership.workspace.name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-display text-[25px] font-extrabold leading-[1.15] tracking-[-0.025em] text-slate-900 md:text-[33px] md:leading-normal">Welcome back to {membership.workspace.name}</h1>
+          <SectionIntro section="dashboard" workspaceId={workspaceId} />
+        </div>
         {stageCounts.to_review > 0 && <p className="mt-1.5 text-[13.5px] text-slate-500 md:text-[14.5px]">{stageCounts.to_review} document{stageCounts.to_review === 1 ? " is" : "s are"} waiting for review across your pipeline.</p>}
       </div>
       <div className="hidden md:block">
@@ -96,6 +105,25 @@ export default async function WorkspaceHomePage({ params }: {
           ? <Link key={stat.label} href={stat.href} className={className}>{inner}</Link>
           : <div key={stat.label} className={className}>{inner}</div>
       })}
+    </div>
+
+    <div className="grid grid-cols-3 gap-3">
+      {[
+        { icon: Upload, label: "Upload", count: documentsThisMonth, desc: "documents this month", href: `/workspaces/${workspaceId}/pipeline`, color: "bg-indigo-50 text-indigo-600" },
+        { icon: ListChecks, label: "Review", count: stageCounts.to_review, desc: "awaiting review", href: `/workspaces/${workspaceId}/pipeline?stage=to_review`, color: "bg-amber-50 text-amber-600" },
+        { icon: Table2, label: "Sheets", count: stageCounts.ready + stageCounts.archive, desc: "ready to use", href: `/workspaces/${workspaceId}/files`, color: "bg-emerald-50 text-emerald-700" },
+      ].map((step, i) => (
+        <Link key={step.label} href={step.href} className="group flex items-center gap-3 rounded-xl border border-[#e6ebf1] bg-white px-4 py-3 shadow-panel transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${step.color}`}><step.icon className="h-[17px] w-[17px]" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+              {step.label}
+              {i < 2 && <ArrowRight className="h-3 w-3 text-slate-300" />}
+            </div>
+            <div className="text-[12px] text-slate-500">{step.count} {step.desc}</div>
+          </div>
+        </Link>
+      ))}
     </div>
 
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.55fr_1fr]">
@@ -147,5 +175,10 @@ export default async function WorkspaceHomePage({ params }: {
       </div>
     </div>
 
+    <GettingStartedCard
+      workspaceId={workspaceId}
+      initialState={onboardingState}
+      liveCounts={{ uploaded: documentsThisMonth, approved: stageCounts.ready + stageCounts.archive, placedInSheet: 0 }}
+    />
   </main>
 }

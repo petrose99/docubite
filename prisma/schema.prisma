@@ -47,6 +47,7 @@ model User {
   editedTranscripts     Document[]            @relation("TranscriptEditor")
   flaggedDocuments      Document[]            @relation("DocumentFlagger")
   listPreferences       UserListPreference[]
+  sheetPlacements       DocumentSheetPlacement[] @relation("PlacementPlacer")
   decidedFieldSuggestions FieldSuggestion[]   @relation("FieldSuggestionDecider")
   createdApiKeys        WorkspaceApiKey[]     @relation("ApiKeyCreator")
   createdIntegrationConnections IntegrationConnection[] @relation("IntegrationConnectionCreator")
@@ -141,6 +142,7 @@ model Workspace {
   healthScores HealthScore[]
   healthScoreConfigs HealthScoreConfig[]
   ledgerTransactions LedgerTransaction[]
+  sheetPlacements DocumentSheetPlacement[]
 
   @@map("workspaces")
 }
@@ -207,6 +209,7 @@ model DocumentFile {
   /// is app-managed furniture, not something anyone opens as a spreadsheet, so listFiles hides it.
   /// A partial unique index in the migration makes "one dictation container per workspace" a
   /// database fact rather than a convention ensureDictationFile has to remember.
+  folderPath  String?             @map("folder_path")
   kind        String              @default("sheet")
   /** Link sharing, keyed on the file id itself the way Lido keys on ?lidoFileId=<uuid>:
    * none | view | interact | edit. */
@@ -222,9 +225,11 @@ model DocumentFile {
   workbook    SpreadsheetWorkbook?
   chunks      DocumentChunk[]
   fieldValues DocumentFieldValue[]
+  sheetPlacements DocumentSheetPlacement[]
 
   @@index([workspaceId, folderId])
   @@index([workspaceId, updatedAt])
+  @@index([workspaceId, folderPath])
   @@map("document_files")
 }
 
@@ -372,6 +377,8 @@ model Document {
   sha256            String
   storageKey        String?                  @map("storage_key")
   pageRange         String?                  @map("page_range")
+  parentDocumentId  String?                  @map("parent_document_id") @db.Uuid
+  splitStatus       String?                  @map("split_status")
   receivedAt        DateTime                 @default(now()) @map("received_at")
   fieldSnapshot     Json                     @map("field_snapshot")
   rawExtraction     Json?                    @map("raw_extraction")
@@ -455,6 +462,8 @@ model Document {
   checkResults      DocumentCheckResult[]
   transcriptEditedBy User?                   @relation("TranscriptEditor", fields: [transcriptEditedById], references: [id], onDelete: SetNull)
   flaggedBy         User?                    @relation("DocumentFlagger", fields: [flaggedById], references: [id], onDelete: SetNull)
+  parentDocument    Document?                @relation("DocumentSplit", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  childDocuments    Document[]               @relation("DocumentSplit")
   jobs              DocumentProcessingJob[]
   auditEvents       DocumentAuditEvent[]
   chunks            DocumentChunk[]
@@ -469,6 +478,7 @@ model Document {
   bankMatchesAsMatched   BankMatch[] @relation("BankMatchMatched")
   expenseClaimItems ExpenseClaimItem[]
   healthCheckResults HealthCheckResult[]
+  sheetPlacements    DocumentSheetPlacement[]
 
   @@unique([fileId, sha256])
   @@index([workspaceId, status])
@@ -477,7 +487,30 @@ model Document {
   @@index([shapeId])
   @@index([fileId, uploadBatchId])
   @@index([workspaceId, archivedAt])
+  @@index([parentDocumentId])
   @@map("documents")
+}
+
+/// Tracks which documents have been placed into which user sheets (Phase 3).
+/// A document can sit in many sheets; sheetAppliedAt stays for the pipeline container reconcile.
+model DocumentSheetPlacement {
+  id            String       @id @default(uuid()) @db.Uuid
+  workspaceId   String       @map("workspace_id") @db.Uuid
+  fileId        String       @map("file_id") @db.Uuid
+  documentId    String       @map("document_id") @db.Uuid
+  univerSheetId String       @map("univer_sheet_id")
+  rowStart      Int?         @map("row_start")
+  rowCount      Int          @default(1) @map("row_count")
+  placedById    String       @map("placed_by_id") @db.Uuid
+  placedAt      DateTime     @default(now()) @map("placed_at")
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  file          DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  document      Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  placedBy      User         @relation("PlacementPlacer", fields: [placedById], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, documentId, univerSheetId])
+  @@index([workspaceId])
+  @@map("document_sheet_placements")
 }
 
 model DocumentProcessingJob {
