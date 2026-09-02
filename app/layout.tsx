@@ -1,3 +1,4 @@
+import { InstallPrompt } from "@/components/shell/install-prompt"
 import { SwRegister } from "@/components/shell/sw-register"
 import config from "@/lib/config"
 import type { Metadata, Viewport } from "next"
@@ -70,7 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // hydrates, so server and client markup differ on this one element by design. It suppresses
     // the warning for <html> only — children still report mismatches normally.
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${display.variable}`}>
-      <body className="min-h-screen bg-white antialiased"><SwRegister />{children}</body>
+      <body className="min-h-screen bg-white antialiased"><SwRegister /><InstallPrompt />{children}</body>
     </html>
   )
 }
