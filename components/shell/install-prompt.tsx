@@ -40,7 +40,7 @@ export function InstallPrompt() {
     try { localStorage.setItem("pwa-install-dismissed", "1") } catch {}
   }
 
-  return <div className="fixed inset-x-0 bottom-0 z-50 p-3 md:bottom-4 md:left-auto md:right-4 md:p-0 md:w-[360px]">
+  return <div className="fixed inset-x-0 bottom-0 z-50 p-3 md:hidden">
     <div className="flex items-center gap-3 rounded-2xl border border-[#e6ebf1] bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.12)]">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#065f46,#0f9d6f)] text-white">
         <Download className="h-5 w-5" />
