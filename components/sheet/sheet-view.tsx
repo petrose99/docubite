@@ -330,8 +330,6 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         </button> : undefined} />
 
       <div className="relative flex min-h-0 flex-1">
-        {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}
-
         <UniverSheetLoader
           fileId={fileId}
           snapshot={snapshot}
@@ -342,20 +340,9 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
           onSaveHandle={(saveNow) => { saveNowRef.current = saveNow }}
           onRevChange={(next) => { clientRev.current = next; notifiedRev.current = next }}
           onReady={handleReady} />
-      </div>
 
-      {/* A persistent affordance the whole time a file has extracted rows, so the traceability is
-          always on screen — not hidden behind a cell selection, the toolbar overflow, or the
-          right-click menu. Select a cell and click it to open that value's source. */}
-      {!readOnly && hasRows && !source && (
-        <button
-          type="button"
-          onClick={() => void openActiveCellSource()}
-          title="Select a cell that came from a document, then click to open its source, highlighted at the value"
-          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-lg transition-colors hover:border-emerald-400 hover:bg-emerald-50">
-          <FileText className="h-4 w-4" />View source
-        </button>
-      )}
+        {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}
+      </div>
 
       {source && <SourcePreview source={source} target={target} onClose={() => { setSource(null); setTarget(null) }} />}
 
@@ -365,14 +352,11 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         <DocumentListPanel apiRef={apiRef} activeFilter={activeFilter} onFilter={applyFilter} onShowAll={showAll} onClose={() => setDocumentsPanelOpen(false)} />
       )}
 
-      {/* Survives closing the Documents panel (X) — closing it must not strand the user in a
-          filtered grid with no way back. Sits above the "View source" pill so the two don't
-          overlap when both are visible. */}
       {activeFilter && !readOnly && (
         <button
           type="button"
           onClick={showAll}
-          className="fixed bottom-24 right-6 z-40 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-lg transition-colors hover:border-emerald-400 hover:bg-emerald-50">
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-lg transition-colors hover:border-emerald-400 hover:bg-emerald-50">
           <Files className="h-4 w-4" />Showing: {activeFilter.filename} · Show all
         </button>
       )}
