@@ -50,7 +50,7 @@
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "resend": "^6.17.2",
+    "resend": "^6.22.0",
     "sharp": "^0.35.3",
     "sonner": "^2.0.8",
     "standardwebhooks": "^1.0.0",
