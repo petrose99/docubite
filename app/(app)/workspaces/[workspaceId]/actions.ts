@@ -429,9 +429,9 @@ export async function createSheetFromDocumentsAction(workspaceId: string, docume
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the sheet") } }
 }
 
-/** Split documents into separate sheets — one per document type / template. Each sheet is named
- * after the template (e.g. "Invoice", "Receipt") and contains only its matching documents. */
-export async function splitDocumentsIntoSheetsAction(workspaceId: string, documentIds: string[]): Promise<ActionState<{ fileIds: string[] }>> {
+/** Split documents into separate sheets — one per document type / template. `names` maps
+ * templateId (or "unknown") to a user-chosen sheet name; any group without a name is rejected. */
+export async function splitDocumentsIntoSheetsAction(workspaceId: string, documentIds: string[], names?: Record<string, string>): Promise<ActionState<{ fileIds: string[] }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
@@ -451,8 +451,13 @@ export async function splitDocumentsIntoSheetsAction(workspaceId: string, docume
       groups.set(key, group)
     }
 
+    for (const [key] of groups) {
+      const n = names?.[key]?.trim()
+      if (!n) return { success: false, error: "Please name every sheet" }
+    }
+
     const fileIds: string[] = []
-    for (const [, groupDocs] of groups) {
+    for (const [key, groupDocs] of groups) {
       const seen = new Set<string>()
       const fields: Array<{ key: string; label: string; type: string; instruction: string; required: boolean }> = []
       for (const doc of groupDocs) {
@@ -470,7 +475,7 @@ export async function splitDocumentsIntoSheetsAction(workspaceId: string, docume
       const multiRow = groupDocs[0].template?.multiRow ?? false
 
       const file = await createFile({
-        workspaceId, userId: user.id, folderId: null, name: templateName,
+        workspaceId, userId: user.id, folderId: null, name: names![key]!.trim(),
         templates: [{ code: templateCode, name: templateName, documentType: templateCode, multiRow, fields }],
       })
 

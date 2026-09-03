@@ -24,6 +24,8 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
   const [creating, startCreate] = useTransition()
   const [name, setName] = useState("")
   const [error, setError] = useState("")
+  const [splitMode, setSplitMode] = useState(false)
+  const [splitNames, setSplitNames] = useState<Record<string, string>>({})
   const inputRef = useRef<HTMLInputElement>(null)
 
   const toggle = (id: string) => {
@@ -33,11 +35,13 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
       else next.add(id)
       return next
     })
+    setSplitMode(false)
   }
 
   const toggleAll = () => {
     if (selected.size === documents.length) setSelected(new Set())
     else setSelected(new Set(documents.map((d) => d.id)))
+    setSplitMode(false)
   }
 
   const handleCombine = () => {
@@ -57,29 +61,69 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
     })
   }
 
+  // Build groups from selected documents
+  const groups: Array<{ templateId: string; templateName: string; count: number }> = []
+  const seenGroups = new Map<string, number>()
+  for (const doc of documents) {
+    if (!selected.has(doc.id)) continue
+    const key = doc.templateName ?? "Other"
+    if (seenGroups.has(key)) {
+      groups[seenGroups.get(key)!].count++
+    } else {
+      seenGroups.set(key, groups.length)
+      groups.push({ templateId: key, templateName: key, count: 1 })
+    }
+  }
+  const distinctTypes = groups.length
+
+  const enterSplitMode = () => {
+    const defaults: Record<string, string> = {}
+    for (const g of groups) defaults[g.templateId] = g.templateName
+    setSplitNames(defaults)
+    setSplitMode(true)
+    setError("")
+  }
+
   const handleSplit = () => {
+    for (const g of groups) {
+      if (!splitNames[g.templateId]?.trim()) {
+        setError("Please name every sheet")
+        return
+      }
+    }
     startCreate(async () => {
-      const result = await splitDocumentsIntoSheetsAction(workspaceId, [...selected])
-      if (result.success && result.data) {
-        if (result.data.fileIds.length === 1) {
-          router.push(`/workspaces/${workspaceId}/files/${result.data.fileIds[0]}/sheet`)
+      // Map templateName keys to actual templateId keys for the action
+      // The action groups by templateId, but we grouped by templateName for display
+      // We need to map the doc templateIds to names
+      const docsByTemplateName = new Map<string, string[]>()
+      for (const doc of documents) {
+        if (!selected.has(doc.id)) continue
+        const key = doc.templateName ?? "Other"
+        const arr = docsByTemplateName.get(key) ?? []
+        arr.push(doc.id)
+        docsByTemplateName.set(key, arr)
+      }
+
+      // Create each sheet individually using the combine action with the right docs
+      const fileIds: string[] = []
+      for (const g of groups) {
+        const ids = docsByTemplateName.get(g.templateId) ?? []
+        const sheetName = splitNames[g.templateId]!.trim()
+        const result = await createSheetFromDocumentsAction(workspaceId, ids, sheetName)
+        if (result.success && result.data) {
+          fileIds.push(result.data.fileId)
         } else {
-          router.push(`/workspaces/${workspaceId}/files`)
+          setError(result.error ?? "Something went wrong")
+          return
         }
+      }
+      if (fileIds.length === 1) {
+        router.push(`/workspaces/${workspaceId}/files/${fileIds[0]}/sheet`)
       } else {
-        setError(result.error ?? "Something went wrong")
+        router.push(`/workspaces/${workspaceId}/files`)
       }
     })
   }
-
-  const templateGroups = new Map<string, number>()
-  for (const doc of documents) {
-    if (selected.has(doc.id)) {
-      const key = doc.templateName ?? "Other"
-      templateGroups.set(key, (templateGroups.get(key) ?? 0) + 1)
-    }
-  }
-  const distinctTypes = templateGroups.size
 
   return (
     <>
@@ -93,36 +137,71 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setError("") }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCombine() } }}
-              placeholder="Sheet name — e.g. Q3 Invoices"
-              className="flex-1 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
-            />
-            <button
-              onClick={handleCombine}
-              disabled={creating}
-              className="shrink-0 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
-              title="Combine all selected documents into one sheet"
-            >
-              {creating ? "Creating..." : "One sheet"}
-            </button>
-          </div>
+          {!splitMode ? (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setError("") }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCombine() } }}
+                  placeholder="Sheet name — e.g. Q3 Invoices"
+                  className="flex-1 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
+                />
+                <button
+                  onClick={handleCombine}
+                  disabled={creating}
+                  className="shrink-0 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                  title="Combine all selected documents into one sheet"
+                >
+                  {creating ? "Creating..." : "One sheet"}
+                </button>
+              </div>
 
-          {distinctTypes > 1 && (
-            <button
-              onClick={handleSplit}
-              disabled={creating}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
-              title="Create a separate sheet for each document type"
-            >
-              <Layers className="h-4 w-4" />
-              {creating ? "Creating..." : `Split into ${distinctTypes} sheets by type`}
-            </button>
+              {distinctTypes > 1 && (
+                <button
+                  onClick={enterSplitMode}
+                  disabled={creating}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                >
+                  <Layers className="h-4 w-4" />
+                  Split into {distinctTypes} sheets by type
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {groups.map((g) => (
+                  <div key={g.templateId} className="flex items-center gap-2">
+                    <span className="w-16 shrink-0 text-right text-xs text-emerald-600">{g.count} doc{g.count === 1 ? "" : "s"}</span>
+                    <input
+                      type="text"
+                      value={splitNames[g.templateId] ?? ""}
+                      onChange={(e) => { setSplitNames((prev) => ({ ...prev, [g.templateId]: e.target.value })); setError("") }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSplit() } }}
+                      className="flex-1 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSplit}
+                  disabled={creating}
+                  className="flex-1 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                >
+                  {creating ? "Creating..." : `Create ${distinctTypes} sheets`}
+                </button>
+                <button
+                  onClick={() => setSplitMode(false)}
+                  className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
+                >
+                  Back
+                </button>
+              </div>
+            </>
           )}
 
           {error && <p className="text-xs text-red-600">{error}</p>}
