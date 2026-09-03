@@ -30,7 +30,7 @@ export function PipelineShell({ workspaceId, stage, counts, rows, contentMatches
           <h1 className="text-xl font-bold text-slate-900">Extraction</h1>
           <SectionIntro section="extraction" workspaceId={workspaceId} />
         </div>
-        <p className="text-sm text-slate-500">Upload, review, and approve documents — one list across every file.</p>
+        <p className="text-sm text-slate-500">Add, review, and extract documents — one list across every file.</p>
       </div>
       <div className="ml-auto">
         <FileHubUploadButton
