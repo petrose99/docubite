@@ -36,8 +36,5 @@ ALTER TABLE "document_sheet_placements"
     ADD CONSTRAINT "document_sheet_placements_placed_by_id_fkey"
     FOREIGN KEY ("placed_by_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- RLS: workspace members can manage their own placements
-ALTER TABLE "document_sheet_placements" ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "workspace_member_placements" ON "document_sheet_placements"
-    USING ("workspace_id" IN (SELECT "workspace_id" FROM "workspace_memberships" WHERE "user_id" = auth.uid()));
+-- RLS policies are applied on the hosted Supabase DB, not locally.
+-- The auth.uid() function is not available in plain Postgres.

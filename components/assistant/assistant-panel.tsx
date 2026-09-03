@@ -20,7 +20,7 @@ const INTENTS = [
   "Add a column totalling each row",
 ]
 
-/** Offered only when document search is on â€” one, not two: four buttons is the ceiling. Leads the
+/** Offered only when document search is on — one, not two: four buttons is the ceiling. Leads the
  * user to the half of the assistant they would not otherwise discover (the documents, not the grid). */
 const DOCUMENT_INTENT = "What payment terms do the invoices state?"
 
@@ -39,10 +39,10 @@ const TOOL_LABELS: Record<string, string> = {
   get_expense_claims: "Reading expense claims",
 }
 
-/** Finance agent Act tools (Part 5c/WP3.5) â€” every one only ever proposes an action
+/** Finance agent Act tools (Part 5c/WP3.5) — every one only ever proposes an action
  * (lib/finance/actions.ts), so they all render through the same Accept/Dismiss card rather than a
  * one-line "doing X" label. `decide_review_task_stage`/`decide_expense_claim` (WP3.5, ad9deec) were
- * missing from this set â€” the ai-chat route and finance-proposal.tsx both already handled them, but
+ * missing from this set — the ai-chat route and finance-proposal.tsx both already handled them, but
  * without a matching entry here they fell through to the generic one-line "doing X" fallback below
  * instead of the Accept/Dismiss card, so a person could see the model propose a decision but never
  * had a way to act on it. Fixed as part of the Phase 3 follow-up pass. */
@@ -60,7 +60,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   /** The live grid. A ref rather than a value because the panel mounts before Univer finishes
    * booting, and a question asked in that window still has to find a workbook to read. On a page
    * with no grid (the dictation verify screen) this is a ref that stays null and the server is
-   * told not to register the sheet tools at all â€” see `surface`. */
+   * told not to register the sheet tools at all — see `surface`. */
   apiRef: RefObject<FUniver | null>
   onClose: () => void
   /** Additive and default-off: callers that do not pass these see today's behaviour exactly. When
@@ -68,7 +68,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   documentSearchEnabled?: boolean
   onOpenSource?: (hit: SourceHit) => void
   /** Which page is asking. Sent to /api/ai-chat, which registers the spreadsheet tools only for
-   * "sheet" â€” offering the model seven tools that can only answer "the spreadsheet is still
+   * "sheet" — offering the model seven tools that can only answer "the spreadsheet is still
    * loading" wastes its step budget on the way to the same answer. "finance-inbox" (the review
    * queue) has no grid either, but is where the finance agent's tools/persona are meant to be. */
   surface?: "sheet" | "dictation" | "finance-inbox"
@@ -141,7 +141,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
           <div className="space-y-2">
             <p className="text-xs text-slate-500">
               {emptyHint ?? (documentSearchEnabled
-                ? "Ask about the data in this sheet â€” or what the documents behind it actually say."
+                ? "Ask about the data in this sheet — or what the documents behind it actually say."
                 : "Ask about the data in this sheet. The assistant reads the grid as you see it.")}
             </p>
             {(intents ?? (documentSearchEnabled ? [...INTENTS, DOCUMENT_INTENT] : INTENTS)).map((intent) => (
@@ -158,7 +158,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
               if (part.type === "text") return <p key={index} className="whitespace-pre-wrap">{part.text}</p>
               if (part.type === "reasoning") return <Thought key={index} text={part.text} />
               // Tool parts are typed as `tool-<name>`; showing them is what makes the wait
-              // legible â€” otherwise several seconds pass with nothing on screen.
+              // legible — otherwise several seconds pass with nothing on screen.
               if (part.type === "tool-task_complete") {
                 const input = (part as { input?: { summary?: string; changes?: { target?: string; action?: string }[] } }).input
                 return input?.summary ? <SummaryCard key={index} summary={input.summary} changes={input.changes ?? []} apiRef={apiRef} /> : null
@@ -171,7 +171,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
                 return <DocumentSearchPart key={index} state={p.state} input={p.input} output={p.output} onOpenSource={onOpenSource} />
               }
               // Finance Act tools also run on the server (they only validate and describe a
-              // proposal â€” see lib/finance/actions.ts), so their result arrives the same way
+              // proposal — see lib/finance/actions.ts), so their result arrives the same way
               // search_documents' does; the Accept/Dismiss card is what turns that into a decision
               // instead of a fact.
               if (part.type.startsWith("tool-") && FINANCE_PROPOSAL_TOOLS.has(part.type.slice("tool-".length))) {
@@ -187,7 +187,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
           </div>
         ))}
 
-        {busy && <p className="flex items-center gap-1.5 text-xs text-slate-500"><Loader2 className="h-3 w-3 animate-spin" />Thinkingâ€¦</p>}
+        {busy && <p className="flex items-center gap-1.5 text-xs text-slate-500"><Loader2 className="h-3 w-3 animate-spin" />Thinking…</p>}
         {error && <p className="rounded-md bg-red-50 px-2.5 py-2 text-xs text-red-700">{error.message}</p>}
       </div>
 
@@ -197,7 +197,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
         <textarea
           rows={2}
           value={input}
-          placeholder="Ask anythingâ€¦"
+          placeholder="Ask anything…"
           className="min-w-0 flex-1 resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -227,7 +227,7 @@ function SummaryCard({ summary, changes, apiRef }: {
     const api = apiRef.current
     const workbook = api?.getActiveWorkbook()
     if (!workbook) return
-    // Targets arrive as "Sheet1!G1" or bare "G1" â€” the sheet half is optional and the model is
+    // Targets arrive as "Sheet1!G1" or bare "G1" — the sheet half is optional and the model is
     // not consistent about it.
     const [sheetName, range] = target.includes("!") ? target.split("!") : [null, target]
     const sheet = sheetName ? workbook.getSheets().find((candidate) => candidate.getSheetName() === sheetName) : workbook.getActiveSheet()
@@ -265,7 +265,7 @@ function SummaryCard({ summary, changes, apiRef }: {
 }
 
 /** Gemini's thinking, collapsed. It is long, it is not the answer, and it is occasionally the
- * only thing that explains a wrong one â€” so it is kept, but out of the way. */
+ * only thing that explains a wrong one — so it is kept, but out of the way. */
 function Thought({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   return (
