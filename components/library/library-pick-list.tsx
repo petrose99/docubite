@@ -3,7 +3,7 @@
 import { createSheetFromDocumentsAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ChevronRight, FileText, Table2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 
 type LibraryDoc = {
   id: string
@@ -22,6 +22,9 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [creating, startCreate] = useTransition()
+  const [name, setName] = useState("")
+  const [error, setError] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -38,10 +41,18 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
   }
 
   const handleCreate = () => {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setError("Name is required")
+      inputRef.current?.focus()
+      return
+    }
     startCreate(async () => {
-      const result = await createSheetFromDocumentsAction(workspaceId, [...selected])
+      const result = await createSheetFromDocumentsAction(workspaceId, [...selected], trimmed)
       if (result.success && result.data) {
         router.push(`/workspaces/${workspaceId}/files/${result.data.fileId}/sheet`)
+      } else {
+        setError(result.error ?? "Something went wrong")
       }
     })
   }
@@ -49,18 +60,32 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
   return (
     <>
       {selected.size > 0 && (
-        <div className="sticky top-0 z-10 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3 shadow-sm backdrop-blur-sm">
-          <Table2 className="h-4 w-4 text-emerald-700" />
-          <span className="text-sm font-medium text-emerald-800">
-            {selected.size} document{selected.size === 1 ? "" : "s"} selected
-          </span>
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            className="ml-auto rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
-          >
-            {creating ? "Creating..." : "Create sheet"}
-          </button>
+        <div className="sticky top-0 z-10 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <Table2 className="h-4 w-4 text-emerald-700" />
+            <span className="text-sm font-medium text-emerald-800">
+              {selected.size} document{selected.size === 1 ? "" : "s"} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError("") }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreate() } }}
+              placeholder="Name your sheet — e.g. Q3 Invoices"
+              className="flex-1 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
+            />
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="shrink-0 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+            >
+              {creating ? "Creating..." : "Create sheet"}
+            </button>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       )}
 

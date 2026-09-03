@@ -367,12 +367,13 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
  * Starts with no worksheets at all — a person building their own sheet defines its fields from
  * scratch in the Extract Data panel, rather than starting from a pre-seeded Invoice/Receipt/Expense
  * receipt/Custom document set they didn't ask for. */
-export async function createFileAction(workspaceId: string, folderId: string | null): Promise<ActionState<{ fileId: string }>> {
+export async function createFileAction(workspaceId: string, folderId: string | null, name?: string): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
+  if (!name?.trim()) return { success: false, error: "Please give your sheet a name" }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: [] })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, name: name.trim(), templates: [] })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
@@ -381,11 +382,12 @@ export async function createFileAction(workspaceId: string, folderId: string | n
 /** Create a sheet from library documents: reads each document's extracted field schema,
  * creates a file with a template whose columns are the union of those fields, then moves the
  * documents into the new file so ensureFileWorkbook populates the grid with extracted data. */
-export async function createSheetFromDocumentsAction(workspaceId: string, documentIds: string[]): Promise<ActionState<{ fileId: string }>> {
+export async function createSheetFromDocumentsAction(workspaceId: string, documentIds: string[], name?: string): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   if (!documentIds.length) return { success: false, error: "No documents selected" }
+  if (!name?.trim()) return { success: false, error: "Please give your sheet a name" }
   try {
     const documents = await prisma.document.findMany({
       where: { id: { in: documentIds }, workspaceId },
@@ -410,7 +412,7 @@ export async function createSheetFromDocumentsAction(workspaceId: string, docume
     const multiRow = documents[0].template?.multiRow ?? false
 
     const file = await createFile({
-      workspaceId, userId: user.id, folderId: null,
+      workspaceId, userId: user.id, folderId: null, name: name!.trim(),
       templates: [{ code: templateCode, name: templateName, documentType: templateCode, multiRow, fields }],
     })
 
