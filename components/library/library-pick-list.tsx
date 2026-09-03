@@ -1,6 +1,6 @@
 "use client"
 
-import { createSheetFromDocumentsAction, splitDocumentsIntoSheetsAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { createSheetFromDocumentsAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ChevronRight, FileText, Layers, Table2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
@@ -14,10 +14,9 @@ type LibraryDoc = {
   templateName: string | null
 }
 
-export function LibraryPickList({ workspaceId, documents, stage }: {
+export function LibraryPickList({ workspaceId, documents }: {
   workspaceId: string
   documents: LibraryDoc[]
-  stage: "ready" | "archive"
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -246,11 +245,6 @@ export function LibraryPickList({ workspaceId, documents, stage }: {
                 {doc.templateName ? ` · ${doc.templateName}` : ""}
               </div>
             </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-              stage === "ready" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-            }`}>
-              {stage === "ready" ? "Approved" : "Archived"}
-            </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
           </button>
         ))}
