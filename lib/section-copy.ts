@@ -25,11 +25,11 @@ export const SECTION_COPY: Record<SectionKey, SectionCopy> = {
   },
   sheets: {
     banner:
-      "Sheets are spreadsheets you compute in; pull documents from extraction, import your own files, and ask the AI assistant to do the work.",
+      "Sheets are spreadsheets you compute in; bring in your financial statements, invoices, or any spreadsheet — or pull documents already in your Docu Library. Use built-in formulas, the =AI() function, or ask the AI assistant to do the work.",
     howItWorks: [
-      "Start a blank sheet, import xlsx/csv, or pull documents from Extraction.",
-      "Use formulas, the =AI() function, and the AI assistant side-panel.",
-      "Every cell keeps provenance — click to jump back to the source document page.",
+      "Import your own xlsx/csv files (financial statements, reports, etc.) or pull documents from Docu Library.",
+      "Use formulas, the =AI() function, and the AI assistant to analyse and compute.",
+      "Every cell from an extraction keeps provenance — right-click to jump back to the source document.",
     ],
   },
   dashboard: {

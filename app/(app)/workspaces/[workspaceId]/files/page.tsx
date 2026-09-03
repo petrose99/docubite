@@ -1,4 +1,3 @@
-import { SectionIntro } from "@/components/shell/section-intro"
 import { getCurrentUser } from "@/lib/auth"
 import { countReviewedUnplaced } from "@/models/document-sheet-placements"
 import { listFiles } from "@/models/files"
@@ -29,12 +28,9 @@ export default async function SheetsPage({ params, searchParams }: {
 
   return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 md:space-y-6 md:py-6 md:px-6">
     <header>
-      <div className="flex items-center gap-2">
-        <h1 className="text-xl font-bold text-slate-900">Sheets</h1>
-        <SectionIntro section="sheets" workspaceId={workspaceId} />
-      </div>
+      <h1 className="text-xl font-bold text-slate-900">Sheets</h1>
       <p className="mt-1 hidden text-sm text-slate-500 sm:block">
-        Spreadsheets you compute in — pull documents from extraction, import your own files, and ask the AI assistant to do the work.
+        Bring in your financial statements, invoices, or any spreadsheet — or pull documents already in your Docu Library. Use built-in spreadsheet formulas, the =AI() function, or ask the AI assistant to do the heavy lifting.
       </p>
     </header>
 
@@ -42,20 +38,20 @@ export default async function SheetsPage({ params, searchParams }: {
       <SheetsCreateCard
         icon="blank"
         title="Blank sheet"
-        description="Start from scratch with a fresh spreadsheet."
+        description="Start fresh — paste or type in your own data."
         workspaceId={workspaceId}
       />
       <SheetsCreateCard
         icon="import"
         title="Import xlsx / csv"
-        description="Import a spreadsheet file and start working."
+        description="Bring in financial statements, reports, or any spreadsheet."
         workspaceId={workspaceId}
         href={`${base}/files?import=1`}
       />
       <SheetsCreateCard
         icon="extraction"
         title="From Docu Library"
-        description={unplacedCount > 0 ? `${unplacedCount} document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull documents from extraction into a sheet."}
+        description={unplacedCount > 0 ? `${unplacedCount} document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull invoices and documents already in your library."}
         workspaceId={workspaceId}
         href={`${base}/library?pick=sheet`}
         badge={unplacedCount > 0 ? unplacedCount : undefined}

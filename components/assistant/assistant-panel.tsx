@@ -127,25 +127,27 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   }
 
   return (
-    <aside className={className ?? "absolute inset-0 z-20 flex flex-col bg-slate-50 sm:relative sm:inset-auto sm:z-auto sm:w-80 sm:shrink-0 sm:border-r"}>
-      <div className="flex items-center gap-2 border-b bg-white px-3 py-2">
-        <Sparkles className="h-4 w-4 text-emerald-700" />
-        <span className="text-sm font-semibold text-slate-800">{title}</span>
-        <button type="button" aria-label="Close AI Assistant" className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={onClose}>
+    <aside className={className ?? "absolute inset-0 z-20 flex flex-col bg-slate-50 sm:relative sm:inset-auto sm:z-auto sm:w-80 sm:shrink-0 sm:border-l sm:border-slate-200/80 sm:shadow-[inset_1px_0_0_0_rgba(0,0,0,0.04),-4px_0_12px_-4px_rgba(0,0,0,0.08)]"}>
+      <div className="flex items-center gap-2.5 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-white px-3 py-2.5">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-700 shadow-sm">
+          <Sparkles className="h-3.5 w-3.5 text-white" />
+        </span>
+        <span className="text-sm font-semibold text-slate-900">{title}</span>
+        <button type="button" aria-label="Close AI Assistant" className="ml-auto rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" onClick={onClose}>
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+      <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4">
         {!messages.length && (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-500">
+          <div className="space-y-2.5">
+            <p className="text-xs leading-relaxed text-slate-500">
               {emptyHint ?? (documentSearchEnabled
                 ? "Ask about the data in this sheet — or what the documents behind it actually say."
                 : "Ask about the data in this sheet. The assistant reads the grid as you see it.")}
             </p>
             {(intents ?? (documentSearchEnabled ? [...INTENTS, DOCUMENT_INTENT] : INTENTS)).map((intent) => (
-              <button key={intent} type="button" className="block w-full rounded-md border bg-white px-2.5 py-2 text-left text-xs text-slate-600 hover:border-emerald-300 hover:text-slate-900" onClick={() => ask(intent)}>
+              <button key={intent} type="button" className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-xs text-slate-600 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-slate-900" onClick={() => ask(intent)}>
                 {intent}
               </button>
             ))}
@@ -153,7 +155,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
         )}
 
         {messages.map((message) => (
-          <div key={message.id} className={message.role === "user" ? "ml-6 rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white" : "space-y-1.5 text-sm text-slate-800"}>
+          <div key={message.id} className={message.role === "user" ? "ml-6 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm text-white shadow-sm" : "space-y-2 text-sm text-slate-700"}>
             {message.parts.map((part, index) => {
               if (part.type === "text") return <p key={index} className="whitespace-pre-wrap">{part.text}</p>
               if (part.type === "reasoning") return <Thought key={index} text={part.text} />
@@ -180,30 +182,30 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
               }
               if (part.type.startsWith("tool-")) {
                 const name = part.type.slice("tool-".length)
-                return <p key={index} className="flex items-center gap-1.5 text-xs text-slate-500"><Table2 className="h-3 w-3" />{TOOL_LABELS[name] ?? name}</p>
+                return <p key={index} className="flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500"><Table2 className="h-3 w-3 text-slate-400" />{TOOL_LABELS[name] ?? name}</p>
               }
               return null
             })}
           </div>
         ))}
 
-        {busy && <p className="flex items-center gap-1.5 text-xs text-slate-500"><Loader2 className="h-3 w-3 animate-spin" />Thinking…</p>}
-        {error && <p className="rounded-md bg-red-50 px-2.5 py-2 text-xs text-red-700">{error.message}</p>}
+        {busy && <p className="flex items-center gap-1.5 text-xs text-slate-400"><Loader2 className="h-3 w-3 animate-spin text-emerald-600" />Thinking…</p>}
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error.message}</p>}
       </div>
 
       <form
-        className="flex items-end gap-1.5 border-t bg-white p-2"
+        className="flex items-end gap-2 border-t border-slate-200 bg-white p-2.5"
         onSubmit={(event) => { event.preventDefault(); ask(input) }}>
         <textarea
           rows={2}
           value={input}
           placeholder="Ask anything…"
-          className="min-w-0 flex-1 resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
+          className="min-w-0 flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition-colors focus:border-emerald-400 focus:bg-white focus:outline-none"
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); ask(input) }
           }} />
-        <button type="submit" aria-label="Send" disabled={busy || !input.trim()} className="rounded-md bg-emerald-700 p-2 text-white disabled:opacity-40">
+        <button type="submit" aria-label="Send" disabled={busy || !input.trim()} className="rounded-lg bg-emerald-700 p-2 text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-40">
           <ArrowUp className="h-4 w-4" />
         </button>
       </form>
