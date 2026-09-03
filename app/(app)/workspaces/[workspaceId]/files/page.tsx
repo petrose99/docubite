@@ -27,18 +27,18 @@ export default async function SheetsPage({ params, searchParams }: {
   const pickIds = query.pick?.split(",").filter(Boolean) ?? []
   const base = `/workspaces/${workspaceId}`
 
-  return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 md:px-6">
+  return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 md:space-y-6 md:py-6 md:px-6">
     <header>
       <div className="flex items-center gap-2">
         <h1 className="text-xl font-bold text-slate-900">Sheets</h1>
         <SectionIntro section="sheets" workspaceId={workspaceId} />
       </div>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 hidden text-sm text-slate-500 sm:block">
         Spreadsheets you compute in — pull documents from extraction, import your own files, and ask the AI assistant to do the work.
       </p>
     </header>
 
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
       <SheetsCreateCard
         icon="blank"
         title="Blank sheet"

@@ -99,18 +99,20 @@ export function SheetsCreateCard({ icon, title, description, workspaceId, href, 
     <button
       onClick={handleClick}
       disabled={creating}
-      className="group flex flex-col items-start rounded-xl border border-[#e6ebf1] bg-white p-5 text-left shadow-panel transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md disabled:opacity-60"
+      className="group flex items-center gap-3 rounded-xl border border-[#e6ebf1] bg-white px-4 py-3 text-left shadow-panel transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md disabled:opacity-60 sm:flex-col sm:items-start sm:gap-0 sm:p-5"
     >
-      <div className="relative mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-        <Icon className="h-5 w-5" />
+      <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 sm:mb-3 sm:h-10 sm:w-10">
+        <Icon className="h-[17px] w-[17px] sm:h-5 sm:w-5" />
         {badge != null && badge > 0 && (
           <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-700 px-1 text-[10px] font-bold text-white">
             {badge}
           </span>
         )}
       </div>
-      <h3 className="text-sm font-semibold text-slate-900 group-hover:text-emerald-800">{title}</h3>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-slate-900 group-hover:text-emerald-800">{title}</h3>
+        <p className="hidden text-xs text-slate-500 sm:mt-1 sm:block">{description}</p>
+      </div>
     </button>
   )
 }
