@@ -28,7 +28,7 @@ describe("onboarding state helpers", () => {
   it("isOnboardingComplete returns true when all 5 steps are done", () => {
     let s = DEFAULT_ONBOARDING_STATE
     expect(isOnboardingComplete(s)).toBe(false)
-    for (const step of ["upload", "approve", "find_library", "pull_sheet", "ask_question"] as const) {
+    for (const step of ["upload", "review", "find_library", "pull_sheet", "ask_question"] as const) {
       s = markStep(s, step)
     }
     expect(isOnboardingComplete(s)).toBe(true)

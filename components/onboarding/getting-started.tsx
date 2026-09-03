@@ -10,7 +10,7 @@ import { useCallback, useState, useTransition } from "react"
 export function GettingStartedCard({ workspaceId, initialState, liveCounts }: {
   workspaceId: string
   initialState: OnboardingState
-  liveCounts: { uploaded: number; approved: number; placedInSheet: number }
+  liveCounts: { uploaded: number; reviewed: number; placedInSheet: number }
 }) {
   const [state, setState] = useState(initialState)
   const [, startTransition] = useTransition()
@@ -18,7 +18,7 @@ export function GettingStartedCard({ workspaceId, initialState, liveCounts }: {
   const autoCompleted = useCallback((): OnboardingStepKey[] => {
     const auto: OnboardingStepKey[] = []
     if (liveCounts.uploaded > 0) auto.push("upload")
-    if (liveCounts.approved > 0) auto.push("approve")
+    if (liveCounts.reviewed > 0) auto.push("review")
     return auto
   }, [liveCounts])
 
