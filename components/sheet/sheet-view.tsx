@@ -307,17 +307,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
       // two separate levels, where the ribbon slots above happen to be single keys.
     }).appendTo("contextMenu.mainArea|contextMenu.others")
 
-    /** The assistant toggle sits on the same row as Start / Formulas / Data. `header-menu` is
-     * the one UI part Univer renders there; a menu item would have landed in the toolbar
-     * below, which is a different row from the one it belongs beside. */
-    api.registerUIPart("header-menu" as never, () => (
-      <button
-        type="button"
-        onClick={() => setAssistantOpen((open) => !open)}
-        className="mr-2 inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-100">
-        <Sparkles className="h-3.5 w-3.5" />AI Assistant
-      </button>
-    ))
+    api.registerUIPart("header-menu" as never, () => null)
   }, [clearFilter, fileId, openActiveCellSource, readOnly, workspaceId])
 
   const label = readOnly ? "Read only" : SAVE_LABELS[saveState]
@@ -331,7 +321,13 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         linkAccess={linkAccess}
         backHref={`/workspaces/${workspaceId}/files`}
         backLabel="Back"
-        status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-slate-400"}`}>{label}</span> : null} />
+        status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-slate-400"}`}>{label}</span> : null}
+        trailing={!readOnly ? <button
+          type="button"
+          onClick={() => setAssistantOpen((open) => !open)}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs font-semibold text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-100 sm:px-2.5">
+          <Sparkles className="h-3.5 w-3.5" /><span className="sm:hidden">AI</span><span className="hidden sm:inline">AI Assistant</span>
+        </button> : undefined} />
 
       <div className="relative flex min-h-0 flex-1">
         {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}
