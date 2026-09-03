@@ -59,7 +59,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       pipelineReviewCount={pipelineCounts.to_review} />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[radial-gradient(1200px_480px_at_100%_-10%,rgba(4,120,87,0.05),transparent_60%),#fafbfc]">
       <MobileHeader workspaceId={workspaceId} workspaces={switchable} user={{ name: user.name, email: user.email }} />
-      <div className="flex-1 pb-[72px] md:pb-0">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col pb-[72px] md:pb-0">{children}</div>
       <MobileTabBar workspaceId={workspaceId} pipelineReviewCount={pipelineCounts.to_review} />
     </div>
   </div>
