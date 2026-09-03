@@ -378,17 +378,53 @@ export async function createFileAction(workspaceId: string, folderId: string | n
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
 }
 
-/** Create a sheet pre-seeded with the default extraction worksheets (Invoice, Receipt, etc.)
- * so documents pulled from Docu Library land in familiar columns. */
-export async function createFileFromLibraryAction(workspaceId: string): Promise<ActionState<{ fileId: string }>> {
+/** Create a sheet from library documents: reads each document's extracted field schema,
+ * creates a file with a template whose columns are the union of those fields, then moves the
+ * documents into the new file so ensureFileWorkbook populates the grid with extracted data. */
+export async function createSheetFromDocumentsAction(workspaceId: string, documentIds: string[]): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
+  if (!documentIds.length) return { success: false, error: "No documents selected" }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId: null })
+    const documents = await prisma.document.findMany({
+      where: { id: { in: documentIds }, workspaceId },
+      include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } } },
+    })
+    if (!documents.length) return { success: false, error: "Documents not found" }
+
+    const seen = new Set<string>()
+    const fields: Array<{ key: string; label: string; type: string; instruction: string; required: boolean }> = []
+    for (const doc of documents) {
+      const snapshot = doc.fieldSnapshot as Array<{ key: string; label: string; type?: string; instruction?: string; required?: boolean }> | null
+      if (!snapshot || !Array.isArray(snapshot)) continue
+      for (const field of snapshot) {
+        if (seen.has(field.key)) continue
+        seen.add(field.key)
+        fields.push({ key: field.key, label: field.label, type: field.type ?? "string", instruction: field.instruction ?? "", required: field.required ?? false })
+      }
+    }
+
+    const templateName = documents[0].template?.name ?? "Extracted"
+    const templateCode = documents[0].template?.code ?? "extracted"
+    const multiRow = documents[0].template?.multiRow ?? false
+
+    const file = await createFile({
+      workspaceId, userId: user.id, folderId: null,
+      templates: [{ code: templateCode, name: templateName, documentType: templateCode, multiRow, fields }],
+    })
+
+    const newTemplate = await prisma.documentTemplate.findFirst({ where: { workspaceId, fileId: file.id } })
+    const newVersion = newTemplate ? await prisma.documentTemplateVersion.findFirst({ where: { templateId: newTemplate.id }, orderBy: { version: "desc" } }) : null
+
+    await prisma.document.updateMany({
+      where: { id: { in: documentIds }, workspaceId },
+      data: { fileId: file.id, templateId: newTemplate?.id ?? null, templateVersionId: newVersion?.id ?? null, sheetAppliedAt: null },
+    })
+
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
-  } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not create the sheet") } }
 }
 
 /** Companion to createFileAction's "Upload" flow: closing the Extract overlay without uploading

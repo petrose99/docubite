@@ -1,6 +1,6 @@
 "use client"
 
-import { createFileAction, createFileFromLibraryAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
+import { createFileAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { ArrowDownToLine, FileSpreadsheet, Library } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
@@ -26,15 +26,6 @@ export function SheetsCreateCard({ icon, title, description, workspaceId, href, 
   const handleClick = () => {
     if (href) {
       router.push(href)
-      return
-    }
-    if (icon === "extraction") {
-      startCreate(async () => {
-        const result = await createFileFromLibraryAction(workspaceId)
-        if (result.success && result.data) {
-          router.push(`/workspaces/${workspaceId}/files/${result.data.fileId}/sheet`)
-        }
-      })
       return
     }
     startCreate(async () => {

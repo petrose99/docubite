@@ -55,6 +55,7 @@ export default async function SheetsPage({ params, searchParams }: {
         title="From Docu Library"
         description={unplacedCount > 0 ? `${unplacedCount} approved document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull approved documents into a sheet."}
         workspaceId={workspaceId}
+        href={`${base}/library?pick=sheet`}
         badge={unplacedCount > 0 ? unplacedCount : undefined}
       />
     </div>
