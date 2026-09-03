@@ -1,7 +1,7 @@
 import { SectionIntro } from "@/components/shell/section-intro"
 import { getCurrentUser } from "@/lib/auth"
 import { countReviewedUnplaced } from "@/models/document-sheet-placements"
-import { listRecentFiles } from "@/models/files"
+import { listFiles } from "@/models/files"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { FileSpreadsheet, FilePlus2, ArrowDownToLine, Table2 } from "lucide-react"
 import Link from "next/link"
@@ -12,13 +12,15 @@ export const dynamic = "force-dynamic"
 
 export default async function SheetsPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string }>
-  searchParams: Promise<{ pick?: string }>
+  searchParams: Promise<{ pick?: string; q?: string }>
 }) {
   const [{ workspaceId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
   await requireWorkspaceRole(workspaceId, user.id)
 
-  const [recentFiles, unplacedCount] = await Promise.all([
-    listRecentFiles(workspaceId, 50),
+  const search = query.q?.trim() || ""
+
+  const [files, unplacedCount] = await Promise.all([
+    listFiles(workspaceId, { query: search || undefined }),
     countReviewedUnplaced(workspaceId),
   ])
 
@@ -67,28 +69,40 @@ export default async function SheetsPage({ params, searchParams }: {
       <span>create a sheet above to pull them in.</span>
     </div>}
 
-    {recentFiles.length > 0 && <section>
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Your sheets</h2>
+    <form action="">
+      <input
+        type="search"
+        name="q"
+        defaultValue={search}
+        placeholder="Search sheets..."
+        className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+      />
+    </form>
+
+    {files.length > 0 ? (
       <div className="divide-y rounded-xl border border-[#e6ebf1] bg-white shadow-panel">
-        {recentFiles.map((file) => (
+        {files.map((file) => (
           <Link key={file.id} href={`${base}/files/${file.id}/sheet`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-700">
               <Table2 className="h-[17px] w-[17px]" />
             </span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800">{file.name}</div>
-              <div className="text-xs text-slate-400">{file._count.documents} document{file._count.documents === 1 ? "" : "s"}{file.folder ? ` · ${file.folder.name}` : ""}</div>
             </div>
             <span className="shrink-0 text-xs text-slate-400"><LastUpdated iso={file.updatedAt.toISOString()} /></span>
           </Link>
         ))}
       </div>
-    </section>}
-
-    {recentFiles.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center">
-      <FileSpreadsheet className="mx-auto h-10 w-10 text-slate-300" />
-      <p className="mt-3 text-sm font-medium text-slate-500">No sheets yet</p>
-      <p className="mt-1 text-xs text-slate-400">Create one above to get started.</p>
-    </div>}
+    ) : (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center">
+        <FileSpreadsheet className="mx-auto h-10 w-10 text-slate-300" />
+        <p className="mt-3 text-sm font-medium text-slate-500">
+          {search ? "No sheets match your search." : "No sheets yet"}
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          {search ? "Try a different query." : "Create one above to get started."}
+        </p>
+      </div>
+    )}
   </main>
 }

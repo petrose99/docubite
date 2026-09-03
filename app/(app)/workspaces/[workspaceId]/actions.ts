@@ -367,12 +367,13 @@ export async function setWorkspaceHipaaModeAction(workspaceId: string, enabled: 
  * Starts with no worksheets at all — a person building their own sheet defines its fields from
  * scratch in the Extract Data panel, rather than starting from a pre-seeded Invoice/Receipt/Expense
  * receipt/Custom document set they didn't ask for. */
-export async function createFileAction(workspaceId: string, folderId: string | null): Promise<ActionState<{ fileId: string }>> {
+export async function createFileAction(workspaceId: string, folderId: string | null, name?: string): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
+  if (!name?.trim()) return { success: false, error: "Please give your sheet a name" }
   try {
-    const file = await createFile({ workspaceId, userId: user.id, folderId, templates: [] })
+    const file = await createFile({ workspaceId, userId: user.id, folderId, name: name.trim(), templates: [] })
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
@@ -381,11 +382,12 @@ export async function createFileAction(workspaceId: string, folderId: string | n
 /** Create a sheet from library documents: reads each document's extracted field schema,
  * creates a file with a template whose columns are the union of those fields, then moves the
  * documents into the new file so ensureFileWorkbook populates the grid with extracted data. */
-export async function createSheetFromDocumentsAction(workspaceId: string, documentIds: string[]): Promise<ActionState<{ fileId: string }>> {
+export async function createSheetFromDocumentsAction(workspaceId: string, documentIds: string[], name?: string): Promise<ActionState<{ fileId: string }>> {
   const user = await getCurrentUser()
   const membership = await requireMember(workspaceId, user.id)
   if (!membership) return { success: false, error: NO_ACCESS }
   if (!documentIds.length) return { success: false, error: "No documents selected" }
+  if (!name?.trim()) return { success: false, error: "Please give your sheet a name" }
   try {
     const documents = await prisma.document.findMany({
       where: { id: { in: documentIds }, workspaceId },
@@ -410,7 +412,7 @@ export async function createSheetFromDocumentsAction(workspaceId: string, docume
     const multiRow = documents[0].template?.multiRow ?? false
 
     const file = await createFile({
-      workspaceId, userId: user.id, folderId: null,
+      workspaceId, userId: user.id, folderId: null, name: name!.trim(),
       templates: [{ code: templateCode, name: templateName, documentType: templateCode, multiRow, fields }],
     })
 
@@ -425,6 +427,72 @@ export async function createSheetFromDocumentsAction(workspaceId: string, docume
     revalidatePath(paths(workspaceId).files)
     return { success: true, data: { fileId: file.id } }
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the sheet") } }
+}
+
+/** Split documents into separate sheets — one per document type / template. `names` maps
+ * templateId (or "unknown") to a user-chosen sheet name; any group without a name is rejected. */
+export async function splitDocumentsIntoSheetsAction(workspaceId: string, documentIds: string[], names?: Record<string, string>): Promise<ActionState<{ fileIds: string[] }>> {
+  const user = await getCurrentUser()
+  const membership = await requireMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
+  if (!documentIds.length) return { success: false, error: "No documents selected" }
+  try {
+    const documents = await prisma.document.findMany({
+      where: { id: { in: documentIds }, workspaceId },
+      include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } } },
+    })
+    if (!documents.length) return { success: false, error: "Documents not found" }
+
+    const groups = new Map<string, typeof documents>()
+    for (const doc of documents) {
+      const key = doc.templateId ?? "unknown"
+      const group = groups.get(key) ?? []
+      group.push(doc)
+      groups.set(key, group)
+    }
+
+    for (const [key] of groups) {
+      const n = names?.[key]?.trim()
+      if (!n) return { success: false, error: "Please name every sheet" }
+    }
+
+    const fileIds: string[] = []
+    for (const [key, groupDocs] of groups) {
+      const seen = new Set<string>()
+      const fields: Array<{ key: string; label: string; type: string; instruction: string; required: boolean }> = []
+      for (const doc of groupDocs) {
+        const snapshot = doc.fieldSnapshot as Array<{ key: string; label: string; type?: string; instruction?: string; required?: boolean }> | null
+        if (!snapshot || !Array.isArray(snapshot)) continue
+        for (const field of snapshot) {
+          if (seen.has(field.key)) continue
+          seen.add(field.key)
+          fields.push({ key: field.key, label: field.label, type: field.type ?? "string", instruction: field.instruction ?? "", required: field.required ?? false })
+        }
+      }
+
+      const templateName = groupDocs[0].template?.name ?? "Extracted"
+      const templateCode = groupDocs[0].template?.code ?? "extracted"
+      const multiRow = groupDocs[0].template?.multiRow ?? false
+
+      const file = await createFile({
+        workspaceId, userId: user.id, folderId: null, name: names![key]!.trim(),
+        templates: [{ code: templateCode, name: templateName, documentType: templateCode, multiRow, fields }],
+      })
+
+      const newTemplate = await prisma.documentTemplate.findFirst({ where: { workspaceId, fileId: file.id } })
+      const newVersion = newTemplate ? await prisma.documentTemplateVersion.findFirst({ where: { templateId: newTemplate.id }, orderBy: { version: "desc" } }) : null
+
+      await prisma.document.updateMany({
+        where: { id: { in: groupDocs.map((d) => d.id) }, workspaceId },
+        data: { fileId: file.id, templateId: newTemplate?.id ?? null, templateVersionId: newVersion?.id ?? null, sheetAppliedAt: null },
+      })
+
+      fileIds.push(file.id)
+    }
+
+    revalidatePath(paths(workspaceId).files)
+    return { success: true, data: { fileIds } }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not split into sheets") } }
 }
 
 /** Companion to createFileAction's "Upload" flow: closing the Extract overlay without uploading

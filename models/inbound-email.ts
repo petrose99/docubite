@@ -6,6 +6,7 @@ import { createIngestionItem } from "@/lib/ingestion"
 import { isSupportedDocumentBuffer } from "@/models/documents"
 import { EXTENSION_MIME_TYPES } from "@/lib/zip-ingestion"
 import { prisma } from "@/lib/db"
+import { DEFAULT_DOCUMENT_TEMPLATES } from "@/lib/document-templates"
 import { createFile, getFileTemplates } from "@/models/files"
 import { getWorkspaceMembers } from "@/models/workspaces"
 import crypto from "crypto"
@@ -88,7 +89,7 @@ async function ensureEmailIntakeFile(workspaceId: string) {
   if (existing) return existing
   const owner = await prisma.workspaceMember.findFirst({ where: { workspaceId, role: "owner" }, orderBy: { createdAt: "asc" }, select: { userId: true } })
   if (!owner) throw new Error("workspace_has_no_owner")
-  return createFile({ workspaceId, userId: owner.userId, name: "Email intake" })
+  return createFile({ workspaceId, userId: owner.userId, name: "Email intake", templates: DEFAULT_DOCUMENT_TEMPLATES })
 }
 
 function inferMimeType(filename: string): string | null {

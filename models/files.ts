@@ -53,7 +53,7 @@ export async function createFile(input: {
   templates?: readonly SeedTemplate[]
   kind?: "sheet" | "dictation" | "pipeline"
 }) {
-  const templates = input.templates ?? DEFAULT_DOCUMENT_TEMPLATES
+  const templates = input.templates ?? []
   return prisma.documentFile.create({
     data: {
       workspaceId: input.workspaceId,
@@ -135,7 +135,7 @@ export async function ensureDictationFile(workspaceId: string, userId: string) {
  * via addDomainPackToFile — missing worksheets are added on every call, present ones untouched. */
 export async function ensurePipelineFile(workspaceId: string, userId: string) {
   const existing = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "pipeline" } })
-  const file = existing ?? await createFile({ workspaceId, userId, name: "Pipeline", kind: "pipeline" })
+  const file = existing ?? await createFile({ workspaceId, userId, name: "Pipeline", kind: "pipeline", templates: DEFAULT_DOCUMENT_TEMPLATES })
     .catch(async () => {
       const raced = await prisma.documentFile.findFirst({ where: { workspaceId, kind: "pipeline" } })
       if (!raced) throw new Error("pipeline_file_unavailable")
