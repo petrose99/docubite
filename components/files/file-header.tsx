@@ -14,11 +14,10 @@ import { toast } from "sonner"
  *
  * `status` is the spreadsheet's save state, which sits beside the filename the way every other
  * spreadsheet puts it — the grid below owns the rest of the window and has nowhere to say it. */
-export function FileHeader({ workspaceId, fileId, name, linkAccess, status, backHref, backLabel }: {
+export function FileHeader({ workspaceId, fileId, name, linkAccess, status, backHref, backLabel, trailing }: {
   workspaceId: string; fileId: string; name: string; linkAccess: string; status?: ReactNode
-  /** Defaults to the Files list — the sheet's file bar overrides this to the file hub instead,
-   * so "← Back" from the grid returns to the hub rather than skipping over it. */
   backHref?: string; backLabel?: string
+  trailing?: ReactNode
 }) {
   const router = useRouter()
   const [value, setValue] = useState(name)
@@ -63,9 +62,12 @@ export function FileHeader({ workspaceId, fileId, name, linkAccess, status, back
       }} />
     {linkAccess !== "none" && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500"><Globe className="h-3 w-3" />Shared</span>}
     {status}
-    <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setSharing(true)}>
+    <div className="ml-auto flex items-center gap-1.5">
+    {trailing}
+    <button type="button" className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setSharing(true)}>
       <Share2 className="h-3.5 w-3.5" />Share
     </button>
+    </div>
     <ShareDialog workspaceId={workspaceId} fileId={fileId} fileName={saved} open={sharing} onClose={() => { setSharing(false); router.refresh() }} />
   </div>
 }
