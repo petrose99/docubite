@@ -72,7 +72,10 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
   // The revision the server settled on after absorbing an extraction, handed to the grid so its
   // next save is not rejected by work it effectively did itself.
   const [adoptRev, setAdoptRev] = useState<number | null>(null)
-  const [assistantOpen, setAssistantOpen] = useState(!readOnly)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  useEffect(() => {
+    if (!readOnly && window.innerWidth >= 640) setAssistantOpen(true)
+  }, [readOnly])
   const apiRef = useRef<FUniver | null>(null)
   const saveNowRef = useRef<(() => Promise<boolean>) | null>(null)
 
@@ -330,7 +333,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         backLabel="Back"
         status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-slate-400"}`}>{label}</span> : null} />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {assistantOpen && !readOnly && <AssistantPanel workspaceId={workspaceId} apiRef={apiRef} onClose={() => setAssistantOpen(false)} documentSearchEnabled={documentSearchEnabled} onOpenSource={(hit) => void openSearchSource(hit)} />}
 
         <UniverSheetLoader
