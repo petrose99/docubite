@@ -9,7 +9,7 @@ import { listWorkspaceDocuments } from "@/models/documents"
 import { getFileTemplates, getWorkspaceFile } from "@/models/files"
 import { listOpenReviewTasksForFile } from "@/models/review-tasks"
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
-import { ClipboardCheck, Download, FileText, Table2 } from "lucide-react"
+import { ClipboardCheck, Download, FileText, ListPlus, Table2 } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -59,13 +59,16 @@ export default async function FileHubPage({ params }: { params: Promise<{ worksp
         <Link href={`${base}/sheet`} className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
           <Table2 className="h-4 w-4" />Open sheet
         </Link>
-        <FileHubUploadButton workspaceId={workspaceId} fileId={fileId} fileName={file.name} template={template} usage={usage} sheetCount={templates.length} documentSearchEnabled={config.embeddings.enabled} />
+        <Link href={`${base}/sheet?addDocuments=1`} className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+          <ListPlus className="h-4 w-4" />Add documents
+        </Link>
         <Link href={`${base}/export?format=xlsx`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
           <Download className="h-4 w-4" />Export xlsx
         </Link>
         <Link href={`${base}/export?format=csv`} className="inline-flex items-center gap-2 rounded-md border bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
           <Download className="h-4 w-4" />Export csv
         </Link>
+        <FileHubUploadButton workspaceId={workspaceId} fileId={fileId} fileName={file.name} template={template} usage={usage} sheetCount={templates.length} documentSearchEnabled={config.embeddings.enabled} />
       </div>
 
       {hasReviewQueue && reviewTasks.length > 0 && <section className="space-y-2">

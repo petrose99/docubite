@@ -7,6 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "predev": "node -e \"require('fs').rm('.next',{recursive:true,force:true},()=>{})\"",
     "dev": "next dev --turbopack",
     "build": "prisma migrate deploy && next build",
     "build:ci": "next build",
