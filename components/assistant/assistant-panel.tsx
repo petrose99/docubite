@@ -127,7 +127,7 @@ export function AssistantPanel({ workspaceId, apiRef, onClose, documentSearchEna
   }
 
   return (
-    <aside className={className ?? "flex w-80 shrink-0 flex-col border-r bg-slate-50"}>
+    <aside className={className ?? "absolute inset-0 z-20 flex flex-col bg-slate-50 sm:relative sm:inset-auto sm:z-auto sm:w-80 sm:shrink-0 sm:border-r"}>
       <div className="flex items-center gap-2 border-b bg-white px-3 py-2">
         <Sparkles className="h-4 w-4 text-emerald-700" />
         <span className="text-sm font-semibold text-slate-800">{title}</span>
