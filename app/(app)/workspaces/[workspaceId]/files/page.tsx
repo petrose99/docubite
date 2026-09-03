@@ -52,10 +52,10 @@ export default async function SheetsPage({ params, searchParams }: {
       />
       <SheetsCreateCard
         icon="extraction"
-        title="From Extraction"
+        title="From Docu Library"
         description={unplacedCount > 0 ? `${unplacedCount} approved document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull approved documents into a sheet."}
         workspaceId={workspaceId}
-        href={`${base}/files?pick=new`}
+        href={`${base}/library`}
         badge={unplacedCount > 0 ? unplacedCount : undefined}
       />
     </div>
@@ -71,7 +71,7 @@ export default async function SheetsPage({ params, searchParams }: {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Your sheets</h2>
       <div className="divide-y rounded-xl border border-[#e6ebf1] bg-white shadow-panel">
         {recentFiles.map((file) => (
-          <Link key={file.id} href={`${base}/files/${file.id}`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
+          <Link key={file.id} href={`${base}/files/${file.id}/sheet`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-700">
               <Table2 className="h-[17px] w-[17px]" />
             </span>

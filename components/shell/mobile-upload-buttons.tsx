@@ -19,10 +19,10 @@ export function MobileUploadButtons({ workspaceId, fileId }: { workspaceId: stri
       <input type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0]
-          if (file) window.location.href = `/workspaces/${workspaceId}/files/${fileId}`
+          if (file) window.location.href = `/workspaces/${workspaceId}/files/${fileId}/sheet`
         }} />
     </label>}
-    <a href={`/workspaces/${workspaceId}/files/${fileId}`}
+    <a href={`/workspaces/${workspaceId}/files/${fileId}/sheet`}
       className="flex flex-1 items-center justify-center gap-2 rounded-[13px] border border-[#d5dee6] bg-white py-[13px] text-[14.5px] font-semibold text-emerald-700 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
       <Upload className="h-[18px] w-[18px]" />
       Upload

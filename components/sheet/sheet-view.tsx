@@ -326,7 +326,7 @@ export function SheetView({ workspaceId, fileId, fileName, linkAccess, snapshot,
         fileId={fileId}
         name={fileName}
         linkAccess={linkAccess}
-        backHref={`/workspaces/${workspaceId}/files/${fileId}`}
+        backHref={`/workspaces/${workspaceId}/files`}
         backLabel="Back"
         status={label ? <span className={`text-xs ${saveState === "error" && !readOnly ? "text-destructive" : "text-slate-400"}`}>{label}</span> : null} />
 

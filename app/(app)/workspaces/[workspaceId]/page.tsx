@@ -137,7 +137,7 @@ export default async function WorkspaceHomePage({ params }: {
         {recentFiles.length === 0 ? <p className="px-5 py-10 text-center text-sm text-slate-400">No files yet — upload something to get started.</p> : <div>
           {recentFiles.map((file) => {
             const reviewCount = recentFileReviewCounts[file.id] ?? 0
-            return <Link key={file.id} href={`/workspaces/${workspaceId}/files/${file.id}`} className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0 hover:bg-slate-50">
+            return <Link key={file.id} href={`/workspaces/${workspaceId}/files/${file.id}/sheet`} className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0 hover:bg-slate-50">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-700"><Table2 className="h-[17px] w-[17px]" /></span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold text-slate-800">{file.name}</div>
