@@ -8,6 +8,7 @@ import config from "@/lib/config"
 import { getCurrentUser } from "@/lib/auth"
 import { parseTemplateFields } from "@/lib/document-templates"
 import { countDocumentsByStage, countDocumentsThisMonth, countToReviewByFile, flaggedFieldsFromConfidence, listWorkspaceDocuments, summarizeDocumentForReview } from "@/models/documents"
+import { countReviewedUnplaced } from "@/models/document-sheet-placements"
 import { ensurePipelineFile, getFileTemplates, listRecentFiles } from "@/models/files"
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
 import { MobileUploadButtons } from "@/components/shell/mobile-upload-buttons"
@@ -39,13 +40,14 @@ export default async function WorkspaceHomePage({ params }: {
 
   const documentSearchEnabled = config.embeddings.enabled
 
-  const [pipelineFile, usage, stageCounts, documentsThisMonth, recentFiles, onboardingState] = await Promise.all([
+  const [pipelineFile, usage, stageCounts, documentsThisMonth, recentFiles, onboardingState, unplacedCount] = await Promise.all([
     ensurePipelineFile(workspaceId, user.id),
     getWorkspaceUsage(workspaceId),
     countDocumentsByStage(workspaceId),
     countDocumentsThisMonth(workspaceId),
     listRecentFiles(workspaceId, 4),
     getOnboardingStateAction(workspaceId),
+    countReviewedUnplaced(workspaceId),
   ])
   const pipelineTemplates = await getFileTemplates(workspaceId, pipelineFile.id)
   const uploadTemplates: SheetTemplate[] = pipelineTemplates.flatMap((candidate) => {
@@ -111,7 +113,7 @@ export default async function WorkspaceHomePage({ params }: {
       {[
         { icon: Upload, label: "Upload", count: documentsThisMonth, desc: "documents this month", href: `/workspaces/${workspaceId}/pipeline`, color: "bg-indigo-50 text-indigo-600" },
         { icon: ListChecks, label: "Review", count: stageCounts.to_review, desc: "awaiting review", href: `/workspaces/${workspaceId}/pipeline?stage=to_review`, color: "bg-amber-50 text-amber-600" },
-        { icon: Table2, label: "Sheets", count: stageCounts.ready + stageCounts.archive, desc: "ready to use", href: `/workspaces/${workspaceId}/files`, color: "bg-emerald-50 text-emerald-700" },
+        { icon: Table2, label: "Sheets", count: stageCounts.ready + stageCounts.archive, desc: unplacedCount > 0 ? `ready to use · ${unplacedCount} not in a sheet` : "ready to use", href: `/workspaces/${workspaceId}/files`, color: "bg-emerald-50 text-emerald-700" },
       ].map((step, i) => (
         <Link key={step.label} href={step.href} className="group flex items-center gap-3 rounded-xl border border-[#e6ebf1] bg-white px-4 py-3 shadow-panel transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${step.color}`}><step.icon className="h-[17px] w-[17px]" /></div>
@@ -178,7 +180,7 @@ export default async function WorkspaceHomePage({ params }: {
     <GettingStartedCard
       workspaceId={workspaceId}
       initialState={onboardingState}
-      liveCounts={{ uploaded: documentsThisMonth, approved: stageCounts.ready + stageCounts.archive, placedInSheet: 0 }}
+      liveCounts={{ uploaded: documentsThisMonth, approved: stageCounts.ready + stageCounts.archive, placedInSheet: (stageCounts.ready + stageCounts.archive) - unplacedCount }}
     />
   </main>
 }

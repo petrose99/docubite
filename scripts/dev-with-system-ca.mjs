@@ -4,7 +4,14 @@
 // Not part of the committed "dev" script since it's an environment workaround, not something
 // every contributor needs.
 import { spawn } from "node:child_process"
+import { rm } from "node:fs/promises"
 import path from "node:path"
+
+// Turbopack's persistent cache can hold stale module-resolution results after new files are added,
+// causing "Module not found" errors that only a manual .next delete would fix. Clearing it on every
+// cold start is cheap (Turbopack rebuilds in seconds) and prevents the class of bug entirely.
+const dotNext = path.join(import.meta.dirname, "..", ".next")
+await rm(dotNext, { recursive: true, force: true }).catch(() => {})
 
 process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, "--use-system-ca"].filter(Boolean).join(" ")
 
