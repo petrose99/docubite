@@ -1,7 +1,7 @@
 "use client"
 
 import { AccountMenu } from "@/components/shell/account-menu"
-import { GlobalSearch } from "@/components/shell/global-search"
+
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import { BiteMark } from "@/components/marketing/logo"
 import { MODULES } from "@/lib/modules"
@@ -111,9 +111,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
 
     <div className="mb-1 mt-2"><WorkspaceSwitcher workspaces={workspaces} workspaceId={workspaceId} /></div>
 
-    <div className="mb-1"><GlobalSearch workspaceId={workspaceId} /></div>
-
-    <nav className="flex flex-col">
+    <nav className="mt-2 flex flex-col">
       {sectionLabel("Workspace")}
       <div className="space-y-0.5">{workItems.map(navLink)}</div>
 
