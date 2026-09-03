@@ -8,10 +8,8 @@ import { getWorkspaceIntegrationConnection } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { notFound } from "next/navigation"
 
-/** The Bigcapital bridge surface: connection status, chart-of-accounts/vendor sync, and the default
- * expense account picker (P2). Push and reporting land in later phases. Hard-gated on the deployment
- * having Bigcapital configured, the same "sidebar entry + 404" shape as the QuickBooks/Xero settings
- * page uses for config.integrations.enabled. */
+/** The accounting bridge surface: connection status, chart-of-accounts/vendor sync, and the default
+ * expense account picker. Hard-gated on the deployment having accounting configured. */
 export default async function AccountingPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   if (!config.integrations.bigcapital.enabled) notFound()
   const { workspaceId } = await params
@@ -34,7 +32,7 @@ export default async function AccountingPage({ params }: { params: Promise<{ wor
   return <main className="space-y-6">
     <header>
       <h1 className="text-3xl font-bold">Accounting</h1>
-      <p className="mt-1 text-muted-foreground">Your workspace&apos;s own isolated Bigcapital ledger — coded accounts and vendors, ready for documents to push into.</p>
+      <p className="mt-1 text-muted-foreground">Your workspace&apos;s own ledger — coded accounts and vendors, ready for documents to push into.</p>
       {membership.role !== "owner" && <p className="mt-2 text-sm text-muted-foreground">Only workspace owners can manage this connection.</p>}
     </header>
     <AccountingDashboard

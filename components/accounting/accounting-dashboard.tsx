@@ -52,7 +52,7 @@ function deriveStatus(connection: Connection, job: ProvisionJob): string {
   return job ? "error" : "not_started"
 }
 
-/** The connection status card: shows where this workspace's Bigcapital organization stands — being
+/** The connection status card: shows where this workspace's accounting organization stands — being
  * built, live, or stuck — and the one action available either way (repair/re-provision), since
  * there is no manual "Connect" step to offer for an auto-provisioned tenant. */
 function ConnectionCard({ workspaceId, isOwner, apiBase, connection, job, onChanged }: {
@@ -82,7 +82,7 @@ function ConnectionCard({ workspaceId, isOwner, apiBase, connection, job, onChan
     <Card>
       <CardHeader>
         <CardTitle>Connection</CardTitle>
-        <CardDescription>Every workspace gets its own isolated Bigcapital organization, created automatically — nothing to connect by hand.</CardDescription>
+        <CardDescription>Every workspace gets its own isolated accounting organization, created automatically — nothing to connect by hand.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -98,7 +98,7 @@ function ConnectionCard({ workspaceId, isOwner, apiBase, connection, job, onChan
           </div>
           {isOwner && connection?.status === "active" && connection.externalTenantId && (
             <a className="shrink-0 text-sm font-medium text-emerald-700 hover:underline" href={`${apiBase}`} target="_blank" rel="noreferrer">
-              Open in Bigcapital
+              Open accounting
             </a>
           )}
           {isOwner && needsRepair && (

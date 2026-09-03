@@ -234,6 +234,38 @@ export async function voidBill(apiKey: string, organizationId: string, billId: s
   await request<void>(`/api/bills/${billId}`, { method: "DELETE" }, { token: apiKey, organizationId })
 }
 
+// ---- Reports (table DTO) -----------------------------------------------------------------------
+
+export type BigcapitalReportColumn = { key: string; label: string; children?: BigcapitalReportColumn[] }
+export type BigcapitalReportRow = { cells: { key: string; value: string | number | null }[]; rowTypes?: string; children?: BigcapitalReportRow[] }
+export type BigcapitalReportTable = { columns: BigcapitalReportColumn[]; rows: BigcapitalReportRow[] }
+
+export async function fetchReportTable(
+  apiKey: string,
+  organizationId: string,
+  reportPath: string,
+  params: { fromDate?: string; toDate?: string; basis?: "cash" | "accrual" } = {},
+): Promise<BigcapitalReportTable> {
+  const qs = new URLSearchParams()
+  if (params.fromDate) qs.set("fromDate", params.fromDate)
+  if (params.toDate) qs.set("toDate", params.toDate)
+  if (params.basis) qs.set("basis", params.basis)
+  const suffix = qs.size > 0 ? `?${qs}` : ""
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json: any = await request<unknown>(
+    `${reportPath}${suffix}`,
+    { method: "GET", headers: { accept: "application/json+table" } },
+    { token: apiKey, organizationId },
+  )
+
+  const table = (json?.table ?? json?.data?.table ?? json) as BigcapitalReportTable | undefined
+  if (!table || !Array.isArray(table.columns) || !Array.isArray(table.rows)) {
+    throw new Error("Unexpected report response shape — missing columns/rows")
+  }
+  return table
+}
+
 // ---- Phase B: ledger sync ----------------------------------------------------------------------
 
 export type BigcapitalLedgerTransaction = {

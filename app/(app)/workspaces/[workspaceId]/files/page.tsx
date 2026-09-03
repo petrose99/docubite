@@ -1,10 +1,13 @@
 import { getCurrentUser } from "@/lib/auth"
+import config from "@/lib/config"
 import { countReviewedUnplaced } from "@/models/document-sheet-placements"
 import { listFiles } from "@/models/files"
+import { getWorkspaceIntegrationConnection } from "@/models/integrations"
 import { requireWorkspaceRole } from "@/models/workspaces"
 import { FileSpreadsheet, FilePlus2, ArrowDownToLine, Table2 } from "lucide-react"
 import Link from "next/link"
 import { SheetsCreateCard } from "@/components/files/sheets-create-card"
+import { FromAccountingCard } from "@/components/files/from-accounting-card"
 import { LastUpdated } from "@/components/shared/relative-time"
 
 export const dynamic = "force-dynamic"
@@ -18,10 +21,15 @@ export default async function SheetsPage({ params, searchParams }: {
 
   const search = query.q?.trim() || ""
 
-  const [files, unplacedCount] = await Promise.all([
+  const [files, unplacedCount, accountingConnection] = await Promise.all([
     listFiles(workspaceId, { query: search || undefined }),
     countReviewedUnplaced(workspaceId),
+    config.integrations.bigcapital.enabled
+      ? getWorkspaceIntegrationConnection(workspaceId, "bigcapital")
+      : null,
   ])
+
+  const accountingReady = config.integrations.bigcapital.enabled && accountingConnection?.status === "active"
 
   const pickIds = query.pick?.split(",").filter(Boolean) ?? []
   const base = `/workspaces/${workspaceId}`
@@ -34,7 +42,7 @@ export default async function SheetsPage({ params, searchParams }: {
       </p>
     </header>
 
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+    <div className={`grid grid-cols-1 gap-2 sm:gap-4 ${accountingReady ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"}`}>
       <SheetsCreateCard
         icon="blank"
         title="Blank sheet"
@@ -56,6 +64,7 @@ export default async function SheetsPage({ params, searchParams }: {
         href={`${base}/library?pick=sheet`}
         badge={unplacedCount > 0 ? unplacedCount : undefined}
       />
+      {accountingReady && <FromAccountingCard workspaceId={workspaceId} />}
     </div>
 
     {pickIds.length > 0 && <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-800">

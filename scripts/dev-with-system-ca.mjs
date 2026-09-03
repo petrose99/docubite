@@ -15,6 +15,16 @@ await rm(dotNext, { recursive: true, force: true }).catch(() => {})
 
 process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, "--use-system-ca"].filter(Boolean).join(" ")
 
+// Start mock Bigcapital API alongside Next.js when the integration is enabled and no real
+// instance is running. The mock serves sample reports so the "From Accounting" flow works
+// in local dev without a full Bigcapital Docker deployment.
+if (process.env.BIGCAPITAL_ENABLED === "true") {
+  const mockScript = path.join(import.meta.dirname, "mock-bigcapital.mjs")
+  const mock = spawn("node", [mockScript], { stdio: "inherit" })
+  mock.on("error", () => {}) // non-fatal if the script is missing
+  process.on("exit", () => mock.kill())
+}
+
 const nextBin = path.join(import.meta.dirname, "..", "node_modules", ".bin", process.platform === "win32" ? "next.cmd" : "next")
 
 const child = spawn(nextBin, ["dev", "--turbopack"], {
