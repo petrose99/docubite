@@ -378,6 +378,19 @@ export async function createFileAction(workspaceId: string, folderId: string | n
   } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
 }
 
+/** Create a sheet pre-seeded with the default extraction worksheets (Invoice, Receipt, etc.)
+ * so documents pulled from Docu Library land in familiar columns. */
+export async function createFileFromLibraryAction(workspaceId: string): Promise<ActionState<{ fileId: string }>> {
+  const user = await getCurrentUser()
+  const membership = await requireMember(workspaceId, user.id)
+  if (!membership) return { success: false, error: NO_ACCESS }
+  try {
+    const file = await createFile({ workspaceId, userId: user.id, folderId: null })
+    revalidatePath(paths(workspaceId).files)
+    return { success: true, data: { fileId: file.id } }
+  } catch (error) { return { success: false, error: errorMessage(error, "Could not create the file") } }
+}
+
 /** Companion to createFileAction's "Upload" flow: closing the Extract overlay without uploading
  * anything should not leave a stray empty file behind. No-ops if the file picked up any documents
  * in the meantime, so it is safe to call unconditionally on close. */
