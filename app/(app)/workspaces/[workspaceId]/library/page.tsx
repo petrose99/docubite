@@ -9,30 +9,22 @@ import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
-const STAGE_TABS = [
-  { key: "ready", label: "Approved" },
-  { key: "archive", label: "Archived" },
-] as const
-
 export default async function LibraryPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string }>
-  searchParams: Promise<{ stage?: string; q?: string; pick?: string }>
+  searchParams: Promise<{ q?: string; pick?: string }>
 }) {
   const [{ workspaceId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
   await requireWorkspaceRole(workspaceId, user.id)
 
-  const stage = query.stage === "archive" ? "archive" as const : "ready" as const
   const search = query.q?.trim() || ""
   const pickMode = query.pick === "sheet"
 
   const documents = await listWorkspaceDocuments(workspaceId, {
-    stage,
+    stage: "ready",
     ...(search ? { query: search } : {}),
   })
 
   const base = `/workspaces/${workspaceId}`
-
-  const pickParam = pickMode ? "&pick=sheet" : ""
 
   return <main className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 md:px-6">
     <header>
@@ -43,39 +35,25 @@ export default async function LibraryPage({ params, searchParams }: {
       <p className="mt-1 text-sm text-slate-500">
         {pickMode
           ? "Pick the documents you want — the sheet will use their extracted fields as columns."
-          : "Every approved document in one place — browse, search, and pull into Sheets."}
+          : "Every document that's been through extraction — browse, search, and pull into Sheets."}
       </p>
     </header>
 
-    <div className="flex items-center gap-4">
-      <nav className="flex items-center gap-1 text-sm">
-        {STAGE_TABS.map((tab) => (
-          <Link
-            key={tab.key}
-            href={`${base}/library${tab.key === "ready" ? "" : `?stage=${tab.key}`}${tab.key === "ready" ? (pickParam ? `?pick=sheet` : "") : pickParam}`}
-            className={`rounded-md px-2.5 py-1 font-medium ${stage === tab.key ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
-      <form action="" className="ml-auto">
-        {pickMode && <input type="hidden" name="pick" value="sheet" />}
-        <input
-          type="search"
-          name="q"
-          defaultValue={search}
-          placeholder="Search documents..."
-          className="w-64 rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
-        />
-      </form>
-    </div>
+    <form action="">
+      {pickMode && <input type="hidden" name="pick" value="sheet" />}
+      <input
+        type="search"
+        name="q"
+        defaultValue={search}
+        placeholder="Search documents..."
+        className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+      />
+    </form>
 
     {documents.length > 0 ? (
       pickMode ? (
         <LibraryPickList
           workspaceId={workspaceId}
-          stage={stage}
           documents={documents.map((doc) => {
             const review = summarizeDocumentForReview(doc)
             return {
@@ -112,11 +90,6 @@ export default async function LibraryPage({ params, searchParams }: {
                     {doc.template ? ` · ${doc.template.name}` : ""}
                   </div>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                  stage === "ready" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-                }`}>
-                  {stage === "ready" ? "Approved" : "Archived"}
-                </span>
                 <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
               </Link>
             )
@@ -130,7 +103,7 @@ export default async function LibraryPage({ params, searchParams }: {
           {search ? "No documents match your search." : "Nothing here yet."}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          {search ? "Try a different query." : "Approve a document in Extraction to see it here."}
+          {search ? "Try a different query." : "Documents will appear here after extraction."}
         </p>
       </div>
     )}
