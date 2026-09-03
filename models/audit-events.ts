@@ -52,9 +52,11 @@ const EVENT_LABELS: Record<string, string> = {
   integration_push_enqueued: "Push to accounting queued",
   integration_batch_push: "Batch push to accounting",
   integration_entities_synced: "Accounting entities synced",
-  bigcapital_provisioned: "Bigcapital account provisioned",
-  bigcapital_provision_failed: "Bigcapital provisioning failed",
-  bigcapital_provision_enqueued: "Bigcapital provisioning started",
+  bigcapital_provisioned: "Accounting provisioned",
+  bigcapital_provision_failed: "Accounting provisioning failed",
+  bigcapital_provision_enqueued: "Accounting provisioning started",
+  accounting_report_imported: "Accounting report imported",
+  accounting_report_failed: "Accounting report failed",
   activity_exported: "Activity log exported",
 }
 

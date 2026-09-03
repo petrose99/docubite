@@ -9,6 +9,7 @@ import { fetchReportTable } from "@/lib/integrations/bigcapital/client"
 import { IntegrationAuthError } from "@/lib/integrations/errors"
 import { BIGCAPITAL_REPORTS, isBigcapitalReportType, reportTableToSheet } from "@/lib/integrations/bigcapital/report-mapper"
 import { ImportLimitError, sheetsToSnapshot } from "@/lib/sheet-import"
+import { recordDocumentAudit } from "@/lib/audit"
 import { createFile } from "@/models/files"
 import { saveWorkbook } from "@/models/spreadsheets"
 
@@ -42,6 +43,8 @@ export async function createSheetFromAccountingReportAction(
     throw err
   }
 
+  const auditDetail = { reportType: input.reportType, reportLabel: report.label, fromDate: input.fromDate, toDate: input.toDate }
+
   let table
   try {
     table = await fetchReportTable(apiKey, connection.externalTenantId, report.path, {
@@ -49,8 +52,11 @@ export async function createSheetFromAccountingReportAction(
       toDate: report.supportsDateRange ? input.toDate : undefined,
     })
   } catch (err) {
-    if (err instanceof IntegrationAuthError) return { error: "Accounting connection needs attention — please reconnect" }
-    return { error: "Could not fetch report from accounting system" }
+    const msg = err instanceof IntegrationAuthError
+      ? "Accounting connection needs attention — please reconnect"
+      : "Could not fetch report from accounting system"
+    await recordDocumentAudit({ workspaceId, actorId: user.id, type: "accounting_report_failed", outcome: "failure", detail: { ...auditDetail, error: msg } })
+    return { error: msg }
   }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -61,6 +67,7 @@ export async function createSheetFromAccountingReportAction(
     const created = await createFile({ workspaceId, userId: user.id, name: sheetName, folderId: null, templates: [], kind: "sheet" })
     const snapshot = sheetsToSnapshot(created.id, [sheet])
     await saveWorkbook({ workspaceId, fileId: created.id, rev: 0, snapshot })
+    await recordDocumentAudit({ workspaceId, actorId: user.id, type: "accounting_report_imported", detail: { ...auditDetail, fileId: created.id, sheetName } })
     return { fileId: created.id }
   } catch (err) {
     if (err instanceof ImportLimitError) return { error: err.message }
