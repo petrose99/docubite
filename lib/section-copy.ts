@@ -10,7 +10,7 @@ export const SECTION_COPY: Record<SectionKey, SectionCopy> = {
     banner:
       "Extraction is your inbox: drop files, we OCR, split and extract, you review the results.",
     howItWorks: [
-      "Upload PDFs or drag a folder — we run OCR automatically.",
+      "Add PDFs or drag a folder — we run OCR automatically.",
       "Multi-page files are split into individual documents for you to confirm.",
       "Review extracted fields, fix anything off, then the document moves to the Docu Library.",
     ],
@@ -44,7 +44,7 @@ export const SECTION_COPY: Record<SectionKey, SectionCopy> = {
 }
 
 export const ONBOARDING_STEPS = [
-  { key: "upload", label: "Upload your first document", section: "extraction" as SectionKey },
+  { key: "upload", label: "Add your first document", section: "extraction" as SectionKey },
   { key: "review", label: "Review a document", section: "extraction" as SectionKey },
   { key: "find_library", label: "Find it in Docu Library", section: "library" as SectionKey },
   { key: "pull_sheet", label: "Pull it into a Sheet", section: "sheets" as SectionKey },
@@ -54,7 +54,7 @@ export const ONBOARDING_STEPS = [
 export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]["key"]
 
 export const TOUR_STEPS = [
-  { target: "extraction", title: "Extraction", description: "Upload and review documents here." },
+  { target: "extraction", title: "Extraction", description: "Add and review documents here." },
   { target: "library", title: "Docu Library", description: "Your permanent, searchable document library." },
   { target: "sheets", title: "Sheets", description: "Spreadsheets with AI — pull documents in and compute." },
   { target: "search", title: "Search", description: "Find any document from anywhere, or ask a question." },

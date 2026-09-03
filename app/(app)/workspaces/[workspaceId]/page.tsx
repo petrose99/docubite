@@ -13,7 +13,7 @@ import { ensurePipelineFile, getFileTemplates, listRecentFiles } from "@/models/
 import { getWorkspaceUsage, requireWorkspaceRole } from "@/models/workspaces"
 import { MobileUploadButtons } from "@/components/shell/mobile-upload-buttons"
 import { getOnboardingStateAction } from "./onboarding-actions"
-import { Archive, ArrowRight, CheckCircle2, ChevronRight, FileText, ListChecks, SearchCheck, Table2, Upload } from "lucide-react"
+import { ArrowRight, CheckCircle2, ChevronRight, FileText, ListChecks, SearchCheck, Table2, Upload } from "lucide-react"
 import Link from "next/link"
 
 export const dynamic = "force-dynamic"
@@ -65,7 +65,6 @@ export default async function WorkspaceHomePage({ params }: {
     { label: "Documents this month", value: documentsThisMonth, icon: FileText, href: null, iconClass: "bg-emerald-50 text-emerald-700", hoverClass: "" },
     { label: "In review", value: stageCounts.to_review, icon: SearchCheck, href: `/workspaces/${workspaceId}/pipeline?stage=to_review`, iconClass: "bg-indigo-50 text-indigo-600", hoverClass: "hover:border-[#c7d2fe] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_12px_26px_rgba(79,70,229,0.10)]" },
     { label: "Ready", value: stageCounts.ready, icon: CheckCircle2, href: `/workspaces/${workspaceId}/pipeline?stage=ready`, iconClass: "bg-emerald-50 text-emerald-700", hoverClass: "hover:border-[#a7f3d0] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_12px_26px_rgba(4,120,87,0.10)]" },
-    { label: "Archived", value: stageCounts.archive, icon: Archive, href: `/workspaces/${workspaceId}/pipeline?stage=archive`, iconClass: "bg-slate-100 text-slate-500", hoverClass: "hover:border-[#cbd5e1] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_12px_26px_rgba(15,23,42,0.07)]" },
   ]
 
   return <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-[18px] md:space-y-6 md:p-6">
@@ -95,7 +94,7 @@ export default async function WorkspaceHomePage({ params }: {
 
     <MobileUploadButtons workspaceId={workspaceId} fileId={pipelineFile.id} />
 
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-3.5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5">
       {stats.map((stat) => {
         const inner = <>
           <div className={`mb-3 flex h-[34px] w-[34px] items-center justify-center rounded-[10px] sm:mb-3.5 sm:h-[38px] sm:w-[38px] sm:rounded-[11px] ${stat.iconClass}`}><stat.icon className="h-[18px] w-[18px]" /></div>
@@ -111,9 +110,9 @@ export default async function WorkspaceHomePage({ params }: {
 
     <div className="grid grid-cols-3 gap-3">
       {[
-        { icon: Upload, label: "Upload", count: documentsThisMonth, desc: "documents this month", href: `/workspaces/${workspaceId}/pipeline`, color: "bg-indigo-50 text-indigo-600" },
+        { icon: Upload, label: "Added", count: documentsThisMonth, desc: "documents this month", href: `/workspaces/${workspaceId}/pipeline`, color: "bg-indigo-50 text-indigo-600" },
         { icon: ListChecks, label: "Review", count: stageCounts.to_review, desc: "awaiting review", href: `/workspaces/${workspaceId}/pipeline?stage=to_review`, color: "bg-amber-50 text-amber-600" },
-        { icon: Table2, label: "Sheets", count: stageCounts.ready + stageCounts.archive, desc: unplacedCount > 0 ? `ready to use · ${unplacedCount} not in a sheet` : "ready to use", href: `/workspaces/${workspaceId}/files`, color: "bg-emerald-50 text-emerald-700" },
+        { icon: Table2, label: "Sheets", count: stageCounts.ready, desc: unplacedCount > 0 ? `ready to use · ${unplacedCount} not in a sheet` : "ready to use", href: `/workspaces/${workspaceId}/files`, color: "bg-emerald-50 text-emerald-700" },
       ].map((step, i) => (
         <Link key={step.label} href={step.href} className="group flex items-center gap-3 rounded-xl border border-[#e6ebf1] bg-white px-4 py-3 shadow-panel transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${step.color}`}><step.icon className="h-[17px] w-[17px]" /></div>
@@ -134,7 +133,7 @@ export default async function WorkspaceHomePage({ params }: {
           <h2 className="text-[15px] font-bold text-slate-900">Recent files</h2>
           <Link href={`/workspaces/${workspaceId}/files`} className="text-[13px] font-semibold text-emerald-700 hover:text-emerald-800">View all</Link>
         </div>
-        {recentFiles.length === 0 ? <p className="px-5 py-10 text-center text-sm text-slate-400">No files yet — upload something to get started.</p> : <div>
+        {recentFiles.length === 0 ? <p className="px-5 py-10 text-center text-sm text-slate-400">No files yet — add a document to get started.</p> : <div>
           {recentFiles.map((file) => {
             const reviewCount = recentFileReviewCounts[file.id] ?? 0
             return <Link key={file.id} href={`/workspaces/${workspaceId}/files/${file.id}/sheet`} className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0 hover:bg-slate-50">
@@ -180,7 +179,7 @@ export default async function WorkspaceHomePage({ params }: {
     <GettingStartedCard
       workspaceId={workspaceId}
       initialState={onboardingState}
-      liveCounts={{ uploaded: documentsThisMonth, reviewed: stageCounts.ready + stageCounts.archive, placedInSheet: (stageCounts.ready + stageCounts.archive) - unplacedCount }}
+      liveCounts={{ uploaded: documentsThisMonth, reviewed: stageCounts.ready, placedInSheet: (stageCounts.ready) - unplacedCount }}
     />
   </main>
 }

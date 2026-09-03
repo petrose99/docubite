@@ -48,7 +48,7 @@ export default async function SheetsPage({ params, searchParams }: {
       <SheetsCreateCard
         icon="import"
         title="Import xlsx / csv"
-        description="Upload a spreadsheet file and start working."
+        description="Import a spreadsheet file and start working."
         workspaceId={workspaceId}
         href={`${base}/files?import=1`}
       />

@@ -25,7 +25,7 @@ export function MobileUploadButtons({ workspaceId, fileId }: { workspaceId: stri
     <a href={`/workspaces/${workspaceId}/files/${fileId}/sheet`}
       className="flex flex-1 items-center justify-center gap-2 rounded-[13px] border border-[#d5dee6] bg-white py-[13px] text-[14.5px] font-semibold text-emerald-700 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
       <Upload className="h-[18px] w-[18px]" />
-      Upload
+      Add documents
     </a>
   </div>
 }
