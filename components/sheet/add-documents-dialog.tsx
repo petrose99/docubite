@@ -95,7 +95,7 @@ export function AddDocumentsDialog({ workspaceId, fileId, apiRef, onClose }: {
           <Search className="h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search approved documents..."
+            placeholder="Search documents..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 bg-transparent text-sm outline-none"
@@ -107,7 +107,7 @@ export function AddDocumentsDialog({ workspaceId, fileId, apiRef, onClose }: {
         {loading ? (
           <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
         ) : docs.length === 0 ? (
-          <p className="px-5 py-12 text-center text-sm text-slate-400">No approved documents to add.</p>
+          <p className="px-5 py-12 text-center text-sm text-slate-400">No documents to add.</p>
         ) : (
           <div className="divide-y">
             {docs.map((doc) => (

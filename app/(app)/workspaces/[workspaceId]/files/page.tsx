@@ -34,7 +34,7 @@ export default async function SheetsPage({ params, searchParams }: {
         <SectionIntro section="sheets" workspaceId={workspaceId} />
       </div>
       <p className="mt-1 text-sm text-slate-500">
-        Spreadsheets you compute in — pull approved documents in, import your own files, and ask the AI assistant to do the work.
+        Spreadsheets you compute in — pull documents from extraction, import your own files, and ask the AI assistant to do the work.
       </p>
     </header>
 
@@ -55,7 +55,7 @@ export default async function SheetsPage({ params, searchParams }: {
       <SheetsCreateCard
         icon="extraction"
         title="From Docu Library"
-        description={unplacedCount > 0 ? `${unplacedCount} approved document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull approved documents into a sheet."}
+        description={unplacedCount > 0 ? `${unplacedCount} document${unplacedCount === 1 ? "" : "s"} ready to pull in.` : "Pull documents from extraction into a sheet."}
         workspaceId={workspaceId}
         href={`${base}/library?pick=sheet`}
         badge={unplacedCount > 0 ? unplacedCount : undefined}

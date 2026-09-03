@@ -47,7 +47,7 @@ export function PipelineShell({ workspaceId, stage, counts, rows, contentMatches
     </div>
     <StageTabs workspaceId={workspaceId} active={stage} counts={counts} />
     {stage === "ready" && counts.ready > 0 && <div className="flex items-center gap-2 border-b bg-emerald-50/60 px-6 py-2.5 text-[13px] text-emerald-800">
-      <span className="font-medium">{counts.ready} approved document{counts.ready === 1 ? "" : "s"}</span>
+      <span className="font-medium">{counts.ready} document{counts.ready === 1 ? "" : "s"} ready</span>
       <span className="text-emerald-600">·</span>
       <Link href={`/workspaces/${workspaceId}/library`} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-900">
         Find in Docu Library <ArrowRight className="h-3.5 w-3.5" />

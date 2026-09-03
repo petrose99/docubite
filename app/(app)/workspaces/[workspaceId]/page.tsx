@@ -180,7 +180,7 @@ export default async function WorkspaceHomePage({ params }: {
     <GettingStartedCard
       workspaceId={workspaceId}
       initialState={onboardingState}
-      liveCounts={{ uploaded: documentsThisMonth, approved: stageCounts.ready + stageCounts.archive, placedInSheet: (stageCounts.ready + stageCounts.archive) - unplacedCount }}
+      liveCounts={{ uploaded: documentsThisMonth, reviewed: stageCounts.ready + stageCounts.archive, placedInSheet: (stageCounts.ready + stageCounts.archive) - unplacedCount }}
     />
   </main>
 }
