@@ -1,25 +1,31 @@
 import { SectionIntro } from "@/components/shell/section-intro"
 import { getCurrentUser } from "@/lib/auth"
 import { countReviewedUnplaced } from "@/models/document-sheet-placements"
-import { listRecentFiles } from "@/models/files"
+import { listFiles, listFolders, folderTrail } from "@/models/files"
 import { requireWorkspaceRole } from "@/models/workspaces"
-import { FileSpreadsheet, FilePlus2, ArrowDownToLine, Table2 } from "lucide-react"
+import { FileSpreadsheet, FilePlus2, ArrowDownToLine, Table2, FolderOpen, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { SheetsCreateCard } from "@/components/files/sheets-create-card"
+import { SheetsFolderActions } from "@/components/files/sheets-folder-actions"
 import { LastUpdated } from "@/components/shared/relative-time"
 
 export const dynamic = "force-dynamic"
 
 export default async function SheetsPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string }>
-  searchParams: Promise<{ pick?: string }>
+  searchParams: Promise<{ pick?: string; q?: string; folder?: string }>
 }) {
   const [{ workspaceId }, query, user] = await Promise.all([params, searchParams, getCurrentUser()])
   await requireWorkspaceRole(workspaceId, user.id)
 
-  const [recentFiles, unplacedCount] = await Promise.all([
-    listRecentFiles(workspaceId, 50),
+  const search = query.q?.trim() || ""
+  const folderId = query.folder || null
+
+  const [files, folders, unplacedCount, trail] = await Promise.all([
+    listFiles(workspaceId, { query: search || undefined, folderId: search ? undefined : folderId }),
+    search ? [] : listFolders(workspaceId, { parentId: folderId }),
     countReviewedUnplaced(workspaceId),
+    folderId ? folderTrail(workspaceId, folderId) : [],
   ])
 
   const pickIds = query.pick?.split(",").filter(Boolean) ?? []
@@ -42,6 +48,7 @@ export default async function SheetsPage({ params, searchParams }: {
         title="Blank sheet"
         description="Start from scratch with a fresh spreadsheet."
         workspaceId={workspaceId}
+        folderId={folderId}
       />
       <SheetsCreateCard
         icon="import"
@@ -67,28 +74,72 @@ export default async function SheetsPage({ params, searchParams }: {
       <span>create a sheet above to pull them in.</span>
     </div>}
 
-    {recentFiles.length > 0 && <section>
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Your sheets</h2>
+    <div className="flex items-center gap-3">
+      <form action="" className="flex-1">
+        {folderId && <input type="hidden" name="folder" value={folderId} />}
+        <input
+          type="search"
+          name="q"
+          defaultValue={search}
+          placeholder="Search sheets..."
+          className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+        />
+      </form>
+      <SheetsFolderActions workspaceId={workspaceId} parentId={folderId} />
+    </div>
+
+    {trail.length > 0 && (
+      <nav className="flex items-center gap-1 text-sm text-slate-500">
+        <Link href={`${base}/files`} className="hover:text-emerald-700">Sheets</Link>
+        {trail.map((crumb) => (
+          <span key={crumb.id} className="flex items-center gap-1">
+            <ChevronRight className="h-3 w-3" />
+            <Link href={`${base}/files?folder=${crumb.id}`} className="hover:text-emerald-700">{crumb.name}</Link>
+          </span>
+        ))}
+      </nav>
+    )}
+
+    {(folders.length > 0 || files.length > 0) ? (
       <div className="divide-y rounded-xl border border-[#e6ebf1] bg-white shadow-panel">
-        {recentFiles.map((file) => (
+        {folders.map((folder) => (
+          <Link key={folder.id} href={`${base}/files?folder=${folder.id}`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-amber-50 text-amber-600">
+              <FolderOpen className="h-[17px] w-[17px]" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-800">{folder.name}</div>
+              <div className="text-xs text-slate-400">
+                {folder._count.files} sheet{folder._count.files === 1 ? "" : "s"}
+                {folder._count.children > 0 ? ` · ${folder._count.children} folder${folder._count.children === 1 ? "" : "s"}` : ""}
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+          </Link>
+        ))}
+        {files.map((file) => (
           <Link key={file.id} href={`${base}/files/${file.id}/sheet`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-700">
               <Table2 className="h-[17px] w-[17px]" />
             </span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-800">{file.name}</div>
-              <div className="text-xs text-slate-400">{file._count.documents} document{file._count.documents === 1 ? "" : "s"}{file.folder ? ` · ${file.folder.name}` : ""}</div>
+              {search && file.folder && <div className="text-xs text-slate-400">in {file.folder.name}</div>}
             </div>
             <span className="shrink-0 text-xs text-slate-400"><LastUpdated iso={file.updatedAt.toISOString()} /></span>
           </Link>
         ))}
       </div>
-    </section>}
-
-    {recentFiles.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center">
-      <FileSpreadsheet className="mx-auto h-10 w-10 text-slate-300" />
-      <p className="mt-3 text-sm font-medium text-slate-500">No sheets yet</p>
-      <p className="mt-1 text-xs text-slate-400">Create one above to get started.</p>
-    </div>}
+    ) : (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center">
+        <FileSpreadsheet className="mx-auto h-10 w-10 text-slate-300" />
+        <p className="mt-3 text-sm font-medium text-slate-500">
+          {search ? "No sheets match your search." : "No sheets yet"}
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          {search ? "Try a different query." : "Create one above to get started."}
+        </p>
+      </div>
+    )}
   </main>
 }

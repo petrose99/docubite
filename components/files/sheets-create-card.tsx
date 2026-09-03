@@ -11,13 +11,14 @@ const ICONS = {
   extraction: Library,
 } as const
 
-export function SheetsCreateCard({ icon, title, description, workspaceId, href, badge }: {
+export function SheetsCreateCard({ icon, title, description, workspaceId, href, badge, folderId }: {
   icon: keyof typeof ICONS
   title: string
   description: string
   workspaceId: string
   href?: string
   badge?: number
+  folderId?: string | null
 }) {
   const router = useRouter()
   const [creating, startCreate] = useTransition()
@@ -45,7 +46,7 @@ export function SheetsCreateCard({ icon, title, description, workspaceId, href, 
       return
     }
     startCreate(async () => {
-      const result = await createFileAction(workspaceId, null, trimmed)
+      const result = await createFileAction(workspaceId, folderId ?? null, trimmed)
       if (result.success && result.data) {
         router.push(`/workspaces/${workspaceId}/files/${result.data.fileId}/sheet`)
       } else {
