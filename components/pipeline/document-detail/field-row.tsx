@@ -32,13 +32,13 @@ export function FieldRow({ field, value, confidence, ref: provenanceRef, onFocus
       </label>
       {lowConfidence && <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700">Low confidence</span>}
       {provenanceRef ? (
-        <button type="button" className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 opacity-60 transition-opacity hover:bg-emerald-50 hover:opacity-100"
+        <button type="button" className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 hover:bg-emerald-50"
           onClick={() => onFocusSource({ page: provenanceRef.page, bbox: provenanceRef.bbox, quote: provenanceRef.quote })}
           title="Jump to where this was read in the source">
           <Crosshair className="h-3 w-3" />Source
         </button>
       ) : (
-        <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-slate-300" title="No source pin — entered by hand or unresolved">
+        <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" title="No source pin — entered by hand or unresolved">
           <Pencil className="h-2.5 w-2.5" />Manual
         </span>
       )}

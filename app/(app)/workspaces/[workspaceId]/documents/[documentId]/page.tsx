@@ -104,6 +104,7 @@ export default async function DocumentPage({ params, searchParams }: {
     data={data}
     fieldConfidence={fieldConfidence}
     provenanceFields={provenance?.fields ?? {}}
+    provenanceItems={provenance?.items ?? {}}
     initialTarget={initialTarget}
     conflictingLabels={conflictingLabels}
     missingRequiredFields={confidence?.missingRequiredFields ?? []}

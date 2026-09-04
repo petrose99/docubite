@@ -23,7 +23,7 @@ type Tab = "details" | "note" | "activity"
 type PanelLayout = "split" | "source-only" | "details-only"
 
 export function SplitPane({
-  workspaceId, source, fields, data, fieldConfidence, provenanceFields, initialTarget, conflictingLabels, missingRequiredFields,
+  workspaceId, source, fields, data, fieldConfidence, provenanceFields, provenanceItems, initialTarget, conflictingLabels, missingRequiredFields,
   saveReview, documentType: initialDocumentType, suggestedDocumentType, note: initialNote, auditEvents, prevHref, nextHref, position, stage, afterActionHref,
   header, canPush, pushCard, canCreateRule, defaultSupplier, matchKind, bankMatches,
 }: {
@@ -33,6 +33,7 @@ export function SplitPane({
   data: Record<string, unknown>
   fieldConfidence: Record<string, number>
   provenanceFields: Record<string, Ref>
+  provenanceItems: Record<string, (Ref | null)[]>
   initialTarget: ProvenanceTarget | null
   conflictingLabels: string[]
   missingRequiredFields: string[]
@@ -292,7 +293,7 @@ export function SplitPane({
             {/* Review form */}
             <form action={saveReview} className="space-y-3">
               {formFields.map((field) => field.type === "array"
-                ? <LineItemsSection key={field.key} field={field} value={data[field.key]} fieldKey={field.key} summaryFields={summaryFields} fieldValues={data} provenanceFields={provenanceFields} onFocusSource={setTarget} />
+                ? <LineItemsSection key={field.key} field={field} value={data[field.key]} fieldKey={field.key} summaryFields={summaryFields} fieldValues={data} provenanceFields={provenanceFields} provenanceItems={provenanceItems[field.key] ?? []} onFocusSource={setTarget} />
                 : <FieldRow key={field.key} field={field} value={data[field.key]} confidence={fieldConfidence[field.key] ?? null} ref={provenanceFields[field.key] ?? null} onFocusSource={setTarget} />)}
 
               <div className="flex items-center gap-3 border-t border-slate-100 pt-3">

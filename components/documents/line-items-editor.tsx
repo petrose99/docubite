@@ -1,7 +1,8 @@
 "use client"
 
 import type { DocumentItemFieldDefinition } from "@/lib/document-templates"
-import { Plus, Trash2 } from "lucide-react"
+import type { Ref } from "@/lib/provenance"
+import { Crosshair, Plus, Trash2 } from "lucide-react"
 import { useState } from "react"
 
 type Row = { id: number; values: Record<string, unknown> }
@@ -20,7 +21,13 @@ const hasValue = (value: unknown) => value !== undefined && value !== null && va
  * visible even empty, since a missing required value is itself worth seeing). On a document with
  * no line items yet (a fresh row for someone to fill in by hand), nothing has "not been
  * extracted" yet, so every column shows. */
-export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKey: string; itemFields: DocumentItemFieldDefinition[]; initialRows: Array<Record<string, unknown>> }) {
+export function LineItemsEditor({ fieldKey, itemFields, initialRows, provenanceItems, onFocusSource }: {
+  fieldKey: string
+  itemFields: DocumentItemFieldDefinition[]
+  initialRows: Array<Record<string, unknown>>
+  provenanceItems?: (Ref | null)[]
+  onFocusSource?: (target: { page: number; bbox: Ref["bbox"]; quote: string }) => void
+}) {
   const [rows, setRows] = useState<Row[]>(() => {
     const seed = initialRows.length ? initialRows : [{}]
     return seed.map((values, index) => ({ id: index, values }))
@@ -44,7 +51,9 @@ export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKe
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => <tr key={row.id} className="group even:bg-slate-50/50 hover:bg-emerald-50/40">
+          {rows.map((row, index) => {
+            const rowRef = provenanceItems?.[index] ?? null
+            return <tr key={row.id} className="group even:bg-slate-50/50 hover:bg-emerald-50/40">
             {columns.map((item) => {
               const inputId = `${fieldKey}-${row.id}-${item.key}`
               const name = `${fieldKey}[${index}][${item.key}]`
@@ -67,13 +76,22 @@ export function LineItemsEditor({ fieldKey, itemFields, initialRows }: { fieldKe
               </td>
             })}
             <td className="border-b border-slate-100 px-1 text-center">
-              <button type="button" aria-label="Remove row" title="Remove row" disabled={rows.length <= 1}
-                className="rounded p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-                onClick={() => removeRow(row.id)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                {rowRef && onFocusSource && (
+                  <button type="button" aria-label="View source" title="View source in document"
+                    className="rounded p-1 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700"
+                    onClick={() => onFocusSource({ page: rowRef.page, bbox: rowRef.bbox, quote: rowRef.quote })}>
+                    <Crosshair className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button type="button" aria-label="Remove row" title="Remove row" disabled={rows.length <= 1}
+                  className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-0"
+                  onClick={() => removeRow(row.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </td>
-          </tr>)}
+          </tr>})}
         </tbody>
       </table>
     </div>
