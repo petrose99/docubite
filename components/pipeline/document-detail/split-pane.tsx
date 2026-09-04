@@ -6,13 +6,14 @@ import { DeleteDocumentButton } from "@/components/documents/delete-document-but
 import { FieldRow } from "@/components/pipeline/document-detail/field-row"
 import { LineItemsSection } from "@/components/pipeline/document-detail/line-items-section"
 import { archiveDocumentsAction, flagDocumentsAction, moveDocumentsToStageAction, updateDocumentNoteAction } from "@/app/(app)/workspaces/[workspaceId]/pipeline-actions"
+import { setDocumentTypeAction } from "@/app/(app)/workspaces/[workspaceId]/actions"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SourceViewer, type ProvenanceTarget, type SourceDocument } from "@/components/viewer/source-preview"
 import type { DocumentFieldDefinition } from "@/lib/document-templates"
 import type { PipelineStage } from "@/lib/documents/stages"
 import type { Ref } from "@/lib/provenance"
-import { Archive, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2 } from "lucide-react"
+import { Archive, ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, type ReactNode } from "react"
@@ -22,7 +23,7 @@ type Tab = "details" | "note" | "activity"
 
 export function SplitPane({
   workspaceId, source, fields, data, fieldConfidence, provenanceFields, initialTarget, conflictingLabels, missingRequiredFields,
-  saveReview, note: initialNote, auditEvents, prevHref, nextHref, position, stage, afterActionHref,
+  saveReview, documentType: initialDocumentType, suggestedDocumentType, note: initialNote, auditEvents, prevHref, nextHref, position, stage, afterActionHref,
   header, canPush, pushCard, canCreateRule, defaultSupplier, matchKind, bankMatches,
 }: {
   workspaceId: string
@@ -35,6 +36,8 @@ export function SplitPane({
   conflictingLabels: string[]
   missingRequiredFields: string[]
   saveReview: (formData: FormData) => Promise<void>
+  documentType: "expense" | "sale" | null
+  suggestedDocumentType: string | null
   note: string
   auditEvents: Array<{ id: string; label: string; createdAt: string; actorName: string | null }>
   prevHref: string | null
@@ -63,7 +66,31 @@ export function SplitPane({
   const [note, setNote] = useState(initialNote)
   const [savingNote, setSavingNote] = useState(false)
   const [flagged, setFlagged] = useState(header.flagged)
+  const [docType, setDocType] = useState<"expense" | "sale" | null>(initialDocumentType)
+  const [savingDocType, setSavingDocType] = useState(false)
   const [busyAction, setBusyAction] = useState<"flag" | "archive" | "ready" | null>(null)
+
+  const suggestedType: "expense" | "sale" | null = (() => {
+    if (initialDocumentType) return null
+    const dt = (suggestedDocumentType ?? "").toLowerCase()
+    if (["invoice", "receipt", "bill", "purchase_order", "expense"].some((k) => dt.includes(k))) return "expense"
+    if (["sales_invoice", "credit_note", "quotation", "sales"].some((k) => dt.includes(k))) return "sale"
+    return null
+  })()
+
+  const selectDocType = async (type: "expense" | "sale") => {
+    setSavingDocType(true)
+    setDocType(type)
+    try {
+      const result = await setDocumentTypeAction(workspaceId, header.documentId, type)
+      if (!result.success) { toast.error(result.error || "Could not save document type"); setDocType(docType); return }
+    } catch {
+      toast.error("Could not reach the server")
+      setDocType(docType)
+    } finally {
+      setSavingDocType(false)
+    }
+  }
 
   // Groups the array field (line items) together with whatever numeric fields the template
   // declares immediately before it — Subtotal/Tax total/Total for an invoice, opening/closing
@@ -194,11 +221,32 @@ export function SplitPane({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === "details" && <div className="space-y-5 p-5">
+            <div className={`rounded-lg border-2 p-4 ${docType ? "border-slate-200 bg-white" : "border-amber-300 bg-amber-50"}`}>
+              <p className="mb-3 text-sm font-semibold text-slate-800">
+                {docType ? "Document type" : "What type of document is this?"}
+                {!docType && <span className="ml-1.5 text-xs font-medium text-amber-700">Required</span>}
+              </p>
+              <div className="flex gap-2">
+                <button type="button" disabled={savingDocType} onClick={() => void selectDocType("expense")}
+                  className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${docType === "expense" ? "border-red-300 bg-red-50 text-red-800 ring-2 ring-red-200" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50/50"}`}>
+                  <ArrowUp className="h-4 w-4" />Expense
+                  {suggestedType === "expense" && !docType && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Suggested</span>}
+                </button>
+                <button type="button" disabled={savingDocType} onClick={() => void selectDocType("sale")}
+                  className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${docType === "sale" ? "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-200" : "border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50"}`}>
+                  <ArrowDown className="h-4 w-4" />Sale
+                  {suggestedType === "sale" && !docType && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Suggested</span>}
+                </button>
+              </div>
+              {!docType && <p className="mt-2 text-xs text-amber-700">You must confirm whether this is an expense (money out) or a sale (money in) before saving.</p>}
+            </div>
+
             <form action={saveReview} className="space-y-5">
               {formFields.map((field) => field.type === "array"
                 ? <LineItemsSection key={field.key} field={field} value={data[field.key]} fieldKey={field.key} summaryFields={summaryFields} fieldValues={data} provenanceFields={provenanceFields} onFocusSource={setTarget} />
                 : <FieldRow key={field.key} field={field} value={data[field.key]} confidence={fieldConfidence[field.key] ?? null} ref={provenanceFields[field.key] ?? null} onFocusSource={setTarget} />)}
-              <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">Save review</button>
+              <button type="submit" disabled={!docType} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50" title={!docType ? "Choose Expense or Sale first" : undefined}>Save review</button>
+              {!docType && <p className="text-xs text-amber-600">Choose a document type above to enable saving.</p>}
             </form>
 
             {canPush && pushCard}

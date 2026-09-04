@@ -52,6 +52,8 @@ export default async function DocumentPage({ params, searchParams }: {
   const conflictingLabels = (confidence?.conflictingFields || []).map((key) => fields.find((field) => field.key === key)?.label || key)
   const data = (document.reviewedData || document.rawExtraction || {}) as Record<string, unknown>
   const provenance = document.provenance as DocumentProvenance | null
+  const codingData = (document.codingData as Record<string, unknown> | null) ?? {}
+  const classification = (document.classification as { docType?: string } | null) ?? {}
   const saveReview = async (formData: FormData) => { "use server"; await saveDocumentReviewAction(workspaceId, documentId, formData) }
   const supplierValue = data.vendor ?? data.merchant
   const supplier = typeof supplierValue === "string" ? supplierValue.trim() : ""
@@ -101,6 +103,8 @@ export default async function DocumentPage({ params, searchParams }: {
     conflictingLabels={conflictingLabels}
     missingRequiredFields={confidence?.missingRequiredFields ?? []}
     saveReview={saveReview}
+    documentType={(codingData.documentType === "expense" || codingData.documentType === "sale") ? codingData.documentType : null}
+    suggestedDocumentType={classification.docType ?? null}
     note={document.note ?? ""}
     auditEvents={auditEvents.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() }))}
     prevHref={prevHref}

@@ -363,6 +363,9 @@ export async function updateDocumentReview(input: { workspaceId: string; documen
   const fields = parseTemplateFields(document.fieldSnapshot)
   const reviewedData = validateDocumentValues(fields, input.reviewedData)
   const missing = findMissingRequiredFields(fields, reviewedData)
+  const coding = (document.codingData as Record<string, unknown> | null) ?? {}
+  const hasDocumentType = coding.documentType === "expense" || coding.documentType === "sale"
+  if (!hasDocumentType) missing.push("document_type")
   // Re-project the structured spine from the values a human signed off on. Source is "manual"
   // because these are now reviewed values, but the per-field scores are carried over from the
   // extraction rather than being reset to 1: a bulk "mark reviewed" does not mean somebody read

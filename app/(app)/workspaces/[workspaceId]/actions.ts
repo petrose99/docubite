@@ -17,6 +17,7 @@ import { deleteWorkspaceDocuments, getDocumentsStatus, getWorkspaceDocument, mar
 import { addDomainPackToFile, createFile, createFolder, deleteFileIfEmpty, deleteFiles, deleteFolder, duplicateFile, getFileTemplates, getWorkspaceFile, listFileShares, moveToFolder, removeFileShare, renameFile, renameFolder, setLinkAccess, touchFile, upsertFileShare } from "@/models/files"
 import { getCurrentUser } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import type { Prisma } from "@/prisma/client"
 import { revalidatePath } from "next/cache"
 import { after } from "next/server"
 import { z } from "zod"
@@ -113,6 +114,17 @@ export async function uploadZipAction(workspaceId: string, fileId: string, formD
     await revalidateSheet(workspaceId, fileId)
     return { success: true, data: { count, documents, skipped: skipped.length, truncated } }
   } catch (error) { return { success: false, error: errorMessage(error, "ZIP upload failed") } }
+}
+
+export async function setDocumentTypeAction(workspaceId: string, documentId: string, documentType: "expense" | "sale"): Promise<ActionState<null>> {
+  const user = await getCurrentUser()
+  if (!(await requireMember(workspaceId, user.id))) return { success: false, error: NO_ACCESS }
+  const document = await getWorkspaceDocument(workspaceId, documentId)
+  if (!document) return { success: false, error: "Document not found" }
+  const prev = (document.codingData as Record<string, unknown> | null) ?? {}
+  await prisma.document.update({ where: { id: documentId }, data: { codingData: { ...prev, documentType } as Prisma.InputJsonValue } })
+  revalidatePath(`${paths(workspaceId).documents}/${documentId}`)
+  return { success: true, data: null }
 }
 
 export async function saveDocumentReviewAction(workspaceId: string, documentId: string, formData: FormData): Promise<ActionState<null>> {

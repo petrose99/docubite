@@ -45,7 +45,8 @@ async function pushDocumentToConnection(
   const bill = normalizeBillFromDocument({ documentId: document.id, filename: document.filename, templateCode, reviewedData })
   const coding = (document.codingData as Record<string, unknown> | null) ?? {}
   const category = (typeof coding.account === "string" && coding.account) || (typeof reviewedData.category === "string" && reviewedData.category) || null
-  const payload = { ...bill, ...(expenseAccountId ? { expenseAccountId } : {}), ...(category ? { category } : {}) }
+  const documentType = coding.documentType === "expense" || coding.documentType === "sale" ? coding.documentType : "expense"
+  const payload = { ...bill, documentType, ...(expenseAccountId ? { expenseAccountId } : {}), ...(category ? { category } : {}) }
 
   const push = await upsertWorkspaceIntegrationPush(workspaceId, {
     connectionId: connection.id,
