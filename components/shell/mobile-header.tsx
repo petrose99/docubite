@@ -3,12 +3,15 @@
 import { BiteMark } from "@/components/marketing/logo"
 import { SwitchableWorkspace, WorkspaceSwitcher } from "@/components/workspace/switcher"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 export function MobileHeader({ workspaceId, workspaces, user }: {
   workspaceId: string
   workspaces: SwitchableWorkspace[]
   user: { name: string; email: string }
 }) {
+  const pathname = usePathname()
+  if (pathname.endsWith("/sheet") || pathname.includes("/documents/")) return null
   const initial = (user.name || user.email).trim().charAt(0).toUpperCase() || "?"
 
   return <header className="flex shrink-0 items-center gap-2.5 border-b border-[#eef2f6] bg-[rgba(250,251,252,0.9)] px-4 pb-2.5 pt-3 backdrop-blur-[10px] md:hidden">

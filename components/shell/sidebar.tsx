@@ -54,7 +54,7 @@ export function Sidebar({ workspaceId, workspaces, user, enabledModuleKeys, acco
   pipelineReviewCount?: number
 }) {
   const pathname = usePathname()
-  if (pathname.endsWith("/sheet")) return null
+  if (pathname.endsWith("/sheet") || pathname.includes("/documents/")) return null
 
   const base = `/workspaces/${workspaceId}`
   const enabled = new Set(enabledModuleKeys)

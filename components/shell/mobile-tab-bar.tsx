@@ -9,7 +9,7 @@ export function MobileTabBar({ workspaceId, pipelineReviewCount = 0 }: {
   pipelineReviewCount?: number
 }) {
   const pathname = usePathname()
-  if (pathname.endsWith("/sheet")) return null
+  if (pathname.endsWith("/sheet") || pathname.includes("/documents/")) return null
 
   const base = `/workspaces/${workspaceId}`
   const tabs = [
