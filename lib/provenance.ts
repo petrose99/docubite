@@ -87,6 +87,38 @@ export function scoreMatch(query: string, text: string): number {
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n))
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+/** When a matched block is a multi-row table, narrows the bbox to the row containing the matched
+ * value instead of highlighting the entire table. Splits by `</tr>` to find rows, scores each
+ * against the query, and returns a vertically-narrowed bbox covering the best-matching row.
+ * Returns the original bbox unchanged when the block is not a table or has fewer than 2 rows. */
+function narrowTableBbox(
+  blockText: string,
+  query: string,
+  value: string,
+  bbox: [number, number, number, number],
+): [number, number, number, number] {
+  if (!blockText.includes("<tr")) return bbox
+  const rows = blockText.split(/<\/tr>/i).filter((r) => /<td/i.test(r))
+  if (rows.length < 2) return bbox
+  const q = query || value
+  if (!q) return bbox
+  let bestIdx = 0
+  let bestScore = 0
+  for (let i = 0; i < rows.length; i++) {
+    const rowText = rows[i].replace(/<[^>]*>/g, " ")
+    const s = Math.max(scoreMatch(q, rowText), value ? scoreMatch(value, rowText) : 0)
+    if (s > bestScore) { bestScore = s; bestIdx = i }
+  }
+  if (bestScore <= 0) return bbox
+  const [x0, y0, x1, y1] = bbox
+  const tableHeight = y1 - y0
+  const rowHeight = tableHeight / rows.length
+  const pad = Math.max(rowHeight * 0.2, 2)
+  const ny0 = Math.max(y0, y0 + bestIdx * rowHeight - pad)
+  const ny1 = Math.min(y1, y0 + (bestIdx + 1) * rowHeight + pad)
+  return [x0, ny0, x1, ny1]
+}
+
 /** Turns an extracted value into a plain string used as a fallback query when the model's quote
  * is paraphrased or missing — the printed value itself is often the most reliable thing to match. */
 function valueToQuery(value: unknown): string {
@@ -187,9 +219,10 @@ export function resolveProvenance(
     const best = stagedBest(quote, valueStr, usable, hintPage)
     if (best.index >= 0 && best.block && best.score >= ACCEPT_SCORE) {
       const size = pageSizes?.find((page) => page.page === best.block!.page) ?? estimated?.get(best.block.page) ?? null
+      const narrowed = best.block.bbox ? narrowTableBbox(best.block.text, quote, valueStr, best.block.bbox) : best.block.bbox
       return {
         page: best.block.page,
-        bbox: normalizeBbox(best.block.bbox, size),
+        bbox: normalizeBbox(narrowed, size),
         quote: quote || best.block.text.slice(0, 300),
         blockIndex: best.index,
         score: round2(best.score),
@@ -201,7 +234,8 @@ export function resolveProvenance(
     // since a rough highlight is far more useful than outlining the entire page.
     if (best.index >= 0 && best.block?.bbox) {
       const size = pageSizes?.find((p) => p.page === best.block!.page) ?? estimated?.get(best.block.page) ?? null
-      return { page: best.block.page, bbox: normalizeBbox(best.block.bbox, size), quote, blockIndex: best.index, score: round2(best.score) }
+      const narrowed = narrowTableBbox(best.block.text, quote, valueStr, best.block.bbox)
+      return { page: best.block.page, bbox: normalizeBbox(narrowed, size), quote, blockIndex: best.index, score: round2(best.score) }
     }
     return { page, bbox: null, quote, blockIndex: null, score: best.index >= 0 ? round2(best.score) : 0 }
   }
@@ -270,7 +304,9 @@ export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: Blo
     if (ref.bbox) continue
     const block = findBestBlock(ref, fieldValues?.[key])
     if (block?.bbox) {
-      const bbox = normalizeBbox(block.bbox, resolveSize(block.page))
+      const valStr = fieldValues?.[key] !== undefined && fieldValues[key] !== null ? String(fieldValues[key]) : ""
+      const narrowed = narrowTableBbox(block.text, ref.quote, valStr, block.bbox)
+      const bbox = normalizeBbox(narrowed, resolveSize(block.page))
       if (bbox) { fields[key] = { ...ref, bbox }; changed = true }
     }
   }

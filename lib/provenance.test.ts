@@ -74,6 +74,21 @@ describe("resolveProvenance", () => {
     expect(ref!.score).toBeLessThan(0.55)
   })
 
+  it("narrows the highlight to the matching row inside a table block", () => {
+    const tableHtml = "<table><tr><td>Widget A</td><td>100</td></tr><tr><td>Widget B</td><td>200</td></tr><tr><td>Subtotal</td><td>300</td></tr></table>"
+    const tableBlocks: MineruBlock[] = [
+      { page: 1, bbox: [10, 100, 190, 400], text: tableHtml, type: "table" },
+    ]
+    const ref = resolveProvenance({ page: 1, quote: "Subtotal 300" }, 300, tableBlocks, sizes)
+    expect(ref).not.toBeNull()
+    expect(ref!.bbox).not.toBeNull()
+    // The table has 3 rows; "Subtotal 300" is in the last row, so the highlight should
+    // cover roughly the bottom third, not the whole table.
+    const [, y0, , y1] = ref!.bbox!
+    const highlightHeight = y1 - y0
+    expect(highlightHeight).toBeLessThan(0.5)
+  })
+
   it("degrades to the hinted page when there are no blocks, and null when there is nothing to point at", () => {
     expect(resolveProvenance({ page: 3, quote: "anything" }, "x", null, null)).toEqual({ page: 3, bbox: null, quote: "anything", blockIndex: null, score: 0 })
     expect(resolveProvenance({ page: null, quote: "" }, null, null, null)).toBeNull()
