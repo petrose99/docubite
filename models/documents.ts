@@ -130,7 +130,7 @@ export async function createDocumentFromBuffer(input: {
  * express alone — archive (a boolean-ish timestamp, not a status) and the ready/approvals split
  * (which depends on ReviewTask existence). Shared by every query that needs "is this document on
  * stage X", so the list, its counts, and a content-search filter can never disagree. */
-function stageWhereClause(stage: PipelineStage): Prisma.DocumentWhereInput {
+export function stageWhereClause(stage: PipelineStage): Prisma.DocumentWhereInput {
   return {
     ...stageToStatusFilter(stage),
     ...(stage !== "archive" ? { archivedAt: null } : {}),
@@ -154,6 +154,78 @@ export async function listWorkspaceDocuments(workspaceId: string, filters: { sta
     ...(filters.templateId ? { templateId: filters.templateId } : {}),
   }
   return prisma.document.findMany({ where, include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } }, templateVersion: true }, orderBy: { receivedAt: "desc" }, take: 100 })
+}
+
+export type LibraryListFilters = {
+  templateId?: string
+  category?: string
+  supplier?: string
+  receivedFrom?: Date
+  receivedTo?: Date
+  flagged?: boolean
+  filenameQuery?: string
+  documentIds?: string[]
+  sort?: "receivedAt" | "filename"
+  dir?: "asc" | "desc"
+  page?: number
+  pageSize?: number
+}
+
+export type LibraryDocument = Awaited<ReturnType<typeof listWorkspaceDocuments>>[number]
+
+export async function listLibraryDocuments(workspaceId: string, filters: LibraryListFilters = {}): Promise<{ documents: LibraryDocument[]; total: number; page: number; pageCount: number }> {
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 24, 1), 100)
+
+  if (filters.documentIds?.length) {
+    const where: Prisma.DocumentWhereInput = { workspaceId, id: { in: filters.documentIds }, ...stageWhereClause("ready") }
+    const docs = await prisma.document.findMany({ where, include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } }, templateVersion: true } })
+    const idOrder = new Map(filters.documentIds.map((id, i) => [id, i]))
+    docs.sort((a, b) => (idOrder.get(a.id) ?? Infinity) - (idOrder.get(b.id) ?? Infinity))
+    return { documents: docs, total: docs.length, page: 1, pageCount: 1 }
+  }
+
+  const where: Prisma.DocumentWhereInput = {
+    workspaceId,
+    ...stageWhereClause("ready"),
+    ...(filters.templateId ? { templateId: filters.templateId } : {}),
+    ...(filters.flagged ? { flaggedAt: { not: null } } : {}),
+    ...(filters.filenameQuery?.trim() ? { filename: { contains: filters.filenameQuery.trim(), mode: "insensitive" as const } } : {}),
+    ...((filters.receivedFrom || filters.receivedTo) ? {
+      receivedAt: {
+        ...(filters.receivedFrom ? { gte: filters.receivedFrom } : {}),
+        ...(filters.receivedTo ? { lte: filters.receivedTo } : {}),
+      },
+    } : {}),
+    ...(filters.supplier ? {
+      fieldValues: { some: { fieldKey: "supplier_name", itemKey: null, valueText: { contains: filters.supplier, mode: "insensitive" as const } } },
+    } : {}),
+    ...(filters.category ? {
+      OR: [
+        { codingData: { path: ["account"], string_contains: filters.category } },
+        { reviewedData: { path: ["category"], string_contains: filters.category } },
+      ],
+    } : {}),
+  }
+
+  const orderBy: Prisma.DocumentOrderByWithRelationInput = {
+    [filters.sort ?? "receivedAt"]: filters.dir ?? "desc",
+  }
+
+  const [docs, total] = await prisma.$transaction([
+    prisma.document.findMany({
+      where,
+      include: { template: { include: { versions: { take: 1, orderBy: { createdAt: "desc" } } } }, templateVersion: true },
+      orderBy,
+      skip: (Math.max((filters.page ?? 1), 1) - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.document.count({ where }),
+  ])
+
+  const pageCount = Math.max(Math.ceil(total / pageSize), 1)
+  const page = Math.min(Math.max(filters.page ?? 1, 1), pageCount)
+
+  return { documents: docs, total, page, pageCount }
 }
 
 /** Per-stage counts for the pipeline tabs, sharing stageWhereClause with listWorkspaceDocuments so
@@ -200,6 +272,7 @@ export type ReadyToPushDocument = {
   vendorName: string
   total: number
   currencyCode: string | null
+  category: string
 }
 
 /** Documents on the "Ready" pipeline stage whose type is pushable to accounting and that don't
@@ -223,7 +296,9 @@ export async function listReadyToPushDocuments(workspaceId: string, connectionId
     const reviewedData = (doc.reviewedData as Record<string, unknown> | null) ?? (doc.rawExtraction as Record<string, unknown> | null) ?? {}
     try {
       const bill = normalizeBillFromDocument({ documentId: doc.id, filename: doc.filename, templateCode, reviewedData })
-      results.push({ id: doc.id, filename: doc.filename, vendorName: bill.vendorName, total: bill.total, currencyCode: bill.currencyCode })
+      const coding = (doc.codingData as Record<string, unknown> | null) ?? {}
+      const category = asScalarString(coding.account) ?? asScalarString(reviewedData.category) ?? "Uncategorized"
+      results.push({ id: doc.id, filename: doc.filename, vendorName: bill.vendorName, total: bill.total, currencyCode: bill.currencyCode, category })
     } catch {
       // no usable total — not push-ready
     }

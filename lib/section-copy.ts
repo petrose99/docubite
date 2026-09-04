@@ -17,7 +17,7 @@ export const SECTION_COPY: Record<SectionKey, SectionCopy> = {
   },
   library: {
     banner:
-      "Docu Library is the permanent record of every document, searchable in plain language.",
+      "Browse, filter, and search across every reviewed document.",
     howItWorks: [
       "Reviewed documents land here automatically — browse, filter, and search across everything.",
       "Pull documents into Sheets whenever you need to compute or analyse.",
