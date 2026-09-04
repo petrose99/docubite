@@ -58,9 +58,11 @@ describe("resolveProvenance", () => {
     expect(ref).toMatchObject({ page: 1, bbox: null, quote: "Grand total 1234.56", score: 1 })
   })
 
-  it("keeps the accepted block but drops the bbox when no page sizes are known", () => {
+  it("estimates page sizes from blocks when explicit sizes are missing", () => {
     const ref = resolveProvenance({ page: 1, quote: "Total 99.00" }, 99, blocks, null)
-    expect(ref).toMatchObject({ page: 1, bbox: null, blockIndex: 1, score: 1 })
+    expect(ref).toMatchObject({ page: 1, blockIndex: 1, score: 1 })
+    expect(ref!.bbox).not.toBeNull()
+    expect(ref!.bbox!.every((n) => n >= 0 && n <= 1)).toBe(true)
   })
 
   it("keeps the page but nulls the bbox for a below-threshold match", () => {

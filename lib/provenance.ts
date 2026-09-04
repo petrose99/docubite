@@ -102,7 +102,9 @@ function valueToQuery(value: unknown): string {
 }
 
 /** Normalises a block's pixel bbox into the page's 0-1 space, ordering the corners and clamping
- * to the page. Null when the block had no bbox or the page size is unknown. */
+ * to the page. When pageSizes are missing (no middle.json from MinerU), estimates the page
+ * dimensions from the maximum block coordinates on that page — the bottom-right corner of the
+ * furthest block is a reasonable proxy for page size. */
 function normalizeBbox(bbox: [number, number, number, number] | null, size: MineruPageSize | null): [number, number, number, number] | null {
   if (!bbox || !size) return null
   const [x0, y0, x1, y1] = bbox
@@ -111,6 +113,26 @@ function normalizeBbox(bbox: [number, number, number, number] | null, size: Mine
   const ny0 = clamp01(y0 / size.height)
   const ny1 = clamp01(y1 / size.height)
   return [Math.min(nx0, nx1), Math.min(ny0, ny1), Math.max(nx0, nx1), Math.max(ny0, ny1)]
+}
+
+/** Estimates page dimensions from the blocks themselves when MinerU's middle.json is absent.
+ * Uses the maximum bottom-right coordinate across all blocks on each page, with a small margin. */
+function estimatePageSizes(blocks: MineruBlock[]): Map<number, MineruPageSize> {
+  const extents = new Map<number, { maxX: number; maxY: number }>()
+  for (const block of blocks) {
+    if (!block.bbox) continue
+    const cur = extents.get(block.page)
+    const [, , x1, y1] = block.bbox
+    if (!cur) { extents.set(block.page, { maxX: x1, maxY: y1 }); continue }
+    if (x1 > cur.maxX) cur.maxX = x1
+    if (y1 > cur.maxY) cur.maxY = y1
+  }
+  const result = new Map<number, MineruPageSize>()
+  for (const [page, ext] of extents) {
+    const margin = 1.08
+    result.set(page, { page, width: ext.maxX * margin, height: ext.maxY * margin })
+  }
+  return result
 }
 
 type BlockMatch = { index: number; score: number; block: MineruBlock | null }
@@ -160,10 +182,11 @@ export function resolveProvenance(
   const hintPage = Number.isInteger(hint.page) && (hint.page as number) > 0 ? (hint.page as number) : null
 
   const usable = Array.isArray(blocks) && blocks.length ? blocks : null
+  const estimated = usable && (!pageSizes || !pageSizes.length) ? estimatePageSizes(usable) : null
   if (usable && (quote || valueStr)) {
     const best = stagedBest(quote, valueStr, usable, hintPage)
     if (best.index >= 0 && best.block && best.score >= ACCEPT_SCORE) {
-      const size = pageSizes?.find((page) => page.page === best.block!.page) ?? null
+      const size = pageSizes?.find((page) => page.page === best.block!.page) ?? estimated?.get(best.block.page) ?? null
       return {
         page: best.block.page,
         bbox: normalizeBbox(best.block.bbox, size),
@@ -203,6 +226,51 @@ export type BlocksSidecar = {
   version: 1
   pages: MineruPageSize[]
   blocks: { page: number; bbox: [number, number, number, number] | null; text: string; type: string }[]
+}
+
+/** Re-resolves bboxes for stored provenance refs that were saved with bbox: null because page
+ * sizes were missing at extraction time. Reads the blocks sidecar and estimates page sizes from
+ * block extents, then patches any null-bbox ref whose blockIndex points at a block with a bbox. */
+export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: BlocksSidecar | null): DocumentProvenance {
+  if (!sidecar || !sidecar.blocks.length) return provenance
+  const pageSizes = sidecar.pages.length ? sidecar.pages : null
+  const estimated = !pageSizes ? estimatePageSizes(sidecar.blocks) : null
+
+  const resolveSize = (page: number): MineruPageSize | null =>
+    pageSizes?.find((p) => p.page === page) ?? estimated?.get(page) ?? null
+
+  let changed = false
+  const fields = { ...provenance.fields }
+  for (const [key, ref] of Object.entries(fields)) {
+    if (ref.bbox) continue
+    const block = ref.blockIndex !== null ? sidecar.blocks[ref.blockIndex] : null
+    if (block?.bbox) {
+      const bbox = normalizeBbox(block.bbox, resolveSize(block.page))
+      if (bbox) { fields[key] = { ...ref, bbox }; changed = true }
+    } else {
+      const match = sidecar.blocks.find((b) => b.page === ref.page && b.bbox && scoreMatch(ref.quote, b.text) >= ACCEPT_SCORE)
+      if (match?.bbox) {
+        const bbox = normalizeBbox(match.bbox, resolveSize(match.page))
+        if (bbox) { fields[key] = { ...ref, bbox }; changed = true }
+      }
+    }
+  }
+
+  const items = { ...provenance.items }
+  for (const [key, refs] of Object.entries(items)) {
+    const repaired = refs.map((ref) => {
+      if (!ref || ref.bbox) return ref
+      const block = ref.blockIndex !== null ? sidecar.blocks[ref.blockIndex] : null
+      if (block?.bbox) {
+        const bbox = normalizeBbox(block.bbox, resolveSize(block.page))
+        if (bbox) { changed = true; return { ...ref, bbox } }
+      }
+      return ref
+    })
+    items[key] = repaired
+  }
+
+  return changed ? { ...provenance, fields, items } : provenance
 }
 
 const MAX_BLOCK_TEXT = 2000

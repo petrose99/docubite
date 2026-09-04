@@ -4,7 +4,9 @@ import { PushToAccountingCard } from "@/components/documents/push-to-accounting-
 import { MatchPanel } from "@/components/bank-match/match-panel"
 import { getCurrentUser } from "@/lib/auth"
 import { parseTemplateFields } from "@/lib/document-templates"
-import type { DocumentProvenance } from "@/lib/provenance"
+import type { BlocksSidecar, DocumentProvenance } from "@/lib/provenance"
+import { repairMissingBboxes } from "@/lib/provenance"
+import { documentBlocksKey, readDocumentBlocks } from "@/lib/document-storage"
 import { PIPELINE_STAGES, type PipelineStage } from "@/lib/documents/stages"
 import { getWorkspaceCapabilities } from "@/lib/modules/capabilities"
 import { listBankMatches } from "@/models/bank-matches"
@@ -51,7 +53,10 @@ export default async function DocumentPage({ params, searchParams }: {
   const fieldConfidence = confidence?.fieldConfidence || {}
   const conflictingLabels = (confidence?.conflictingFields || []).map((key) => fields.find((field) => field.key === key)?.label || key)
   const data = (document.reviewedData || document.rawExtraction || {}) as Record<string, unknown>
-  const provenance = document.provenance as DocumentProvenance | null
+  const rawProvenance = document.provenance as DocumentProvenance | null
+  const blocksJson = rawProvenance ? await readDocumentBlocks(documentBlocksKey(workspaceId, documentId)) : null
+  const sidecar: BlocksSidecar | null = blocksJson ? (() => { try { return JSON.parse(blocksJson) as BlocksSidecar } catch { return null } })() : null
+  const provenance = rawProvenance && sidecar ? repairMissingBboxes(rawProvenance, sidecar) : rawProvenance
   const codingData = (document.codingData as Record<string, unknown> | null) ?? {}
   const classification = (document.classification as { docType?: string } | null) ?? {}
   const saveReview = async (formData: FormData) => { "use server"; await saveDocumentReviewAction(workspaceId, documentId, formData) }
