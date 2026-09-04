@@ -255,6 +255,29 @@ export async function listWorkspaceIntegrationPushes(workspaceId: string, docume
   })
 }
 
+/** Learns category→account mappings from succeeded pushes: reads the payload of every succeeded push
+ * for this connection, extracts the (category, expenseAccountId) pair, and returns the most recent
+ * account for each category. Only pushes that recorded both fields contribute — historical pushes
+ * from before per-document account selection are silently skipped. */
+export async function getCategoryAccountMap(connectionId: string): Promise<Record<string, string>> {
+  const pushes = await prisma.integrationPush.findMany({
+    where: { connectionId, status: "succeeded" },
+    orderBy: { completedAt: "desc" },
+    select: { payload: true },
+  })
+  const map: Record<string, string> = {}
+  for (const push of pushes) {
+    const p = push.payload as Record<string, unknown> | null
+    if (!p) continue
+    const category = typeof p.category === "string" ? p.category : null
+    const accountId = typeof p.expenseAccountId === "string" ? p.expenseAccountId : null
+    if (category && accountId && !(category in map)) {
+      map[category] = accountId
+    }
+  }
+  return map
+}
+
 /** Upserts the push row for (documentId, connectionId): re-pushing after a document edit reuses the
  * same row rather than creating a duplicate bill, per the unique constraint. Resets it to a fresh
  * pending attempt cycle so a push after a previous failure (or success) is a normal retry, not stuck

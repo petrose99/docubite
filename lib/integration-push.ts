@@ -110,45 +110,47 @@ export async function attemptIntegrationPush(pushId: string, now = new Date()): 
   if (connection.status !== "active") {
     result = { success: false, errorCode: connection.status === "needs_reauth" ? "integration_needs_reauth" : "integration_connection_disabled", externalBillId: null }
     forceTerminal = true
-  } else if (!connection.externalTenantId || !connection.defaultExpenseAccountId) {
-    result = { success: false, errorCode: "integration_default_account_not_configured", externalBillId: null }
-    forceTerminal = true
   } else {
-    try {
-      const bill = { ...(push.payload as unknown as NormalizedBill), currencyCode: (push.payload as unknown as NormalizedBill).currencyCode ?? null }
-      const accessToken = await getValidAccessToken(connection.id, now)
-      const isDuplicate = bill.referenceNumber ? await ledgerHasDuplicate(connection.provider, connection.externalTenantId, accessToken, bill.referenceNumber) : false
-      if (isDuplicate) throw new IntegrationPermanentError("ledger_duplicate")
-      let created: { id: string }
-      switch (connection.provider) {
-        case "quickbooks":
-          created = await pushToQuickbooks(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
-          break
-        case "xero":
-          created = await pushToXero(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
-          break
-        case "bigcapital":
-          created = await pushToBigcapital(connection.externalTenantId, accessToken, bill, connection.defaultExpenseAccountId)
-          break
-        default:
-          throw new IntegrationPermanentError(`${connection.provider}_push_not_implemented`)
-      }
-      result = { success: true, errorCode: null, externalBillId: created.id }
-    } catch (error) {
-      if (error instanceof TokenRefreshError) {
-        result = { success: false, errorCode: error.message, externalBillId: null }
-        forceTerminal = error.message === "integration_needs_reauth"
-      } else if (error instanceof IntegrationAuthError) {
-        // Reached only if the provider rejects an access token the refresh layer believed valid
-        // (e.g. revoked between refresh and use) — treat the same as needs_reauth, terminal.
-        result = { success: false, errorCode: safeErrorCode(error), externalBillId: null }
-        forceTerminal = true
-        await prisma.integrationConnection.update({ where: { id: connection.id }, data: { status: "needs_reauth" } }).catch(() => {})
-      } else if (error instanceof IntegrationPermanentError) {
-        result = { success: false, errorCode: error.code, externalBillId: null }
-        forceTerminal = true
-      } else {
-        result = { success: false, errorCode: safeErrorCode(error), externalBillId: null }
+    const payloadRaw = push.payload as unknown as NormalizedBill & { expenseAccountId?: string }
+    const expenseAccountId = payloadRaw.expenseAccountId ?? connection.defaultExpenseAccountId
+    if (!connection.externalTenantId || !expenseAccountId) {
+      result = { success: false, errorCode: "integration_default_account_not_configured", externalBillId: null }
+      forceTerminal = true
+    } else {
+      try {
+        const bill = { ...payloadRaw, currencyCode: payloadRaw.currencyCode ?? null }
+        const accessToken = await getValidAccessToken(connection.id, now)
+        const isDuplicate = bill.referenceNumber ? await ledgerHasDuplicate(connection.provider, connection.externalTenantId, accessToken, bill.referenceNumber) : false
+        if (isDuplicate) throw new IntegrationPermanentError("ledger_duplicate")
+        let created: { id: string }
+        switch (connection.provider) {
+          case "quickbooks":
+            created = await pushToQuickbooks(connection.externalTenantId, accessToken, bill, expenseAccountId)
+            break
+          case "xero":
+            created = await pushToXero(connection.externalTenantId, accessToken, bill, expenseAccountId)
+            break
+          case "bigcapital":
+            created = await pushToBigcapital(connection.externalTenantId, accessToken, bill, expenseAccountId)
+            break
+          default:
+            throw new IntegrationPermanentError(`${connection.provider}_push_not_implemented`)
+        }
+        result = { success: true, errorCode: null, externalBillId: created.id }
+      } catch (error) {
+        if (error instanceof TokenRefreshError) {
+          result = { success: false, errorCode: error.message, externalBillId: null }
+          forceTerminal = error.message === "integration_needs_reauth"
+        } else if (error instanceof IntegrationAuthError) {
+          result = { success: false, errorCode: safeErrorCode(error), externalBillId: null }
+          forceTerminal = true
+          await prisma.integrationConnection.update({ where: { id: connection.id }, data: { status: "needs_reauth" } }).catch(() => {})
+        } else if (error instanceof IntegrationPermanentError) {
+          result = { success: false, errorCode: error.code, externalBillId: null }
+          forceTerminal = true
+        } else {
+          result = { success: false, errorCode: safeErrorCode(error), externalBillId: null }
+        }
       }
     }
   }

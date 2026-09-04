@@ -27,7 +27,8 @@ async function pushDocumentToConnection(
   workspaceId: string,
   documentId: string,
   connectionId: string,
-  userId: string
+  userId: string,
+  expenseAccountId?: string
 ): Promise<{ status: string }> {
   const document = await getWorkspaceDocument(workspaceId, documentId)
   if (!document) throw new Error("Document not found")
@@ -42,12 +43,15 @@ async function pushDocumentToConnection(
 
   const reviewedData = (document.reviewedData as Record<string, unknown> | null) ?? (document.rawExtraction as Record<string, unknown> | null) ?? {}
   const bill = normalizeBillFromDocument({ documentId: document.id, filename: document.filename, templateCode, reviewedData })
+  const coding = (document.codingData as Record<string, unknown> | null) ?? {}
+  const category = (typeof coding.account === "string" && coding.account) || (typeof reviewedData.category === "string" && reviewedData.category) || null
+  const payload = { ...bill, ...(expenseAccountId ? { expenseAccountId } : {}), ...(category ? { category } : {}) }
 
   const push = await upsertWorkspaceIntegrationPush(workspaceId, {
     connectionId: connection.id,
     documentId: document.id,
     provider: connection.provider as "quickbooks" | "xero" | "bigcapital",
-    payload: bill,
+    payload,
     createdById: userId,
   })
   await attemptIntegrationPush(push.id)
@@ -59,7 +63,8 @@ async function pushDocumentToConnection(
 export async function pushDocumentToAccountingAction(
   workspaceId: string,
   documentId: string,
-  connectionId: string
+  connectionId: string,
+  expenseAccountId?: string
 ): Promise<ActionState<{ status: string }>> {
   if (!config.integrations.enabled) return { success: false, error: errorMessage(new Error("integrations_not_available"), NO_ACCESS) }
   const user = await getCurrentUser()
@@ -67,7 +72,7 @@ export async function pushDocumentToAccountingAction(
   if (!(await workspaceIntegrationsPlanEnabled(workspaceId))) return { success: false, error: errorMessage(new Error("integrations_plan_required"), NO_ACCESS) }
 
   try {
-    const result = await pushDocumentToConnection(workspaceId, documentId, connectionId, user.id)
+    const result = await pushDocumentToConnection(workspaceId, documentId, connectionId, user.id, expenseAccountId)
     await recordDocumentAudit({ workspaceId, actorId: user.id, documentId, type: "integration_push_enqueued", detail: { connectionId } })
     revalidatePath(`/workspaces/${workspaceId}/documents/${documentId}`)
     revalidatePath(`/workspaces/${workspaceId}/accounting`)
@@ -85,7 +90,8 @@ export async function pushDocumentToAccountingAction(
  * ready set next time. */
 export async function pushAllReadyDocumentsAction(
   workspaceId: string,
-  connectionId: string
+  connectionId: string,
+  accountOverrides?: Record<string, string>
 ): Promise<ActionState<{ pushed: number; failed: number }>> {
   if (!config.integrations.enabled) return { success: false, error: errorMessage(new Error("integrations_not_available"), NO_ACCESS) }
   const user = await getCurrentUser()
@@ -97,7 +103,7 @@ export async function pushAllReadyDocumentsAction(
   let failed = 0
   for (const doc of ready) {
     try {
-      const result = await pushDocumentToConnection(workspaceId, doc.id, connectionId, user.id)
+      const result = await pushDocumentToConnection(workspaceId, doc.id, connectionId, user.id, accountOverrides?.[doc.id])
       if (result.status === "failed") failed += 1
       else pushed += 1
     } catch {
