@@ -255,41 +255,51 @@ export function SplitPane({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {tab === "details" && <div className={`mx-auto space-y-6 p-6 ${layout === "details-only" ? "max-w-2xl" : ""}`}>
-            {/* Document type confirmation */}
-            <div className={`rounded-xl border-2 p-4 transition-colors ${docType ? "border-slate-100 bg-slate-50/50" : "border-amber-300 bg-amber-50/80"}`}>
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-800">
-                  {docType ? "Document type" : "What type of document is this?"}
-                </p>
-                {!docType && <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">Required</span>}
+          {tab === "details" && <div className={`mx-auto space-y-4 p-4 ${layout === "details-only" ? "max-w-2xl" : ""}`}>
+            {/* Document type confirmation — compact inline when confirmed, prominent when not */}
+            {docType ? (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <span className="text-xs font-medium text-slate-500">Type</span>
+                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${docType === "expense" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+                  {docType === "expense" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                  {docType === "expense" ? "Expense" : "Sale"}
+                </span>
+                <button type="button" disabled={savingDocType} onClick={() => void selectDocType(docType === "expense" ? "sale" : "expense")}
+                  className="ml-auto text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-600">Change</button>
               </div>
-              <div className="mt-3 flex gap-3">
-                <button type="button" disabled={savingDocType} onClick={() => void selectDocType("expense")}
-                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${docType === "expense" ? "border-red-300 bg-red-50 text-red-800 shadow-sm ring-2 ring-red-100" : "border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50/50 hover:text-red-700"}`}>
-                  <ArrowUp className="h-4 w-4" />Expense
-                  {suggestedType === "expense" && !docType && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Suggested</span>}
-                </button>
-                <button type="button" disabled={savingDocType} onClick={() => void selectDocType("sale")}
-                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${docType === "sale" ? "border-emerald-300 bg-emerald-50 text-emerald-800 shadow-sm ring-2 ring-emerald-100" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/50 hover:text-emerald-700"}`}>
-                  <ArrowDown className="h-4 w-4" />Sale
-                  {suggestedType === "sale" && !docType && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Suggested</span>}
-                </button>
+            ) : (
+              <div className="rounded-lg border-2 border-amber-300 bg-amber-50/80 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800">What type of document is this?</p>
+                  <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">Required</span>
+                </div>
+                <div className="mt-2.5 flex gap-2">
+                  <button type="button" disabled={savingDocType} onClick={() => void selectDocType("expense")}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-all hover:border-red-200 hover:bg-red-50/50 hover:text-red-700">
+                    <ArrowUp className="h-3.5 w-3.5" />Expense
+                    {suggestedType === "expense" && <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700">Suggested</span>}
+                  </button>
+                  <button type="button" disabled={savingDocType} onClick={() => void selectDocType("sale")}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-all hover:border-emerald-200 hover:bg-emerald-50/50 hover:text-emerald-700">
+                    <ArrowDown className="h-3.5 w-3.5" />Sale
+                    {suggestedType === "sale" && <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700">Suggested</span>}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-amber-700/80">Expense (money out) or sale (money in)?</p>
               </div>
-              {!docType && <p className="mt-2.5 text-xs text-amber-700/80">Confirm whether this is an expense (money out) or a sale (money in) before saving.</p>}
-            </div>
+            )}
 
             {/* Review form */}
-            <form action={saveReview} className="space-y-4">
+            <form action={saveReview} className="space-y-3">
               {formFields.map((field) => field.type === "array"
                 ? <LineItemsSection key={field.key} field={field} value={data[field.key]} fieldKey={field.key} summaryFields={summaryFields} fieldValues={data} provenanceFields={provenanceFields} onFocusSource={setTarget} />
                 : <FieldRow key={field.key} field={field} value={data[field.key]} confidence={fieldConfidence[field.key] ?? null} ref={provenanceFields[field.key] ?? null} onFocusSource={setTarget} />)}
 
-              <div className="flex items-center gap-3 pt-2">
-                <button type="submit" disabled={!docType} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40" title={!docType ? "Choose Expense or Sale first" : undefined}>
+              <div className="flex items-center gap-3 border-t border-slate-100 pt-3">
+                <button type="submit" disabled={!docType} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40" title={!docType ? "Choose Expense or Sale first" : undefined}>
                   <CheckCircle2 className="h-4 w-4" />Save review
                 </button>
-                {!docType && <span className="text-xs text-amber-600">Choose a document type to enable saving</span>}
+                {!docType && <span className="text-xs text-amber-600">Choose a document type first</span>}
               </div>
             </form>
 
