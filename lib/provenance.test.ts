@@ -65,10 +65,11 @@ describe("resolveProvenance", () => {
     expect(ref!.bbox!.every((n) => n >= 0 && n <= 1)).toBe(true)
   })
 
-  it("keeps the page but nulls the bbox for a below-threshold match", () => {
+  it("uses the best block bbox even for a below-threshold match", () => {
     const weak: MineruBlock[] = [{ page: 1, bbox: [0, 0, 10, 10], text: "the line item was", type: "text" }]
     const ref = resolveProvenance({ page: 1, quote: "line item widget" }, "line item widget", weak, sizes)
-    expect(ref).toMatchObject({ page: 1, bbox: null, blockIndex: null })
+    expect(ref).toMatchObject({ page: 1, blockIndex: 0 })
+    expect(ref!.bbox).not.toBeNull()
     expect(ref!.score).toBeGreaterThan(0)
     expect(ref!.score).toBeLessThan(0.55)
   })

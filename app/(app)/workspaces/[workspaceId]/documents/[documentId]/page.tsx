@@ -56,7 +56,7 @@ export default async function DocumentPage({ params, searchParams }: {
   const rawProvenance = document.provenance as DocumentProvenance | null
   const blocksJson = rawProvenance ? await readDocumentBlocks(documentBlocksKey(workspaceId, documentId)) : null
   const sidecar: BlocksSidecar | null = blocksJson ? (() => { try { return JSON.parse(blocksJson) as BlocksSidecar } catch { return null } })() : null
-  const provenance = rawProvenance && sidecar ? repairMissingBboxes(rawProvenance, sidecar) : rawProvenance
+  const provenance = rawProvenance && sidecar ? repairMissingBboxes(rawProvenance, sidecar, data) : rawProvenance
   const codingData = (document.codingData as Record<string, unknown> | null) ?? {}
   const classification = (document.classification as { docType?: string } | null) ?? {}
   const saveReview = async (formData: FormData) => { "use server"; await saveDocumentReviewAction(workspaceId, documentId, formData) }

@@ -197,6 +197,12 @@ export function resolveProvenance(
     }
     const page = hintPage ?? (best.block ? best.block.page : null)
     if (page === null) return null
+    // Below the accept threshold — still use the best block's bbox when available,
+    // since a rough highlight is far more useful than outlining the entire page.
+    if (best.index >= 0 && best.block?.bbox) {
+      const size = pageSizes?.find((p) => p.page === best.block!.page) ?? estimated?.get(best.block.page) ?? null
+      return { page: best.block.page, bbox: normalizeBbox(best.block.bbox, size), quote, blockIndex: best.index, score: round2(best.score) }
+    }
     return { page, bbox: null, quote, blockIndex: null, score: best.index >= 0 ? round2(best.score) : 0 }
   }
 
@@ -230,8 +236,10 @@ export type BlocksSidecar = {
 
 /** Re-resolves bboxes for stored provenance refs that were saved with bbox: null because page
  * sizes were missing at extraction time. Reads the blocks sidecar and estimates page sizes from
- * block extents, then patches any null-bbox ref whose blockIndex points at a block with a bbox. */
-export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: BlocksSidecar | null): DocumentProvenance {
+ * block extents, then patches any null-bbox ref whose blockIndex points at a block with a bbox.
+ * `fieldValues` supplies the extracted values so the value itself can be matched when the stored
+ * quote is too diluted (e.g. "Subtotal 187700" inside a 500-word HTML table). */
+export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: BlocksSidecar | null, fieldValues?: Record<string, unknown>): DocumentProvenance {
   if (!sidecar || !sidecar.blocks.length) return provenance
   const pageSizes = sidecar.pages.length ? sidecar.pages : null
   const estimated = !pageSizes ? estimatePageSizes(sidecar.blocks) : null
@@ -239,20 +247,31 @@ export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: Blo
   const resolveSize = (page: number): MineruPageSize | null =>
     pageSizes?.find((p) => p.page === page) ?? estimated?.get(page) ?? null
 
+  const findBestBlock = (ref: Ref, value?: unknown): typeof sidecar.blocks[0] | null => {
+    if (ref.blockIndex !== null && sidecar.blocks[ref.blockIndex]?.bbox) return sidecar.blocks[ref.blockIndex]
+    const queries = [ref.quote]
+    if (value !== undefined && value !== null) {
+      const v = typeof value === "string" || typeof value === "number" ? String(value) : ""
+      if (v) queries.push(v)
+    }
+    let bestMatch: { block: typeof sidecar.blocks[0]; score: number } | null = null
+    for (const b of sidecar.blocks) {
+      if (!b.bbox) continue
+      let s = 0
+      for (const q of queries) { if (q) s = Math.max(s, scoreMatch(q, b.text)) }
+      if (!bestMatch || s > bestMatch.score) bestMatch = { block: b, score: s }
+    }
+    return bestMatch?.block ?? null
+  }
+
   let changed = false
   const fields = { ...provenance.fields }
   for (const [key, ref] of Object.entries(fields)) {
     if (ref.bbox) continue
-    const block = ref.blockIndex !== null ? sidecar.blocks[ref.blockIndex] : null
+    const block = findBestBlock(ref, fieldValues?.[key])
     if (block?.bbox) {
       const bbox = normalizeBbox(block.bbox, resolveSize(block.page))
       if (bbox) { fields[key] = { ...ref, bbox }; changed = true }
-    } else {
-      const match = sidecar.blocks.find((b) => b.page === ref.page && b.bbox && scoreMatch(ref.quote, b.text) >= ACCEPT_SCORE)
-      if (match?.bbox) {
-        const bbox = normalizeBbox(match.bbox, resolveSize(match.page))
-        if (bbox) { fields[key] = { ...ref, bbox }; changed = true }
-      }
     }
   }
 
@@ -260,7 +279,7 @@ export function repairMissingBboxes(provenance: DocumentProvenance, sidecar: Blo
   for (const [key, refs] of Object.entries(items)) {
     const repaired = refs.map((ref) => {
       if (!ref || ref.bbox) return ref
-      const block = ref.blockIndex !== null ? sidecar.blocks[ref.blockIndex] : null
+      const block = findBestBlock(ref)
       if (block?.bbox) {
         const bbox = normalizeBbox(block.bbox, resolveSize(block.page))
         if (bbox) { changed = true; return { ...ref, bbox } }
